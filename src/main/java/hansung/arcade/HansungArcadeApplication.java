@@ -1,3 +1,5 @@
+package hansung.arcade;
+
 import java.util.Scanner;
 
 public class HansungArcadeApplication {

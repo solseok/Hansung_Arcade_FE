@@ -20,7 +20,7 @@ dependencies {
 }
 
 application {
-    mainClass = 'HansungArcadeApplication'
+    mainClass = 'hansung.arcade.HansungArcadeApplication'
 }
 
 tasks.withType(JavaCompile).configureEach {
