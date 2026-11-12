@@ -1,10 +1,10 @@
 package hansung.arcade;
 
-import java.util.Scanner;
+import hansung.arcade.core.game.GameApplication;
 
 public class HansungArcadeApplication {
 
     public static void main(String[] args) {
-        Scanner sc = new Scanner(System.in);
+        GameApplication.run(HansungArcadeApplication.class, args);
     }
 }
