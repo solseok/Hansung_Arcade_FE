@@ -1,8 +1,13 @@
 package hansung.arcade.ingame.render;
 
 import hansung.arcade.ingame.GameWorld;
+import hansung.arcade.ingame.balloon.BalloonField;
+import hansung.arcade.ingame.balloon.Explosion;
+import hansung.arcade.ingame.balloon.WaterBalloon;
+import hansung.arcade.ingame.balloon.WaterCell;
 import hansung.arcade.ingame.entity.Player;
 import hansung.arcade.ingame.entity.PlayerProfile;
+import hansung.arcade.ingame.entity.PlayerState;
 import hansung.arcade.ingame.map.Tile;
 import hansung.arcade.ingame.map.TileMap;
 
@@ -18,11 +23,16 @@ import java.util.Set;
 
 /**
  * 맵은 테마 타일셋의 BMP 그림으로, 캐릭터는 고른 마스코트의 BMP 그림({@link CharacterSprites})을 고른 고정색으로 칠해 그린다.
+ * 물풍선과 물줄기는 {@link BalloonSprites} 그림이다.
  * 바닥 그림이 없는 테마는 단색 바닥을, 그림이 없는 타일은 기호를 적은 임시 상자를 그린다.
  * 호출 전에 Graphics2D의 원점이 맵 왼쪽 위로 옮겨져 있어야 한다.
  *
  * <p>바닥({@link #drawGround})과 그 위 물체({@link #drawObjects})를 따로 그린다. 블록·나무·집 그림은 칸보다 키가 커서
  * 맨 윗줄에서는 맵 위로 솟으므로, 화면은 바닥만 맵 영역 안으로 자르고 물체는 맵 테두리 위에 겹쳐 그릴 수 있다.</p>
+ *
+ * <p>캐릭터는 상태에 따라 다른 그림이다. 갇히면 물풍선 속 그림, 빠져나오는 중이면 바늘 그림, 탈락하면 쓰러진 그림이
+ * {@link Player#DYING_JUMP_SECONDS}초 동안 포물선으로 {@link #DYING_JUMP_HEIGHT}px 솟았다 떨어진 뒤,
+ * {@link Player#DYING_BLINK_SECONDS}초 동안 {@link #BLINK_SECONDS}초씩 보였다 숨었다 하고 사라진다.</p>
  */
 public final class WorldRenderer {
 
@@ -42,29 +52,89 @@ public final class WorldRenderer {
      * 아래 칸 블록 그림이 칸 위로 솟은 부분에 발이 가려지지 않는다.
      */
     public static final int FEET_BELOW_CENTER = T / 2 - 6;
+    /** 탈락한 캐릭터가 솟아오르는 가장 높은 높이(px). 한 칸 */
+    public static final int DYING_JUMP_HEIGHT = T;
+    /** 탈락 연출 끝에 깜빡일 때 한 번 보이거나 숨는 시간(초). 보임·숨음 한 쌍이 0.2초다 */
+    public static final double BLINK_SECONDS = 0.1;
+
+    /**
+     * 놓인 물풍선 그림 맨 아래 줄(풍선 바닥)이 칸 위쪽에서 떨어진 거리. 칸 바닥보다 2px 위라서
+     * 키 37px인 풍선이 칸 안에 들어앉는다.
+     */
+    static final int BALLOON_BOTTOM = T - 3;
+    /** 물풍선 그림자. 영상처럼 풍선 가운데에서 왼쪽 아래로 조금 비켜 깔린 납작한 타원이다 */
+    private static final Color BALLOON_SHADOW = new Color(0, 0, 0, 70);
+    private static final int BALLOON_SHADOW_WIDTH = 32;
+    private static final int BALLOON_SHADOW_HEIGHT = 12;
+    private static final int BALLOON_SHADOW_LEFT_SHIFT = 5;
+    private static final int BALLOON_SHADOW_BELOW_BOTTOM = 2;
+    private static final double FRAME_BOUNDARY_SLACK = 1e-6;
 
     private final Tileset tileset;
     private final CharacterSprites characters;
+    private final BalloonSprites balloons;
 
-    public WorldRenderer(Tileset tileset, CharacterSprites characters) {
+    public WorldRenderer(Tileset tileset, CharacterSprites characters, BalloonSprites balloons) {
         this.tileset = Objects.requireNonNull(tileset);
         this.characters = Objects.requireNonNull(characters);
+        this.balloons = Objects.requireNonNull(balloons);
     }
 
-    /** 블록·덤불 등 물체와 캐릭터. 바닥을 먼저 그린 뒤에 부른다. */
+    /** 물풍선 그림을 기본 위치에서 새로 읽는다. 미리 읽어 둔 그림이 없는 테스트에서 쓴다. */
+    public WorldRenderer(Tileset tileset, CharacterSprites characters) {
+        this(tileset, characters, BalloonSprites.load());
+    }
+
+    /**
+     * 블록·덤불 등 물체, 물줄기, 물풍선, 캐릭터. 바닥을 먼저 그린 뒤에 부른다.
+     *
+     * <p>위쪽 줄부터 그려서 아래쪽 물체가 앞에 보이게 한다. 한 줄 안에서는 블록 → 물줄기 → 물풍선 → 캐릭터 → 덤불 순서다.
+     * 그래서 아래 줄 블록이 칸 위로 솟은 부분은 윗줄의 물줄기·물풍선·캐릭터를 가리고,
+     * 덤불은 안에 들어간 캐릭터와 물풍선을 가린다.</p>
+     */
     public void drawObjects(Graphics2D g, GameWorld world) {
         TileMap map = world.map();
-        // 위쪽 줄부터 그려서 아래쪽 물체가 앞에 보이게 한다.
-        // 덤불은 같은 줄 캐릭터보다 나중에 그려서 안에 들어간 캐릭터를 가린다.
+        BalloonField field = world.balloonField();
         List<Player> players = world.players();
         for (int row = 0; row < map.rows(); row++) {
             drawRow(g, map, row, false);
+            drawWater(g, field, row);
+            drawBalloons(g, field, row);
             for (Player player : players) {
                 if (player.row() == row) {
                     drawPlayer(g, player);
                 }
             }
             drawRow(g, map, row, true);
+        }
+    }
+
+    /** row줄의 물줄기 칸. 늦게 터진 물줄기가 위에 온다 */
+    private void drawWater(Graphics2D g, BalloonField field, int row) {
+        for (Explosion explosion : field.explosions()) {
+            int frame = explosion.frame();
+            for (WaterCell cell : explosion.cells()) {
+                if (cell.row() == row) {
+                    g.drawImage(balloons.water(cell, frame), cell.col() * T, row * T, null);
+                }
+            }
+        }
+    }
+
+    /** row줄의 놓인 물풍선. 그림자를 먼저 깔고 칸 가운데에 풍선을 세운다 */
+    private void drawBalloons(Graphics2D g, BalloonField field, int row) {
+        for (WaterBalloon balloon : field.balloons()) {
+            if (balloon.row() != row) {
+                continue;
+            }
+            int centerX = balloon.col() * T + T / 2;
+            int bottom = row * T + BALLOON_BOTTOM;
+            g.setColor(BALLOON_SHADOW);
+            g.fillOval(centerX - BALLOON_SHADOW_LEFT_SHIFT - BALLOON_SHADOW_WIDTH / 2,
+                    bottom + BALLOON_SHADOW_BELOW_BOTTOM - BALLOON_SHADOW_HEIGHT / 2,
+                    BALLOON_SHADOW_WIDTH, BALLOON_SHADOW_HEIGHT);
+            BufferedImage image = balloons.balloon(balloon.age());
+            g.drawImage(image, centerX - BalloonSprites.BALLOON_WIDTH / 2, bottom - image.getHeight() + 1, null);
         }
     }
 
@@ -129,17 +199,54 @@ public final class WorldRenderer {
         return tile == Tile.BUSH;
     }
 
-    /** 발밑에 그림자를 깔고, 그림의 가로 가운데를 캐릭터 위치에 맞춰 그린다. 머리는 윗칸으로 솟는다. */
+    /**
+     * 발밑에 그림자를 깔고, 그림의 가로 가운데를 캐릭터 위치에 맞춰 그린다. 머리는 윗칸으로 솟는다.
+     * 탈락 연출 중에는 그림자는 땅에 두고 그림만 솟았다 떨어지며, 깜빡이는 동안 숨는 차례에는 그림자째 그리지 않는다.
+     */
     private void drawPlayer(Graphics2D g, Player player) {
+        if (!isShown(player)) {
+            return;
+        }
         int x = (int) Math.round(player.x());
         int feet = (int) Math.round(player.y()) + FEET_BELOW_CENTER;
 
         g.setColor(SHADOW);
         g.fillOval(x - 14, feet - 6, 28, 9);
 
+        BufferedImage frame = frameOf(player);
+        g.drawImage(frame, x - CharacterSprites.FRAME_SIZE / 2, feet - CharacterSprites.FEET_Y - liftOf(player), null);
+    }
+
+    private BufferedImage frameOf(Player player) {
         PlayerProfile profile = player.profile();
-        BufferedImage frame = characters.frame(profile.mascot(), profile.color(), player.facing(), player.isMoving(),
-                player.walkTime());
-        g.drawImage(frame, x - CharacterSprites.FRAME_SIZE / 2, feet - CharacterSprites.FEET_Y, null);
+        double seconds = player.stateTime();
+        return switch (player.state()) {
+            case NORMAL -> characters.frame(profile.mascot(), profile.color(), player.facing(), player.isMoving(),
+                    player.walkTime());
+            case TRAPPED -> characters.trapped(profile.mascot(), profile.color(), seconds);
+            case ESCAPING -> characters.escaping(profile.mascot(), profile.color(), seconds);
+            case DYING, GONE -> characters.dying(profile.mascot(), profile.color(), seconds);
+        };
+    }
+
+    /** 이번 장면에 캐릭터를 그리는지. 사라졌거나, 탈락 연출 끝에 깜빡이며 숨는 차례면 그리지 않는다 */
+    static boolean isShown(Player player) {
+        return switch (player.state()) {
+            case GONE -> false;
+            case DYING -> {
+                double blinking = player.stateTime() - Player.DYING_JUMP_SECONDS;
+                yield blinking < 0 || (int) Math.floor(blinking / BLINK_SECONDS + FRAME_BOUNDARY_SLACK) % 2 == 0;
+            }
+            default -> true;
+        };
+    }
+
+    /** 탈락 연출로 그림이 땅에서 솟은 높이(px). 솟는 동안 포물선을 그리고, 그 밖에는 0이다 */
+    static int liftOf(Player player) {
+        double t = player.stateTime() / Player.DYING_JUMP_SECONDS;
+        if (player.state() != PlayerState.DYING || t >= 1) {
+            return 0;
+        }
+        return (int) Math.round(DYING_JUMP_HEIGHT * 4 * t * (1 - t));
     }
 }

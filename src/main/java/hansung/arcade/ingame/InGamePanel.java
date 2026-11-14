@@ -9,6 +9,7 @@ import hansung.arcade.ingame.hud.HudSkin;
 import hansung.arcade.ingame.hud.InGameHud;
 import hansung.arcade.ingame.input.KeyBindings;
 import hansung.arcade.ingame.input.LocalInput;
+import hansung.arcade.ingame.render.BalloonSprites;
 import hansung.arcade.ingame.render.CharacterSprites;
 import hansung.arcade.ingame.render.Tileset;
 import hansung.arcade.ingame.render.WorldRenderer;
@@ -130,10 +131,11 @@ public final class InGamePanel extends JPanel {
     /** Enter를 누른 채인지. 누르고 있는 동안 되풀이되는 누름 이벤트를 거른다 */
     private boolean enterHeld;
 
-    public InGamePanel(GameWorld world, Tileset tileset, HudSkin skin, CharacterSprites characters) {
+    public InGamePanel(GameWorld world, Tileset tileset, HudSkin skin, CharacterSprites characters,
+                       BalloonSprites balloons) {
         this.world = world;
         this.input = new LocalInput(world.localPlayers().stream().map(Player::id).toList());
-        this.worldRenderer = new WorldRenderer(tileset, characters);
+        this.worldRenderer = new WorldRenderer(tileset, characters, balloons);
         this.hud = new InGameHud(skin, world.map(), tileset);
         setPreferredSize(new Dimension(HudLayout.WIDTH, HudLayout.HEIGHT));
         // 바탕은 HUD 그림이 화면 전체를 덮으므로 따로 지우지 않는다.
@@ -156,7 +158,12 @@ public final class InGamePanel extends JPanel {
         loopTimer.setCoalesce(true);
     }
 
-    /** 캐릭터 그림을 기본 위치에서 새로 읽는다. 미리 읽어 둔 그림이 없는 테스트에서 쓴다. */
+    /** 물풍선 그림을 기본 위치에서 새로 읽는다. 미리 읽어 둔 그림이 없는 테스트에서 쓴다. */
+    public InGamePanel(GameWorld world, Tileset tileset, HudSkin skin, CharacterSprites characters) {
+        this(world, tileset, skin, characters, BalloonSprites.load());
+    }
+
+    /** 캐릭터·물풍선 그림을 기본 위치에서 새로 읽는다. 미리 읽어 둔 그림이 없는 테스트에서 쓴다. */
     public InGamePanel(GameWorld world, Tileset tileset, HudSkin skin) {
         this(world, tileset, skin, CharacterSprites.load());
     }
