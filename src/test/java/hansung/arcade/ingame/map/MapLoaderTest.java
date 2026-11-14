@@ -140,6 +140,23 @@ class MapLoaderTest {
     }
 
     @Test
+    void 스폰_번호가_1부터_빠짐없이_이어지지_않으면_실패한다() {
+        assertThrows(IllegalArgumentException.class,
+                () -> MapLoader.parse("test", List.of("1.3")));
+        assertThrows(IllegalArgumentException.class,
+                () -> MapLoader.parse("test", List.of(".2.")));
+    }
+
+    @Test
+    void 파일_맨_앞의_BOM은_무시한다() {
+        TileMap map = MapLoader.parse("test", List.of("\uFEFFname=테스트", "1.#"));
+
+        assertEquals("테스트", map.name());
+        assertEquals(3, map.columns());
+        assertEquals(1, MapLoader.parse("test", List.of("\uFEFF1")).columns());
+    }
+
+    @Test
     void 같은_스폰_번호가_두_번_나오면_실패한다() {
         assertThrows(IllegalArgumentException.class,
                 () -> MapLoader.parse("test", List.of("1.1")));

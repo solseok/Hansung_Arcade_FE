@@ -16,7 +16,8 @@ import java.util.List;
  *
  * <pre>
  * name=맵 이름        메타데이터 (key=value)
- * 1.BB#..             타일 한 줄. 글자는 {@link Tile} 참고, 숫자 1~8은 스폰 지점(바닥)이고 번호마다 한 번만 쓴다
+ * 1.BB#..             타일 한 줄. 글자는 {@link Tile} 참고, 숫자 1~8은 스폰 지점(바닥).
+ *                     스폰 번호는 1부터 빠짐없이, 번호마다 한 번만 쓴다
  * </pre>
  *
  * <p>맵 id는 resources/maps 아래 경로다. 앞쪽 폴더 이름이 테마가 된다 (camp/camp08 → camp).</p>
@@ -33,7 +34,8 @@ public final class MapLoader {
         String path = MAP_DIR + id + ".txt";
         try (InputStream in = MapLoader.class.getResourceAsStream(path)) {
             if (in == null) {
-                throw new IllegalArgumentException("맵 파일을 찾을 수 없습니다: " + path);
+                throw new IllegalArgumentException(
+                        "맵 파일을 찾을 수 없습니다: %s (맵 id는 테마/맵 형식입니다. 예: camp/camp08)".formatted(path));
             }
             BufferedReader reader = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8));
             return parse(id, reader.lines().toList());
@@ -47,7 +49,8 @@ public final class MapLoader {
         String name = id;
         List<String> rows = new ArrayList<>();
         for (String raw : lines) {
-            String line = raw.strip();
+            // 메모장 등이 파일 맨 앞에 붙이는 BOM(U+FEFF)은 strip()으로 지워지지 않는다.
+            String line = raw.replace("\uFEFF", "").strip();
             if (line.isEmpty()) {
                 continue;
             }
@@ -98,6 +101,14 @@ public final class MapLoader {
             throw new IllegalArgumentException("맵에 스폰 지점(1~8)이 없습니다: " + name);
         }
         spawns.sort(Comparator.comparingInt(SpawnPoint::order));
+        for (int i = 0; i < spawns.size(); i++) {
+            // 스폰 목록은 번호순 위치로 꺼내 쓰므로, 번호가 빠지면 뒤 번호가 앞당겨져 엉뚱한 자리가 된다.
+            if (spawns.get(i).order() != i + 1) {
+                throw new IllegalArgumentException(
+                        "맵 %s에 스폰 지점 %d이(가) 없습니다. 스폰 번호는 1부터 빠짐없이 써야 합니다."
+                                .formatted(name, i + 1));
+            }
+        }
         return new TileMap(name, themeOf(id), tiles, spawns.stream().map(SpawnPoint::position).toList());
     }
 
