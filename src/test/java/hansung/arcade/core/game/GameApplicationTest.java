@@ -9,12 +9,14 @@ import hansung.arcade.core.boot.StartScreenStep;
 import hansung.arcade.core.boot.SwingStep;
 import org.junit.jupiter.api.Test;
 
+import java.awt.AWTError;
 import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -91,6 +93,32 @@ class GameApplicationTest {
 
         assertTrue(e.getMessage().contains("IllegalStateException"), e.getMessage());
         assertFalse(e.getMessage().contains("null"), e.getMessage());
+    }
+
+    @Test
+    void 화면_연결이나_클래스_초기화_오류도_단계_이름과_함께_알려준다() {
+        for (Error error : List.of(new AWTError("화면에 연결할 수 없음"), new NoClassDefFoundError("없는 클래스"))) {
+            List<BootStep> steps = List.of(new RecordingStep("고장", new ArrayList<>(), () -> {
+                throw error;
+            }));
+
+            BootException e = assertThrows(BootException.class,
+                    () -> new GameApplication(GameApplicationTest.class, steps).boot());
+
+            assertEquals("고장", e.stepName());
+            assertSame(error, e.getCause());
+        }
+    }
+
+    @Test
+    void 메모리_부족_같은_JVM_오류는_감싸지_않고_그대로_던진다() {
+        OutOfMemoryError error = new OutOfMemoryError("테스트용");
+        List<BootStep> steps = List.of(new RecordingStep("고장", new ArrayList<>(), () -> {
+            throw error;
+        }));
+
+        assertSame(error, assertThrows(OutOfMemoryError.class,
+                () -> new GameApplication(GameApplicationTest.class, steps).boot()));
     }
 
     @Test

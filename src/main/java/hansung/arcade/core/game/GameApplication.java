@@ -12,6 +12,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.swing.JOptionPane;
+import java.awt.AWTError;
 import java.awt.GraphicsEnvironment;
 import java.util.List;
 
@@ -72,7 +73,9 @@ public final class GameApplication {
             long stepStart = System.nanoTime();
             try {
                 step.run(context);
-            } catch (Exception e) {
+            } catch (Exception | LinkageError | AWTError e) {
+                // 화면에 연결하지 못하거나(AWTError) 클래스를 초기화하지 못해도(LinkageError) 어느 단계인지 알린다.
+                // 메모리 부족 같은 JVM 오류는 감싸지 않는다.
                 throw new BootException(step.name(), e);
             }
             log.info("({}/{}) {} 완료 - {} ms", i + 1, steps.size(), step.name(), elapsedMillis(stepStart));
@@ -88,9 +91,15 @@ public final class GameApplication {
 
     private static void reportFailure(BootException e) {
         log.error(e.getMessage(), e.getCause());
-        if (!GraphicsEnvironment.isHeadless()) {
+        if (GraphicsEnvironment.isHeadless()) {
+            return;
+        }
+        try {
             SwingThread.runAndWait(() ->
                     JOptionPane.showMessageDialog(null, e.getMessage(), "실행 실패", JOptionPane.ERROR_MESSAGE));
+        } catch (RuntimeException | AWTError dialogFailure) {
+            // 화면에 연결하지 못해 실패한 경우에는 대화상자도 띄울 수 없다. 원인은 위에서 이미 로그로 남겼다.
+            log.warn("실패 대화상자를 띄우지 못했습니다: {}", dialogFailure.toString());
         }
     }
 }
