@@ -1,19 +1,14 @@
 package hansung.arcade.ingame.render;
 
 import hansung.arcade.ingame.GameWorld;
-import hansung.arcade.ingame.entity.Direction;
 import hansung.arcade.ingame.entity.Player;
 import hansung.arcade.ingame.map.Tile;
 import hansung.arcade.ingame.map.TileMap;
 
-import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Graphics2D;
-import java.awt.Shape;
-import java.awt.Stroke;
-import java.awt.geom.Ellipse2D;
 import java.awt.image.BufferedImage;
 import java.util.EnumSet;
 import java.util.List;
@@ -21,7 +16,7 @@ import java.util.Objects;
 import java.util.Set;
 
 /**
- * 맵은 테마 타일셋의 BMP 그림으로, 캐릭터는 아직 Java2D 도형으로 그린다.
+ * 맵은 테마 타일셋의 BMP 그림으로, 캐릭터는 고른 마스코트의 BMP 그림({@link CharacterSprites})으로 그린다.
  * 바닥 그림이 없는 테마는 단색 바닥을, 그림이 없는 타일은 기호를 적은 임시 상자를 그린다.
  * 호출 전에 Graphics2D의 원점이 맵 왼쪽 위로 옮겨져 있어야 한다.
  *
@@ -41,21 +36,23 @@ public final class WorldRenderer {
     private static final Set<Tile> GROUND_LEVEL = EnumSet.of(Tile.ROAD, Tile.ROAD_LANE, Tile.CROSSWALK, Tile.SPIKE);
 
     private static final Color SHADOW = new Color(0, 0, 0, 55);
-    private static final Color[] PLAYER_COLORS = {
-            new Color(0xE84A5F), new Color(0x3D8BFD), new Color(0xF2B33D), new Color(0x8E5BD9),
-            new Color(0x2BB673), new Color(0xF27A3D), new Color(0x35C2C9), new Color(0xE05BB5),
-    };
-    private static final Font NAME_FONT = new Font(Font.SANS_SERIF, Font.BOLD, 10);
-    private static final Stroke BODY_OUTLINE = new BasicStroke(1.5f);
+    /**
+     * 캐릭터 위치(충돌 박스 가운데)에서 발끝까지의 거리. 칸 가운데에 서면 발끝이 칸 바닥보다 6px 위에 와서,
+     * 아래 칸 블록 그림이 칸 위로 솟은 부분에 발이 가려지지 않는다.
+     */
+    static final int FEET_BELOW_CENTER = T / 2 - 6;
 
     private final Tileset tileset;
+    private final CharacterSprites characters;
 
+    /** 캐릭터 그림은 기본 위치(resources/sprites/characters)에서 읽는다. */
     public WorldRenderer(Tileset tileset) {
-        this.tileset = Objects.requireNonNull(tileset);
+        this(tileset, CharacterSprites.load());
     }
 
-    public static Color playerColor(int playerId) {
-        return PLAYER_COLORS[Math.floorMod(playerId - 1, PLAYER_COLORS.length)];
+    public WorldRenderer(Tileset tileset, CharacterSprites characters) {
+        this.tileset = Objects.requireNonNull(tileset);
+        this.characters = Objects.requireNonNull(characters);
     }
 
     /** 블록·덤불 등 물체와 캐릭터. 바닥을 먼저 그린 뒤에 부른다. */
@@ -136,67 +133,16 @@ public final class WorldRenderer {
         return tile == Tile.BUSH;
     }
 
+    /** 발밑에 그림자를 깔고, 그림의 가로 가운데를 캐릭터 위치에 맞춰 그린다. 머리는 윗칸으로 솟는다. */
     private void drawPlayer(Graphics2D g, Player player) {
-        double x = player.x();
-        double y = player.y();
-        double bob = player.isMoving() ? Math.abs(Math.sin(player.walkTime() * 14)) * 3 : 0;
-        Color color = playerColor(player.id());
+        int x = (int) Math.round(player.x());
+        int feet = (int) Math.round(player.y()) + FEET_BELOW_CENTER;
 
         g.setColor(SHADOW);
-        g.fill(new Ellipse2D.Double(x - 13, y + 9, 26, 9));
+        g.fillOval(x - 14, feet - 6, 28, 9);
 
-        // 발: 걸을 때 번갈아 움직인다
-        double step = player.isMoving() ? Math.sin(player.walkTime() * 14) * 3 : 0;
-        g.setColor(color.darker().darker());
-        g.fill(new Ellipse2D.Double(x - 11, y + 7 + step, 9, 6));
-        g.fill(new Ellipse2D.Double(x + 2, y + 7 - step, 9, 6));
-
-        double bodyY = y - 20 - bob;
-        Shape body = new Ellipse2D.Double(x - 15, bodyY, 30, 30);
-        g.setColor(color);
-        g.fill(body);
-        g.setColor(new Color(255, 255, 255, 90));
-        g.fill(new Ellipse2D.Double(x - 10, bodyY + 4, 9, 7));
-        g.setColor(color.darker().darker());
-        // 선 굵기를 되돌려 놓지 않으면 뒤에 그리는 HUD 테두리까지 굵어진다.
-        Stroke previous = g.getStroke();
-        g.setStroke(BODY_OUTLINE);
-        g.draw(body);
-        g.setStroke(previous);
-
-        drawFace(g, player.facing(), x, bodyY + 15);
-        drawNameTag(g, "P" + player.id(), x, bodyY - 4, color);
-    }
-
-    private void drawFace(Graphics2D g, Direction facing, double cx, double cy) {
-        if (facing == Direction.UP) {
-            return; // 뒷모습
-        }
-        double shift = switch (facing) {
-            case LEFT -> -5;
-            case RIGHT -> 5;
-            default -> 0;
-        };
-        double spread = facing == Direction.DOWN ? 5.5 : 4;
-        g.setColor(Color.WHITE);
-        g.fill(new Ellipse2D.Double(cx + shift - spread - 3.5, cy - 4, 7, 9));
-        g.fill(new Ellipse2D.Double(cx + shift + spread - 3.5, cy - 4, 7, 9));
-        g.setColor(new Color(0x222222));
-        double pupil = shift / 3;
-        g.fill(new Ellipse2D.Double(cx + shift - spread - 2 + pupil, cy - 1, 4, 5));
-        g.fill(new Ellipse2D.Double(cx + shift + spread - 2 + pupil, cy - 1, 4, 5));
-    }
-
-    private void drawNameTag(Graphics2D g, String text, double cx, double bottom, Color color) {
-        g.setFont(NAME_FONT);
-        FontMetrics fm = g.getFontMetrics();
-        int w = fm.stringWidth(text) + 8;
-        int h = fm.getHeight();
-        int left = (int) Math.round(cx - w / 2.0);
-        int top = (int) Math.round(bottom - h);
-        g.setColor(new Color(0, 0, 0, 150));
-        g.fillRoundRect(left, top, w, h, 8, 8);
-        g.setColor(color.brighter());
-        g.drawString(text, left + 4, top + fm.getAscent());
+        BufferedImage frame = characters.frame(player.profile().mascot(), player.facing(), player.isMoving(),
+                player.walkTime());
+        g.drawImage(frame, x - CharacterSprites.FRAME_SIZE / 2, feet - CharacterSprites.FEET_Y, null);
     }
 }
