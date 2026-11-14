@@ -32,4 +32,18 @@ class PlayerProfileTest {
         assertEquals(Mascot.DEFAULT, PlayerProfile.placeholder(2).mascot());
         assertEquals(PlayerProfile.placeholder(3), new Player(3, 0, 0).profile());
     }
+
+    @Test
+    void 팀을_정하지_않으면_1팀이다() {
+        assertEquals(PlayerProfile.DEFAULT_TEAM, new PlayerProfile("부기", Mascot.SANGSANGBUGI).team());
+        assertEquals(1, PlayerProfile.placeholder(4).team());
+        assertEquals(new PlayerProfile("부기", Mascot.SANGSANGBUGI, 1), new PlayerProfile("부기", Mascot.SANGSANGBUGI));
+    }
+
+    @Test
+    void 팀_번호는_1_이상이어야_한다() {
+        assertEquals(2, new PlayerProfile("부기", Mascot.SANGSANGBUGI, 2).team());
+        assertThrows(IllegalArgumentException.class, () -> new PlayerProfile("부기", Mascot.SANGSANGBUGI, 0));
+        assertThrows(IllegalArgumentException.class, () -> new PlayerProfile("부기", Mascot.SANGSANGBUGI, -1));
+    }
 }

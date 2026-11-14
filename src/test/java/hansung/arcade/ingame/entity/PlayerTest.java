@@ -197,4 +197,15 @@ class PlayerTest {
         assertEquals(xBefore, player.x(), 1e-9);
         assertEquals(0, player.row());
     }
+
+    @Test
+    void 처음에는_살아_있고_탈락시키면_다시_살아나지_않는다() {
+        Player player = new Player(1, 0, 0);
+        assertTrue(player.isAlive());
+
+        player.eliminate();
+        assertFalse(player.isAlive());
+        player.eliminate();
+        assertFalse(player.isAlive());
+    }
 }

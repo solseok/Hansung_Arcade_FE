@@ -26,6 +26,7 @@ public final class Player {
     private Direction facing = Direction.DOWN;
     private boolean moving;
     private double walkTime;
+    private boolean alive = true;
 
     /** 닉네임·캐릭터를 아직 모를 때(테스트 등). {@link PlayerProfile#placeholder} 정보를 쓴다. */
     public Player(int id, int spawnCol, int spawnRow) {
@@ -144,6 +145,16 @@ public final class Player {
 
     public Direction facing() {
         return facing;
+    }
+
+    /** 이번 판에서 아직 살아 있는지. 승패 판정에 쓴다 */
+    public boolean isAlive() {
+        return alive;
+    }
+
+    /** 이번 판에서 탈락시킨다 (물풍선에 갇힌 채 터졌을 때 등). 한 번 탈락하면 그 판에서는 되살아나지 않는다. */
+    public void eliminate() {
+        alive = false;
     }
 
     public boolean isMoving() {
