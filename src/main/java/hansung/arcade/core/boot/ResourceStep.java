@@ -7,6 +7,7 @@ import hansung.arcade.ingame.hud.HudSkin;
 import hansung.arcade.ingame.map.MapLoader;
 import hansung.arcade.ingame.map.Tile;
 import hansung.arcade.ingame.map.TileMap;
+import hansung.arcade.ingame.render.BalloonSprites;
 import hansung.arcade.ingame.render.CharacterSprites;
 import hansung.arcade.ingame.render.Tileset;
 import org.slf4j.Logger;
@@ -37,6 +38,7 @@ public final class ResourceStep implements BootStep {
         warnMissingArt(map, tileset);
 
         context.register(CharacterSprites.class, CharacterSprites.load());
+        context.register(BalloonSprites.class, BalloonSprites.load());
 
         HudFonts fonts = HudFonts.load();
         if (!fonts.missing().isEmpty()) {
