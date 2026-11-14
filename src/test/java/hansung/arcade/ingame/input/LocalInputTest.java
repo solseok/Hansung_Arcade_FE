@@ -7,13 +7,18 @@ import javax.swing.JPanel;
 import java.awt.Component;
 import java.awt.event.KeyEvent;
 import java.util.List;
+import java.util.Map;
 
+import static java.awt.event.InputEvent.CTRL_DOWN_MASK;
 import static java.awt.event.InputEvent.SHIFT_DOWN_MASK;
 import static java.awt.event.KeyEvent.KEY_LOCATION_LEFT;
 import static java.awt.event.KeyEvent.KEY_LOCATION_RIGHT;
 import static java.awt.event.KeyEvent.KEY_LOCATION_STANDARD;
+import static java.awt.event.KeyEvent.VK_CONTROL;
+import static java.awt.event.KeyEvent.VK_D;
 import static java.awt.event.KeyEvent.VK_LEFT;
 import static java.awt.event.KeyEvent.VK_SHIFT;
+import static java.awt.event.KeyEvent.VK_SLASH;
 import static java.awt.event.KeyEvent.VK_SPACE;
 import static java.awt.event.KeyEvent.VK_UP;
 import static java.awt.event.KeyEvent.VK_W;
@@ -29,8 +34,11 @@ class LocalInputTest {
 
     private static final Component SOURCE = new JPanel();
     private static final int ME = 1;
+    private static final int P1 = 1;
+    private static final int P2 = 2;
 
     private final LocalInput solo = new LocalInput(List.of(ME));
+    private final LocalInput duo = new LocalInput(List.of(P1, P2));
 
     @Test
     void 물풍선_키는_누른_뒤_첫_틱에만_한_번_들어간다() {
@@ -140,6 +148,89 @@ class LocalInputTest {
         // 자동 반복으로 다시 온 Shift 누름은 새로 누른 것이 아니다
         press(solo, VK_SHIFT, KEY_LOCATION_LEFT, SHIFT_DOWN_MASK);
         assertFalse(command(solo, ME).useItem());
+    }
+
+    @Test
+    void 두_명이면_WASD는_1P를_방향키는_2P를_움직인다() {
+        press(duo, VK_W);
+        press(duo, VK_LEFT);
+
+        assertEquals(Direction.UP, duo.heldDirection(0));
+        assertEquals(Direction.LEFT, duo.heldDirection(1));
+
+        // 한 사람이 키를 떼도 다른 사람은 계속 움직인다
+        release(duo, VK_W);
+        assertNull(duo.heldDirection(0));
+        assertEquals(Direction.LEFT, duo.heldDirection(1));
+    }
+
+    @Test
+    void 두_명이면_왼쪽_Shift는_1P_오른쪽_Shift는_2P의_물풍선이다() {
+        PlayerCommand balloon = new PlayerCommand(null, true, false);
+
+        press(duo, VK_SHIFT, KEY_LOCATION_LEFT, SHIFT_DOWN_MASK);
+        assertEquals(Map.of(P1, balloon, P2, PlayerCommand.IDLE), duo.takeCommands());
+        release(duo, VK_SHIFT, KEY_LOCATION_LEFT);
+
+        press(duo, VK_SHIFT, KEY_LOCATION_RIGHT, SHIFT_DOWN_MASK);
+        assertEquals(Map.of(P1, PlayerCommand.IDLE, P2, balloon), duo.takeCommands());
+    }
+
+    @Test
+    void 두_명이면_왼쪽_Ctrl은_1P_슬래시는_2P의_아이템이다() {
+        press(duo, VK_CONTROL, KEY_LOCATION_LEFT, CTRL_DOWN_MASK);
+        press(duo, VK_SLASH, KEY_LOCATION_STANDARD, CTRL_DOWN_MASK);
+
+        PlayerCommand item = new PlayerCommand(null, false, true);
+        assertEquals(Map.of(P1, item, P2, item), duo.takeCommands());
+    }
+
+    @Test
+    void 두_명이면_혼자_할_때의_Space와_오른쪽_Ctrl은_아무_키도_아니다() {
+        assertFalse(press(duo, VK_SPACE));
+        assertFalse(press(duo, VK_CONTROL, KEY_LOCATION_RIGHT, CTRL_DOWN_MASK));
+    }
+
+    @Test
+    void 한_사람이_물풍선_키를_누르고_있어도_다른_사람은_따로_누를_수_있다() {
+        press(duo, VK_SHIFT, KEY_LOCATION_LEFT, SHIFT_DOWN_MASK);
+        command(duo, P1);
+        press(duo, VK_SHIFT, KEY_LOCATION_RIGHT, SHIFT_DOWN_MASK);
+
+        Map<Integer, PlayerCommand> tick = duo.takeCommands();
+        assertFalse(tick.get(P1).placeBalloon());
+        assertTrue(tick.get(P2).placeBalloon());
+    }
+
+    @Test
+    void 두_명일_때_채팅_입력칸에서는_2P의_방향키만_받는다() {
+        assertFalse(duo.keyPressed(key(KeyEvent.KEY_PRESSED, VK_D, KEY_LOCATION_STANDARD, 0), true));
+        assertFalse(duo.keyPressed(key(KeyEvent.KEY_PRESSED, VK_SHIFT, KEY_LOCATION_RIGHT, SHIFT_DOWN_MASK), true));
+        assertFalse(duo.keyPressed(key(KeyEvent.KEY_PRESSED, VK_SLASH, KEY_LOCATION_STANDARD, 0), true));
+        assertTrue(duo.keyPressed(key(KeyEvent.KEY_PRESSED, VK_UP, KEY_LOCATION_STANDARD, 0), true));
+
+        Map<Integer, PlayerCommand> tick = duo.takeCommands();
+        assertEquals(PlayerCommand.IDLE, tick.get(P1));
+        assertEquals(PlayerCommand.moving(Direction.UP), tick.get(P2));
+    }
+
+    @Test
+    void 채팅_입력칸을_열기_전부터_누르던_WASD는_입력칸에서_떼도_멈춘다() {
+        press(duo, VK_D);
+        assertTrue(duo.keyReleased(key(KeyEvent.KEY_RELEASED, VK_D, KEY_LOCATION_STANDARD, 0)));
+
+        assertNull(duo.heldDirection(0));
+    }
+
+    @Test
+    void 포커스를_잃으면_두_사람의_키를_모두_비운다() {
+        press(duo, VK_W);
+        press(duo, VK_UP);
+        press(duo, VK_SLASH);
+
+        duo.clear();
+
+        assertEquals(Map.of(P1, PlayerCommand.IDLE, P2, PlayerCommand.IDLE), duo.takeCommands());
     }
 
     static PlayerCommand command(LocalInput input, int playerId) {

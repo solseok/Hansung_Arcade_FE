@@ -102,4 +102,48 @@ class StartScreenStepTest {
         IllegalStateException e = assertThrows(IllegalStateException.class, () -> StartScreenStep.matchMode(properties));
         assertTrue(e.getMessage().contains("game.match-mode"), e.getMessage());
     }
+
+    @Test
+    void 인원을_정하지_않으면_혼자_한다() {
+        GameProperties properties = GameProperties.of(Map.of("player.nickname", "부기"), List.of());
+
+        assertEquals(List.of(new PlayerProfile("부기", Mascot.SANGSANGBUGI)), StartScreenStep.localProfiles(properties));
+    }
+
+    @Test
+    void 실행_인자로_2명을_주면_2P는_player2_설정을_쓴다() {
+        GameProperties properties = GameProperties.of(Map.of("game.local-players", "1"),
+                List.of("--game.local-players=2", "--player.nickname=부기", "--player2.nickname=꼬꼬",
+                        "--player2.character=kkokko"));
+
+        assertEquals(List.of(new PlayerProfile("부기", Mascot.SANGSANGBUGI), new PlayerProfile("꼬꼬", Mascot.KKOKKO, 2)),
+                StartScreenStep.localProfiles(properties));
+    }
+
+    @Test
+    void 설정이_없으면_2P는_Player2와_한성냥이를_쓴다() {
+        GameProperties properties = GameProperties.of(Map.of(), List.of("--game.local-players=2"));
+
+        assertEquals(new PlayerProfile("Player2", Mascot.HANSUNGNYANGI, 2), StartScreenStep.localProfiles(properties).get(1));
+    }
+
+    @Test
+    void 인원이_1이나_2가_아니면_설정_이름과_함께_실패한다() {
+        for (String count : List.of("0", "3", "two")) {
+            GameProperties properties = GameProperties.of(Map.of(), List.of("--game.local-players=" + count));
+
+            IllegalStateException e = assertThrows(IllegalStateException.class,
+                    () -> StartScreenStep.localProfiles(properties));
+            assertTrue(e.getMessage().contains("game.local-players"), e.getMessage());
+        }
+    }
+
+    @Test
+    void 잘못된_2P_캐릭터는_player2_설정_이름과_함께_실패한다() {
+        GameProperties properties = GameProperties.of(Map.of(),
+                List.of("--game.local-players=2", "--player2.character=nobody"));
+
+        IllegalStateException e = assertThrows(IllegalStateException.class, () -> StartScreenStep.localProfiles(properties));
+        assertTrue(e.getMessage().contains("player2.character"), e.getMessage());
+    }
 }

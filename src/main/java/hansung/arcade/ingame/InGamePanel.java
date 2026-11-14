@@ -1,6 +1,7 @@
 package hansung.arcade.ingame;
 
 import hansung.arcade.ingame.entity.Direction;
+import hansung.arcade.ingame.entity.Player;
 import hansung.arcade.ingame.hud.Box;
 import hansung.arcade.ingame.hud.ChatField;
 import hansung.arcade.ingame.hud.HudLayout;
@@ -26,7 +27,6 @@ import java.awt.event.FocusEvent;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.geom.AffineTransform;
-import java.util.List;
 
 /**
  * 인게임 화면(800 x 600). 아웃게임에서는 이 패널을 프레임에 붙이고 {@link #start()}만 호출하면 된다.
@@ -36,7 +36,8 @@ import java.util.List;
  * 갱신은 고정 간격(1/60초)으로 해서 프레임이 흔들려도 이동 속도가 일정하다.</p>
  *
  * <p>이동·물풍선·아이템 키({@link KeyBindings})는 이 패널이 포커스를 가지고 있을 때 받아, 틱마다 플레이어별 명령으로
- * 바꿔 {@link GameWorld#update}에 넘긴다. 키 바인딩(InputMap)은 수정 키까지 일치해야 해서
+ * 바꿔 {@link GameWorld#update}에 넘긴다. 게임에 이 컴퓨터의 플레이어가 둘이면(한 키보드 2인 모드)
+ * 1P는 W/A/S/D 쪽, 2P는 방향키 쪽 키로 따로 움직인다. 키 바인딩(InputMap)은 수정 키까지 일치해야 해서
  * Shift·Ctrl을 누른 채 방향키를 떼면 뗌 이벤트를 놓치므로, 키 코드만 보는 KeyListener를 쓴다.</p>
  *
  * <p>Enter를 누르면 맵 왼쪽 아래에 채팅 입력칸({@link ChatField})이 열리고 포커스가 그리로 간다.
@@ -131,13 +132,16 @@ public final class InGamePanel extends JPanel {
 
     public InGamePanel(GameWorld world, Tileset tileset, HudSkin skin, CharacterSprites characters) {
         this.world = world;
-        this.input = new LocalInput(List.of(world.localPlayer().id()));
+        this.input = new LocalInput(world.localPlayers().stream().map(Player::id).toList());
         this.worldRenderer = new WorldRenderer(tileset, characters);
         this.hud = new InGameHud(skin, world.map(), tileset);
         setPreferredSize(new Dimension(HudLayout.WIDTH, HudLayout.HEIGHT));
         // 바탕은 HUD 그림이 화면 전체를 덮으므로 따로 지우지 않는다.
         setOpaque(true);
         setFocusable(true);
+        // 한글 입력 상태에서는 입력기가 W/A/S/D 같은 글자 키를 먼저 가져가 키 코드가 제대로 오지 않을 수 있다 (윈도우).
+        // 글을 받지 않는 패널이라 입력기를 끈다. 채팅 입력칸은 자기 입력기를 그대로 쓴다
+        enableInputMethods(false);
         addKeyListener(playerKeys);
         addKeyListener(chatKeys);
         addFocusListener(focusLossHandler);

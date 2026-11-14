@@ -11,6 +11,7 @@ import hansung.arcade.ingame.match.Match;
 import hansung.arcade.ingame.match.MatchMode;
 
 import java.awt.Point;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -23,7 +24,10 @@ import java.util.Map;
 public final class GameWorld {
 
     private final TileMap map;
+    /** 이 컴퓨터의 첫 플레이어(1P). 채팅은 이 플레이어가 친 것으로 올라간다 */
     private final Player localPlayer;
+    /** 이 컴퓨터에서 조작하는 플레이어들. 1P, 2P 순서 */
+    private final List<Player> localPlayers;
     private final ChatLog chatLog = new ChatLog();
     private final SpeechBubbles speechBubbles = new SpeechBubbles();
     private final Match match;
@@ -31,14 +35,44 @@ public final class GameWorld {
 
     /** 개인전으로 시작한다. */
     public GameWorld(TileMap map, PlayerProfile localProfile) {
-        this(map, localProfile, MatchMode.SOLO);
+        this(map, List.of(localProfile), MatchMode.SOLO);
     }
 
     /** @param localProfile 이 컴퓨터에서 조작하는 플레이어의 닉네임·캐릭터·팀 */
     public GameWorld(TileMap map, PlayerProfile localProfile, MatchMode mode) {
+        this(map, List.of(localProfile), mode);
+    }
+
+    /** 한 컴퓨터에서 여럿이 하는 개인전. */
+    public GameWorld(TileMap map, List<PlayerProfile> localProfiles) {
+        this(map, localProfiles, MatchMode.SOLO);
+    }
+
+    /**
+     * 한 컴퓨터에서 여럿이 하는 게임(한 키보드 2인 모드).
+     *
+     * @param localProfiles 이 컴퓨터에서 조작하는 플레이어들의 닉네임·캐릭터·팀. 1P, 2P 순서이고,
+     *                      n번째(1부터) 플레이어는 번호 n을 받아 맵의 n번 스폰에서 시작한다
+     * @param mode          개인전·팀전
+     */
+    public GameWorld(TileMap map, List<PlayerProfile> localProfiles, MatchMode mode) {
+        List<Point> spawns = map.spawnPoints();
+        if (localProfiles.isEmpty()) {
+            throw new IllegalArgumentException("플레이어가 한 명은 있어야 합니다.");
+        }
+        if (localProfiles.size() > spawns.size()) {
+            throw new IllegalArgumentException("맵 %s에는 스폰이 %d곳뿐이라 %d명이 시작할 수 없습니다."
+                    .formatted(map.name(), spawns.size(), localProfiles.size()));
+        }
         this.map = map;
-        Point spawn = map.spawnPoints().get(0);
-        this.localPlayer = new Player(1, localProfile, spawn.x, spawn.y);
+        List<Player> players = new ArrayList<>();
+        for (int i = 0; i < localProfiles.size(); i++) {
+            Point spawn = spawns.get(i);
+            players.add(new Player(i + 1, localProfiles.get(i), spawn.x, spawn.y));
+        }
+        this.localPlayers = List.copyOf(players);
+        this.localPlayer = localPlayers.get(0);
+        // 플레이어를 모두 만든 뒤에 경기를 연다 (경기 중에 플레이어를 더하지 않는다)
         this.match = new Match(mode, players());
     }
 
@@ -106,12 +140,19 @@ public final class GameWorld {
         return map;
     }
 
+    /** 이 컴퓨터의 첫 플레이어(1P). 한 키보드 2인 모드에서도 채팅은 1P가 친 것으로 올라간다. */
     public Player localPlayer() {
         return localPlayer;
     }
 
+    /** 이 컴퓨터에서 조작하는 플레이어들. 1P, 2P 순서. 혼자 하면 1P 한 명이다. */
+    public List<Player> localPlayers() {
+        return localPlayers;
+    }
+
+    /** 맵 위의 모든 플레이어. 지금은 이 컴퓨터의 플레이어뿐이다. */
     public List<Player> players() {
-        return List.of(localPlayer);
+        return localPlayers;
     }
 
     /** 게임을 시작한 뒤 흐른 시간(초). 경기가 끝나도 계속 흐른다. 경기의 남은 시간은 {@link Match#clock()}을 본다 */

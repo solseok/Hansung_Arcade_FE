@@ -12,6 +12,7 @@ import hansung.arcade.ingame.map.MapLoader;
 import hansung.arcade.ingame.match.MatchClock;
 import hansung.arcade.ingame.match.MatchMode;
 import hansung.arcade.ingame.match.MatchOutcome;
+import hansung.arcade.ingame.map.TileMap;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -20,12 +21,18 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class GameWorldTest {
 
     /** 게임 루프 한 번 */
     private static final double TICK = 1.0 / 60;
+
+    private static final PlayerProfile BUGI = new PlayerProfile("부기", Mascot.SANGSANGBUGI);
+    private static final PlayerProfile NYANGI = new PlayerProfile("냥이", Mascot.HANSUNGNYANGI);
+    /** 스폰 1이 왼쪽 위, 스폰 2가 오른쪽 아래인 빈 맵 */
+    private static final TileMap TWO_SPAWNS = MapLoader.parse("fixture/duo", List.of("1....", ".....", "....2"));
 
     private final GameWorld world = new GameWorld(MapLoader.parse("fixture/chat", List.of("1....", ".....")),
             new PlayerProfile("부기", Mascot.SANGSANGBUGI));
@@ -164,5 +171,70 @@ class GameWorldTest {
         for (int i = 0; i < n; i++) {
             world.update(TICK, Map.of());
         }
+    }
+
+    @Test
+    void 혼자_하면_이_컴퓨터의_플레이어는_1번_스폰의_1P_한_명이다() {
+        GameWorld solo = new GameWorld(TWO_SPAWNS, BUGI);
+
+        assertEquals(List.of(solo.localPlayer()), solo.localPlayers());
+        assertEquals(solo.localPlayers(), solo.players());
+        assertEquals(1, solo.localPlayer().id());
+        assertEquals(0, solo.localPlayer().col());
+        assertEquals(0, solo.localPlayer().row());
+    }
+
+    @Test
+    void 두_명이면_1P는_1번_스폰_2P는_2번_스폰에서_각자의_정보로_시작한다() {
+        GameWorld duo = new GameWorld(TWO_SPAWNS, List.of(BUGI, NYANGI));
+
+        List<Player> players = duo.localPlayers();
+        assertEquals(2, players.size());
+        assertEquals(players, duo.players());
+        Player first = players.get(0);
+        Player second = players.get(1);
+        assertEquals(List.of(1, 2), List.of(first.id(), second.id()));
+        assertEquals(List.of(BUGI, NYANGI), List.of(first.profile(), second.profile()));
+        assertEquals(List.of(0, 0), List.of(first.col(), first.row()));
+        assertEquals(List.of(4, 2), List.of(second.col(), second.row()));
+        // 고른 캐릭터의 능력치로 시작한다
+        assertEquals(Mascot.HANSUNGNYANGI.balloons().base(), second.balloons());
+        assertEquals(first, duo.localPlayer());
+    }
+
+    @Test
+    void 명령은_플레이어_번호대로_따로_들어가고_명령이_없는_플레이어는_가만히_있다() {
+        GameWorld duo = new GameWorld(TWO_SPAWNS, List.of(BUGI, NYANGI));
+        Player first = duo.localPlayers().get(0);
+        Player second = duo.localPlayers().get(1);
+        double secondX = second.x();
+        double secondY = second.y();
+
+        duo.update(0.1, Map.of(first.id(), PlayerCommand.moving(Direction.RIGHT)));
+        assertTrue(first.x() > TileMap.centerX(0));
+        assertEquals(secondX, second.x());
+
+        duo.update(0.1, Map.of(second.id(), PlayerCommand.moving(Direction.UP)));
+        assertTrue(second.y() < secondY);
+        assertEquals(secondX, second.x());
+    }
+
+    @Test
+    void 두_명이어도_채팅은_1P가_친_것으로_올라간다() {
+        GameWorld duo = new GameWorld(TWO_SPAWNS, List.of(BUGI, NYANGI));
+
+        duo.sendChat("안녕");
+
+        assertEquals(List.of(new ChatMessage(1, "부기", "안녕")), duo.chatLog().messages());
+    }
+
+    @Test
+    void 스폰보다_사람이_많거나_아무도_없으면_만들지_않는다() {
+        TileMap oneSpawn = MapLoader.parse("fixture/solo", List.of("1...."));
+
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                () -> new GameWorld(oneSpawn, List.of(BUGI, NYANGI)));
+        assertTrue(e.getMessage().contains("스폰"), e.getMessage());
+        assertThrows(IllegalArgumentException.class, () -> new GameWorld(oneSpawn, List.of()));
     }
 }
