@@ -1,8 +1,7 @@
-package hansung.arcade.ingame.chat;
+package hansung.arcade.ingame.hud;
 
 import hansung.arcade.core.ui.RunOnEdt;
-import hansung.arcade.ingame.hud.HudLayout;
-import hansung.arcade.ingame.hud.OutlineText;
+import hansung.arcade.ingame.chat.ChatMessage;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

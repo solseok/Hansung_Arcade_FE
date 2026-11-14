@@ -1,12 +1,12 @@
 package hansung.arcade.ingame;
 
 import hansung.arcade.core.ui.RunOnEdt;
-import hansung.arcade.ingame.chat.ChatField;
 import hansung.arcade.ingame.chat.ChatMessage;
 import hansung.arcade.ingame.entity.Direction;
 import hansung.arcade.ingame.entity.Mascot;
 import hansung.arcade.ingame.entity.PlayerProfile;
 import hansung.arcade.ingame.hud.Box;
+import hansung.arcade.ingame.hud.ChatField;
 import hansung.arcade.ingame.hud.HudFonts;
 import hansung.arcade.ingame.hud.HudLayout;
 import hansung.arcade.ingame.hud.HudPalette;
@@ -176,6 +176,20 @@ class InGamePanelTest {
         // 다시 열면 비어 있다
         tap(panel, KeyEvent.VK_ENTER);
         assertEquals("", panel.chatField().getText());
+    }
+
+    @Test
+    void 닫힌_입력칸에_뒤늦게_들어온_글은_다시_열_때_비운다() {
+        InGamePanel panel = panel(world("..............1"));
+        ChatField chat = panel.chatField();
+        // 닫은 뒤에 입력기가 조합하던 글자를 뒤늦게 확정해 넣은 상황
+        chat.setText("ㅎ");
+        assertFalse(chat.isVisible());
+
+        tap(panel, KeyEvent.VK_ENTER);
+
+        assertTrue(chat.isVisible());
+        assertEquals("", chat.getText());
     }
 
     @Test
@@ -383,6 +397,8 @@ class InGamePanelTest {
     private static InGamePanel panel(GameWorld world) {
         InGamePanel panel = new InGamePanel(world, Tileset.forTheme("fixture"), skin);
         panel.setSize(HudLayout.WIDTH, HudLayout.HEIGHT);
+        // 언제 그려도 입력칸의 커서가 켜진 그림이 나오게 깜빡임 시계를 멈춘다
+        panel.chatField().setBlinkClock(() -> 0L);
         return panel;
     }
 

@@ -1,8 +1,8 @@
 package hansung.arcade.ingame;
 
-import hansung.arcade.ingame.chat.ChatField;
 import hansung.arcade.ingame.entity.Direction;
 import hansung.arcade.ingame.hud.Box;
+import hansung.arcade.ingame.hud.ChatField;
 import hansung.arcade.ingame.hud.HudLayout;
 import hansung.arcade.ingame.hud.HudSkin;
 import hansung.arcade.ingame.hud.InGameHud;

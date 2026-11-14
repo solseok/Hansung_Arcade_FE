@@ -1,7 +1,6 @@
-package hansung.arcade.ingame.chat;
+package hansung.arcade.ingame.hud;
 
-import hansung.arcade.ingame.hud.Box;
-import hansung.arcade.ingame.hud.OutlineText;
+import hansung.arcade.ingame.chat.ChatMessage;
 
 import javax.swing.JTextField;
 import javax.swing.event.DocumentEvent;
@@ -16,12 +15,14 @@ import javax.swing.text.Position;
 import javax.swing.text.StyleConstants;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.util.Objects;
+import java.util.function.LongSupplier;
 
 import static hansung.arcade.ingame.hud.HudLayout.CHAT_BAR;
 import static hansung.arcade.ingame.hud.HudLayout.CHAT_OUTLINE;
 
 /**
- * 맵 위 채팅 입력칸. 자리는 {@link hansung.arcade.ingame.hud.HudLayout#CHAT_BAR}이고, 배경과 테두리 없이
+ * 맵 위 채팅 입력칸. 자리는 {@link HudLayout#CHAT_BAR}이고, 배경과 테두리 없이
  * 치고 있는 글자와 커서만 올라온 채팅과 같은 {@link OutlineText}로 그린다.
  *
  * <p>한글 조합·붙여넣기·지우기는 JTextField가 하던 대로 두고 그리기만 바꿨다. 조합 중인 글자도 문서에 들어 있어
@@ -40,7 +41,9 @@ public final class ChatField extends JTextField {
     private final OutlineText art;
     /** 바 안에 보이는 부분. 글이 바뀔 때만 다시 구한다 */
     private String visibleText = "";
-    private long blinkStart = System.nanoTime();
+    /** 커서 깜빡임을 재는 시계 (나노초) */
+    private LongSupplier blinkClock = System::nanoTime;
+    private long blinkStart = blinkClock.getAsLong();
 
     public ChatField(OutlineText art) {
         this.art = art;
@@ -80,12 +83,21 @@ public final class ChatField extends JTextField {
         return visibleText;
     }
 
+    /**
+     * 커서 깜빡임을 재는 시계를 바꾼다. 커서는 그리는 시점에 따라 켜져 있기도 꺼져 있기도 하므로,
+     * 테스트에서는 멈춘 시계를 넣어 언제 그려도 커서가 켜진 그림을 얻는다.
+     */
+    public void setBlinkClock(LongSupplier nanoClock) {
+        blinkClock = Objects.requireNonNull(nanoClock);
+        blinkStart = blinkClock.getAsLong();
+    }
+
     @Override
     protected void paintComponent(Graphics g) {
         Graphics2D g2 = (Graphics2D) g;
         // 바의 왼쪽 위(글자 칸이 시작하는 곳)는 이 컴포넌트 안에서 (MARGIN, MARGIN)이다
         art.draw(g2, visibleText, OutlineText.MARGIN, OutlineText.MARGIN);
-        if ((System.nanoTime() - blinkStart) / BLINK_NANOS % 2 == 0) {
+        if ((blinkClock.getAsLong() - blinkStart) / BLINK_NANOS % 2 == 0) {
             art.drawBar(g2, OutlineText.MARGIN + art.width(visibleText) + CARET_GAP, OutlineText.MARGIN, CARET_WIDTH);
         }
     }
@@ -94,7 +106,7 @@ public final class ChatField extends JTextField {
     @Override
     public void setVisible(boolean visible) {
         if (visible) {
-            blinkStart = System.nanoTime();
+            blinkStart = blinkClock.getAsLong();
         }
         super.setVisible(visible);
     }
@@ -108,7 +120,7 @@ public final class ChatField extends JTextField {
     private void textChanged() {
         visibleText = tailThatFits(getText());
         // 치는 동안에는 커서가 꺼지지 않게 깜빡임을 처음부터 다시 센다
-        blinkStart = System.nanoTime();
+        blinkStart = blinkClock.getAsLong();
         repaint();
     }
 
