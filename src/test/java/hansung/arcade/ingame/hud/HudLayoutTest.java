@@ -86,13 +86,13 @@ class HudLayoutTest {
     @Test
     void 오른쪽_열은_간격을_지킨_채_나가기가_창_바닥에서_9px_위에_오도록_놓인다() {
         assertEquals(FRAME.right() + 9, PLAYER_LIST.x());
-        // 첫 지시 크기: 168 x 417 (155 x 365), 112 (98), 41 (36)
+        // 첫 지시 → 환산 크기: 168 x 417 → 155 x 365, 112 → 98, 41 → 36
         assertEquals(365, PLAYER_LIST.height());
         assertEquals(98, ITEM_PANEL.height());
         assertEquals(36, EXIT.height());
         assertEquals(PLAYER_LIST.bottom() + 4, ITEM_PANEL.y());
         assertEquals(ITEM_PANEL.bottom() + 4, EXIT.y());
-        // 나가기 받침은 창 바닥에서 10 (9) 위
+        // 나가기 받침은 창 바닥에서 10 → 9 위 (지시 → 환산)
         assertEquals(HEIGHT - 9, EXIT.bottom());
         // 나가기 받침만 오른쪽으로 1px 나온다
         assertEquals(PLAYER_LIST.right() + 1, EXIT.right());

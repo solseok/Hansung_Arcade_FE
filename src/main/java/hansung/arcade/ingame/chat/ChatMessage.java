@@ -47,7 +47,8 @@ public record ChatMessage(int senderId, String sender, String text) {
      * <ul>
      *   <li>자모를 풀어쓴 한글(NFD, 맥의 파일 이름 등)은 한 글자로 합친다</li>
      *   <li>줄바꿈·탭 같은 제어 문자와 줄·문단 구분 문자는 공백으로 바꾼다</li>
-     *   <li>서식 문자(폭 없는 공백, 글자 방향 바꾸기 등)와 짝이 맞지 않는 서로게이트는 지운다</li>
+     *   <li>서식 문자(폭 없는 공백, 글자 방향 바꾸기 등)와 짝이 맞지 않는 서로게이트는 지운다.
+     *       이모지를 이어 붙이는 문자(ZWJ)도 서식 문자라, 이어 붙인 이모지는 낱개 이모지로 나뉜다</li>
      * </ul>
      */
     public static String singleLine(String text) {
