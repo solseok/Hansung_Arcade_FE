@@ -68,8 +68,9 @@ public final class HudLayout {
     /** 말풍선 안에서 한 줄에 들어가는 글자 폭 */
     public static final int BUBBLE_TEXT_WIDTH = BUBBLE_MAX_WIDTH - BUBBLE_PADDING_LEFT - BUBBLE_PADDING_RIGHT;
     /**
-     * 말풍선 바닥은 캐릭터 위치(충돌 박스 중심)에서 이만큼 위다. 캐릭터 그림(70 x 70)의 위쪽 끝으로,
-     * 머리 꼭대기보다 2~6px 높다. 그림을 놓는 자리는 WorldRenderer.drawPlayer 를 따른다 (중심 + 14 가 발, 발에서 65 위가 그림 위쪽 끝).
+     * 말풍선 바닥은 캐릭터 위치(충돌 박스 중심)에서 이만큼 위다. 캐릭터 스프라이트 그림(70 x 70)을 놓았을 때
+     * 그림 위쪽 끝이 오는 자리로, 머리 꼭대기보다 2~6px 높다: 발이 중심에서 14 아래, 그림 위쪽 끝이 발에서 65 위 (65 - 14).
+     * 캐릭터를 그리는 쪽에서 이 두 수치가 바뀌면 같이 고친다. 캐릭터를 도형으로 그리는 동안에는 이름표보다 14px쯤 위에 뜬다.
      */
     public static final int BUBBLE_ABOVE_PLAYER = 51;
 
