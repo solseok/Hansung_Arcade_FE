@@ -21,10 +21,10 @@ class BalloonSpritesTest {
     }
 
     @Test
-    void 놓인_물풍선은_44x40_네_장을_0_2초씩_되풀이한다() {
+    void 놓인_물풍선은_47x47_네_장을_0_2초씩_되풀이한다() {
         BufferedImage first = SPRITES.balloon(0);
-        assertEquals(BalloonSprites.BALLOON_WIDTH, first.getWidth());
-        assertEquals(40, first.getHeight());
+        assertEquals(BalloonSprites.BALLOON_SIZE, first.getWidth());
+        assertEquals(BalloonSprites.BALLOON_SIZE, first.getHeight());
 
         // 게임 루프처럼 1/60초씩 더한 나이로도 12틱째에 정확히 넘어간다
         double age = 0;
@@ -38,6 +38,26 @@ class BalloonSpritesTest {
         assertNotSame(SPRITES.balloon(0.2), SPRITES.balloon(0.4));
         assertNotSame(SPRITES.balloon(0.4), SPRITES.balloon(0.6));
         assertSame(first, SPRITES.balloon(0.8));
+    }
+
+    @Test
+    void 놓인_물풍선은_몸체가_불투명하고_그림자는_반투명_알파로_들어_있다() {
+        for (int frame = 0; frame < 4; frame++) {
+            BufferedImage image = SPRITES.balloon(frame * 0.2);
+            int partial = 0;
+            for (int y = 0; y < image.getHeight(); y++) {
+                for (int x = 0; x < image.getWidth(); x++) {
+                    int alpha = image.getRGB(x, y) >>> 24;
+                    if (alpha > 0 && alpha < 0xFF) {
+                        partial++;
+                    }
+                }
+            }
+            assertTrue(partial > 100, frame + "번째 장의 반투명 픽셀 " + partial);
+            assertEquals(0, image.getRGB(0, 0) >>> 24, "바탕은 투명하다");
+        }
+        // 눌리지 않은 장은 몸체 가운데가 그림의 (24, 20) 둘레다
+        assertEquals(0xFF, SPRITES.balloon(0).getRGB(BalloonSprites.BALLOON_CENTER_X, BalloonSprites.BALLOON_CENTER_Y) >>> 24);
     }
 
     @Test

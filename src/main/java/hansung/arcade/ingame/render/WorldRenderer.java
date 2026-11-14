@@ -57,17 +57,6 @@ public final class WorldRenderer {
     /** 탈락 연출 끝에 깜빡일 때 한 번 보이거나 숨는 시간(초). 보임·숨음 한 쌍이 0.2초다 */
     public static final double BLINK_SECONDS = 0.1;
 
-    /**
-     * 놓인 물풍선 그림 맨 아래 줄(풍선 바닥)이 칸 위쪽에서 떨어진 거리. 칸 바닥보다 2px 위라서
-     * 키 37px인 풍선이 칸 안에 들어앉는다.
-     */
-    static final int BALLOON_BOTTOM = T - 3;
-    /** 물풍선 그림자. 영상처럼 풍선 가운데에서 왼쪽 아래로 조금 비켜 깔린 납작한 타원이다 */
-    private static final Color BALLOON_SHADOW = new Color(0, 0, 0, 70);
-    private static final int BALLOON_SHADOW_WIDTH = 32;
-    private static final int BALLOON_SHADOW_HEIGHT = 12;
-    private static final int BALLOON_SHADOW_LEFT_SHIFT = 5;
-    private static final int BALLOON_SHADOW_BELOW_BOTTOM = 2;
     private static final double FRAME_BOUNDARY_SLACK = 1e-6;
 
     private final Tileset tileset;
@@ -121,20 +110,16 @@ public final class WorldRenderer {
         }
     }
 
-    /** row줄의 놓인 물풍선. 그림자를 먼저 깔고 칸 가운데에 풍선을 세운다 */
+    /**
+     * row줄의 놓인 물풍선. 몸체 가운데({@link BalloonSprites#BALLOON_CENTER_X}, {@link BalloonSprites#BALLOON_CENTER_Y})를
+     * 칸 가운데에 맞춘다. 반투명 그림자는 그림에 들어 있어서 왼쪽 아래로 칸 밖까지 몇 px 깔린다.
+     */
     private void drawBalloons(Graphics2D g, BalloonField field, int row) {
         for (WaterBalloon balloon : field.balloons()) {
-            if (balloon.row() != row) {
-                continue;
+            if (balloon.row() == row) {
+                g.drawImage(balloons.balloon(balloon.age()), balloon.col() * T + T / 2 - BalloonSprites.BALLOON_CENTER_X,
+                        row * T + T / 2 - BalloonSprites.BALLOON_CENTER_Y, null);
             }
-            int centerX = balloon.col() * T + T / 2;
-            int bottom = row * T + BALLOON_BOTTOM;
-            g.setColor(BALLOON_SHADOW);
-            g.fillOval(centerX - BALLOON_SHADOW_LEFT_SHIFT - BALLOON_SHADOW_WIDTH / 2,
-                    bottom + BALLOON_SHADOW_BELOW_BOTTOM - BALLOON_SHADOW_HEIGHT / 2,
-                    BALLOON_SHADOW_WIDTH, BALLOON_SHADOW_HEIGHT);
-            BufferedImage image = balloons.balloon(balloon.age());
-            g.drawImage(image, centerX - BalloonSprites.BALLOON_WIDTH / 2, bottom - image.getHeight() + 1, null);
         }
     }
 

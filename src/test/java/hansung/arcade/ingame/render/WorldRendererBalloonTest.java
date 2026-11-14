@@ -53,7 +53,7 @@ class WorldRendererBalloonTest {
         return canvas;
     }
 
-    /** sprite의 불투명한 픽셀이 canvas의 (left, top)부터 그대로 찍혔는지. 비교한 픽셀 수를 돌려준다 */
+    /** sprite의 완전히 불투명한 픽셀이 canvas의 (left, top)부터 그대로 찍혔는지. 비교한 픽셀 수를 돌려준다 */
     private static int assertDrawnAt(BufferedImage sprite, BufferedImage canvas, int left, int top) {
         int compared = 0;
         for (int y = 0; y < sprite.getHeight(); y++) {
@@ -61,7 +61,7 @@ class WorldRendererBalloonTest {
                 int rgb = sprite.getRGB(x, y);
                 int cx = left + x;
                 int cy = top + y;
-                if ((rgb >>> 24) != 0 && cx >= 0 && cy >= 0 && cx < canvas.getWidth() && cy < canvas.getHeight()) {
+                if ((rgb >>> 24) == 0xFF && cx >= 0 && cy >= 0 && cx < canvas.getWidth() && cy < canvas.getHeight()) {
                     assertEquals(rgb, canvas.getRGB(cx, cy), "(%d, %d)".formatted(x, y));
                     compared++;
                 }
@@ -71,18 +71,30 @@ class WorldRendererBalloonTest {
     }
 
     @Test
-    void 놓인_물풍선은_칸_가운데에_풍선_바닥이_칸_바닥_2px_위에_오게_그린다() {
+    void 놓인_물풍선은_몸체_가운데를_칸_가운데에_맞추고_그림자는_반투명하게_그린다() {
         GameWorld world = placedBalloon();
         WaterBalloon balloon = world.balloonField().balloons().get(0);
         BufferedImage canvas = draw(world);
 
         BufferedImage sprite = BALLOONS.balloon(balloon.age());
-        int left = T + T / 2 - BalloonSprites.BALLOON_WIDTH / 2;
-        int top = WorldRenderer.BALLOON_BOTTOM - sprite.getHeight() + 1;
+        int left = T + T / 2 - BalloonSprites.BALLOON_CENTER_X;
+        int top = T / 2 - BalloonSprites.BALLOON_CENTER_Y;
         assertTrue(assertDrawnAt(sprite, canvas, left, top) > 1000);
-        // 풍선 바닥 줄 바로 아래(칸 바닥 쪽)에는 반투명 그림자만 깔린다
-        int below = canvas.getRGB(T + T / 2 - 5, WorldRenderer.BALLOON_BOTTOM + 2);
-        assertTrue((below >>> 24) > 0 && (below >>> 24) < 0xFF, "그림자 " + Integer.toHexString(below));
+        // 그림의 반투명한 그림자 자리는 화면에서도 반투명하다
+        int shadows = 0;
+        for (int y = 0; y < sprite.getHeight(); y++) {
+            for (int x = 0; x < sprite.getWidth(); x++) {
+                int alpha = sprite.getRGB(x, y) >>> 24;
+                int cx = left + x;
+                int cy = top + y;
+                if (alpha > 0 && alpha < 0xFF && cx >= 0 && cy >= 0) {
+                    int drawn = canvas.getRGB(cx, cy) >>> 24;
+                    assertTrue(Math.abs(drawn - alpha) <= 1, "(%d, %d) 알파 %d → %d".formatted(x, y, alpha, drawn));
+                    shadows++;
+                }
+            }
+        }
+        assertTrue(shadows > 100, "반투명 픽셀 " + shadows);
     }
 
     @Test

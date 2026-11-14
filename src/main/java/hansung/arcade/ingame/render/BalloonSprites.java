@@ -14,7 +14,8 @@ import java.util.Map;
  * 놓인 물풍선과 터진 물줄기 그림. 파일은 resources/water_balloon/ 에 있다.
  *
  * <ul>
- *   <li>Balloon.bmp: 놓인 물풍선 4장 (44 x 40, 마젠타 바탕). {@link WaterBalloon#FRAME_SECONDS}초씩 되풀이한다.</li>
+ *   <li>Balloon.png: 놓인 물풍선 4장 (47 x 47). 바탕은 투명하고 그림자는 반투명 알파로 들어 있다.
+ *       {@link WaterBalloon#FRAME_SECONDS}초씩 되풀이한다.</li>
  *   <li>Center.bmp: 터진 칸 물줄기 3장 (40 x 40).</li>
  *   <li>Up/Down/Left/Right.bmp: 그 방향 물줄기 가운데 칸. 8장 중 앞 3장만 쓴다.</li>
  *   <li>UpLast/DownLast/LeftLast/RightLast.bmp: 그 방향 물줄기 끝 칸. 8장 중 앞 3장만 쓰고,
@@ -25,8 +26,12 @@ public final class BalloonSprites {
 
     /** 물풍선·물줄기 그림이 들어 있는 리소스 폴더 */
     public static final String DIRECTORY = "/water_balloon/";
-    /** 놓인 물풍선 그림 한 장의 폭. 높이는 40이다 */
-    public static final int BALLOON_WIDTH = 44;
+    /** 놓인 물풍선 그림 한 장의 가로·세로 크기 */
+    public static final int BALLOON_SIZE = 47;
+    /** 놓인 물풍선 그림에서 몸체(원) 가운데의 가로 위치. 첫 장 기준이고, 이 점을 칸 가운데에 맞춰 그린다 */
+    public static final int BALLOON_CENTER_X = 24;
+    /** 놓인 물풍선 그림에서 몸체(원) 가운데의 세로 위치 */
+    public static final int BALLOON_CENTER_Y = 20;
     /** 물줄기 그림 장 수. 파일에 더 있어도 앞에서부터 이만큼만 쓴다 */
     private static final int WATER_FRAMES = 3;
     private static final double FRAME_BOUNDARY_SLACK = 1e-6;
@@ -51,13 +56,13 @@ public final class BalloonSprites {
         Map<Direction, List<BufferedImage>> end = new EnumMap<>(Direction.class);
         for (Direction direction : Direction.values()) {
             String name = fileName(direction);
-            middle.put(direction, sheet(name, T).subList(0, WATER_FRAMES));
-            end.put(direction, sheet(name + "Last", T).subList(0, WATER_FRAMES).stream()
+            middle.put(direction, sheet(name + ".bmp", T).subList(0, WATER_FRAMES));
+            end.put(direction, sheet(name + "Last.bmp", T).subList(0, WATER_FRAMES).stream()
                     .map(BlackBackground::clear)
                     .map(frame -> sealInnerEdge(frame, direction))
                     .toList());
         }
-        return new BalloonSprites(sheet("Balloon", BALLOON_WIDTH), sheet("Center", T).subList(0, WATER_FRAMES),
+        return new BalloonSprites(sheet("Balloon.png", BALLOON_SIZE), sheet("Center.bmp", T).subList(0, WATER_FRAMES),
                 middle, end);
     }
 
@@ -107,8 +112,8 @@ public final class BalloonSprites {
         return frame;
     }
 
-    private static List<BufferedImage> sheet(String name, int frameWidth) {
-        String path = DIRECTORY + name + ".bmp";
+    private static List<BufferedImage> sheet(String fileName, int frameWidth) {
+        String path = DIRECTORY + fileName;
         return SpriteSheet.find(path)
                 .orElseThrow(() -> new IllegalStateException("물풍선 그림 파일이 없습니다: " + path))
                 .frames(frameWidth);
