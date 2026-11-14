@@ -2,6 +2,7 @@ package hansung.arcade.ingame;
 
 import hansung.arcade.ingame.balloon.BalloonField;
 import hansung.arcade.ingame.balloon.Explosion;
+import hansung.arcade.ingame.block.BoxPusher;
 import hansung.arcade.ingame.chat.ChatLog;
 import hansung.arcade.ingame.chat.ChatMessage;
 import hansung.arcade.ingame.chat.SpeechBubbles;
@@ -31,7 +32,8 @@ import java.util.random.RandomGenerator;
  *
  * <p>물풍선 싸움 규칙은 {@link #update} 한 틱 안에서 이 순서로 처리한다.</p>
  * <ol>
- *   <li>플레이어가 움직인다. 놓인 물풍선은 막힌 칸이다 (놓는 순간 그 칸에 있던 사람은 빠져나갈 수 있다).</li>
+ *   <li>플레이어가 움직인다. 놓인 물풍선은 막힌 칸이다 (놓는 순간 그 칸에 있던 사람은 빠져나갈 수 있다).
+ *       상자에 막힌 채 계속 밀면 상자가 한 칸 밀린다 ({@link BoxPusher}).</li>
  *   <li>때가 된 물풍선이 터지고, 다 보인 물줄기가 사라진다 ({@link BalloonField}).</li>
  *   <li>물풍선 키를 막 누른 플레이어가 선 칸에 물풍선을 놓는다.</li>
  *   <li>이번 틱에 터진 물줄기가 막혀 멈춘 블럭을 맞힌다. 한 틱에 여럿이 같은 블럭을 맞혀도 한 번만 맞는다.
@@ -54,6 +56,7 @@ public final class GameWorld {
     private final BalloonField balloonField;
     private final FieldItems items = new FieldItems();
     private final ItemDrops itemDrops;
+    private final BoxPusher boxPusher;
     /** 이 컴퓨터의 첫 플레이어(1P). 채팅은 이 플레이어가 친 것으로 올라간다 */
     private final Player localPlayer;
     /** 이 컴퓨터에서 조작하는 플레이어들. 1P, 2P 순서 */
@@ -106,6 +109,7 @@ public final class GameWorld {
         this.map = map;
         this.balloonField = new BalloonField(map);
         this.itemDrops = new ItemDrops(random);
+        this.boxPusher = new BoxPusher(map);
         List<Player> players = new ArrayList<>();
         for (int i = 0; i < localProfiles.size(); i++) {
             Point spawn = spawns.get(i);
@@ -130,6 +134,7 @@ public final class GameWorld {
             // 경기가 끝나면 누르고 있어도 멈춰 선다
             PlayerCommand command = playing ? commands.getOrDefault(player.id(), PlayerCommand.IDLE) : PlayerCommand.IDLE;
             player.update(command.move(), dt, obstaclesFor(player));
+            boxPusher.push(player, command.move(), dt, this::holdsSomething);
         }
         balloonField.update(dt, players);
         if (playing) {
@@ -143,6 +148,7 @@ public final class GameWorld {
         // 경기가 끝나도 이미 놓인 물풍선은 터지므로 블럭도 계속 부서진다
         breakBlocks(balloonField.takeNewExplosions());
         items.removeWhere(balloonField::isWet);
+        boxPusher.advance(dt);
         if (playing) {
             trapSoakedPlayers();
             settleTouches();
@@ -184,6 +190,12 @@ public final class GameWorld {
                 items.take(player.col(), player.row()).ifPresent(item -> ItemEffects.apply(player, item));
             }
         }
+    }
+
+    /** 밀린 블럭이 들어갈 수 없게 무언가 있는 칸인지: 물풍선, 아이템, 몸이 조금이라도 걸친 플레이어(사라진 사람 빼고) */
+    private boolean holdsSomething(int col, int row) {
+        return balloonField.balloonAt(col, row).isPresent() || items.at(col, row).isPresent()
+                || players().stream().anyMatch(p -> p.state() != PlayerState.GONE && p.overlapsTile(col, row));
     }
 
     /** 물줄기가 덮은 칸에 선 사람을 가둔다. 자기나 같은 편의 물줄기여도 갇힌다 */
@@ -284,6 +296,11 @@ public final class GameWorld {
     /** 맵 위의 물풍선과 물줄기 */
     public BalloonField balloonField() {
         return balloonField;
+    }
+
+    /** 몸으로 미는 블럭과, 밀려 미끄러지는 중인 블럭 */
+    public BoxPusher boxPusher() {
+        return boxPusher;
     }
 
     /** 맵 바닥에 놓인 아이템. 비행기처럼 아이템을 떨어뜨리는 쪽은 여기에 {@link FieldItems#place 놓는다} */
