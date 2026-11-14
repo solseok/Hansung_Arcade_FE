@@ -13,6 +13,7 @@ import static hansung.arcade.ingame.hud.HudLayout.PLAYER_TAG_BELOW_PLAYER;
 
 /**
  * 한 키보드 2인 모드에서 캐릭터 머리 위에 "1P", "2P"를 띄워 누가 누구인지 가린다. 혼자 할 때는 그리지 않는다.
+ * 물풍선에 갇혀 있거나 빠져나오는 동안에도 따라다니고, 탈락하면 거둔다.
  * 글자는 채팅과 같은 도트 글자(흰 글자에 검은 1px 테두리)이고, 캐릭터를 따라다닌다.
  *
  * <p>맨 윗줄에서는 머리 위에 자리가 없거나(창 밖) 맵 이름표에 가려지므로 발 아래에 띄운다.
@@ -36,7 +37,8 @@ final class PlayerTagView implements HudPart {
         int originY = HudLayout.mapOriginY(world.map());
         for (int i = 0; i < locals.size(); i++) {
             Player player = locals.get(i);
-            if (world.speechBubbles().textOf(player.id()) != null) {
+            // 탈락하면 쓰러져 솟았다 사라지는 연출만 보이게 표시를 거둔다
+            if (!player.isAlive() || world.speechBubbles().textOf(player.id()) != null) {
                 continue;
             }
             String tag = tagOf(i);

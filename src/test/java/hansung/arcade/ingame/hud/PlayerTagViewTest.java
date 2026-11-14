@@ -70,6 +70,19 @@ class PlayerTagViewTest {
     }
 
     @Test
+    void 물풍선에_갇혀도_표시를_그리고_탈락하면_거둔다() {
+        GameWorld world = new GameWorld(MAP, List.of(ONE, TWO));
+        Player first = world.localPlayers().get(0);
+        Player second = world.localPlayers().get(1);
+        first.trap(second.id());
+        second.eliminate();
+        BufferedImage screen = paint(world);
+
+        assertTrue(countDrawn(screen, tagBox(world, first, "1P").inset(-OutlineText.MARGIN)) > 20);
+        assertEquals(0, countDrawn(screen, tagBox(world, second, "2P").inset(-OutlineText.MARGIN)));
+    }
+
+    @Test
     void 말풍선이_떠_있는_동안에는_그_플레이어의_표시를_그리지_않는다() {
         GameWorld world = new GameWorld(MAP, List.of(ONE, TWO));
         world.sendChat("hi");
