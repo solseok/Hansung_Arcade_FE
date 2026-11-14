@@ -79,7 +79,7 @@ class LocalInputTest {
     void 한_프레임에_틱이_여러_번_돌아도_막_눌린_키는_한_틱에만_들어간다() {
         press(solo, VK_SPACE);
         press(solo, VK_SHIFT, KEY_LOCATION_LEFT, SHIFT_DOWN_MASK);
-        press(solo, VK_UP);
+        press(solo, VK_UP, KEY_LOCATION_STANDARD, SHIFT_DOWN_MASK);
 
         // 한 프레임에 세 틱이 돈다
         List<PlayerCommand> ticks = List.of(command(solo, ME), command(solo, ME), command(solo, ME));
@@ -231,6 +231,43 @@ class LocalInputTest {
         duo.clear();
 
         assertEquals(Map.of(P1, PlayerCommand.IDLE, P2, PlayerCommand.IDLE), duo.takeCommands());
+    }
+
+    @Test
+    void 반대쪽_Shift를_아직_누르고_있으면_한쪽_Shift를_떼도_상대의_Shift는_누른_채로_둔다() {
+        press(duo, VK_SHIFT, KEY_LOCATION_LEFT, SHIFT_DOWN_MASK);
+        press(duo, VK_SHIFT, KEY_LOCATION_RIGHT, SHIFT_DOWN_MASK);
+        duo.takeCommands();
+
+        // 2P가 오른쪽 Shift를 뗐다. 1P가 왼쪽 Shift를 누르고 있어서 Shift 표시가 남아 있다
+        duo.keyReleased(key(KeyEvent.KEY_RELEASED, VK_SHIFT, KEY_LOCATION_RIGHT, SHIFT_DOWN_MASK));
+        // 그래서 1P의 왼쪽 Shift 자동 반복은 여전히 새로 누른 것이 아니다
+        press(duo, VK_SHIFT, KEY_LOCATION_LEFT, SHIFT_DOWN_MASK);
+
+        assertFalse(command(duo, P1).placeBalloon());
+    }
+
+    @Test
+    void 두_Shift가_겹쳐_먼저_뗀_쪽의_뗌을_놓쳐도_마지막_Shift를_떼면_바로잡힌다() {
+        press(duo, VK_SHIFT, KEY_LOCATION_LEFT, SHIFT_DOWN_MASK);
+        press(duo, VK_SHIFT, KEY_LOCATION_RIGHT, SHIFT_DOWN_MASK);
+        duo.takeCommands();
+        // 2P의 오른쪽 Shift 뗌은 오지 않고(Windows·macOS), 1P가 왼쪽 Shift를 떼면 Shift가 하나도 없다고 온다
+        duo.keyReleased(key(KeyEvent.KEY_RELEASED, VK_SHIFT, KEY_LOCATION_LEFT, 0));
+
+        press(duo, VK_SHIFT, KEY_LOCATION_RIGHT, SHIFT_DOWN_MASK);
+        assertEquals(Map.of(P1, PlayerCommand.IDLE, P2, new PlayerCommand(null, true, false)), duo.takeCommands());
+    }
+
+    @Test
+    void 왼쪽_Ctrl을_뗀_이벤트를_놓쳐도_Ctrl이_떼진_뒤에는_다시_누를_수_있다() {
+        press(duo, VK_CONTROL, KEY_LOCATION_LEFT, CTRL_DOWN_MASK);
+        assertTrue(command(duo, P1).useItem());
+        // Ctrl 뗌은 오지 않았고, 다음 키 이벤트에는 Ctrl이 없다
+        press(duo, VK_W);
+
+        press(duo, VK_CONTROL, KEY_LOCATION_LEFT, CTRL_DOWN_MASK);
+        assertTrue(command(duo, P1).useItem());
     }
 
     static PlayerCommand command(LocalInput input, int playerId) {
