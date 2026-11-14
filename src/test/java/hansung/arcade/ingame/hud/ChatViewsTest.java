@@ -8,7 +8,17 @@ import java.awt.Font;
 import java.awt.image.BufferedImage;
 import java.util.List;
 
-import static hansung.arcade.ingame.hud.HudLayout.*;
+import static hansung.arcade.ingame.hud.HudLayout.BUBBLE_ABOVE_PLAYER;
+import static hansung.arcade.ingame.hud.HudLayout.BUBBLE_MAX_WIDTH;
+import static hansung.arcade.ingame.hud.HudLayout.BUBBLE_PADDING_BOTTOM;
+import static hansung.arcade.ingame.hud.HudLayout.BUBBLE_PADDING_LEFT;
+import static hansung.arcade.ingame.hud.HudLayout.BUBBLE_PADDING_RIGHT;
+import static hansung.arcade.ingame.hud.HudLayout.BUBBLE_PADDING_TOP;
+import static hansung.arcade.ingame.hud.HudLayout.BUBBLE_RADIUS;
+import static hansung.arcade.ingame.hud.HudLayout.BUBBLE_TEXT_WIDTH;
+import static hansung.arcade.ingame.hud.HudLayout.CHAT_LINE_PITCH;
+import static hansung.arcade.ingame.hud.HudLayout.CHAT_TEXT_HEIGHT;
+import static hansung.arcade.ingame.hud.HudLayout.FIELD;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -37,7 +47,7 @@ class ChatViewsTest {
         BufferedImage bubble = bubbles.render("Hi");
 
         assertEquals(List.of("Hi"), bubbles.wrap("Hi"));
-        // 왼쪽 10 (9) + 글자 + 오른쪽 15 (14), 위 10 (9) + 글자 칸 + 아래 10 (9)
+        // 지시 → 환산: 왼쪽 10 → 9 + 글자 + 오른쪽 15 → 14, 위 10 → 9 + 글자 칸 + 아래 10 → 9
         assertEquals(9 + text.width("Hi") + 14, bubble.getWidth());
         assertEquals(9 + CHAT_TEXT_HEIGHT + 9, bubble.getHeight());
     }
