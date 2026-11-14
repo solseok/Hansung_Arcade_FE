@@ -5,23 +5,30 @@ import hansung.arcade.ingame.balloon.BalloonField;
 import hansung.arcade.ingame.balloon.Explosion;
 import hansung.arcade.ingame.balloon.WaterBalloon;
 import hansung.arcade.ingame.balloon.WaterCell;
+import hansung.arcade.ingame.block.BoxPusher;
+import hansung.arcade.ingame.block.SlidingBlock;
 import hansung.arcade.ingame.entity.Player;
 import hansung.arcade.ingame.entity.PlayerProfile;
 import hansung.arcade.ingame.entity.PlayerState;
+import hansung.arcade.ingame.item.FieldItems.FieldItem;
+import hansung.arcade.ingame.item.ItemType;
 import hansung.arcade.ingame.map.Tile;
 import hansung.arcade.ingame.map.TileMap;
 
+import java.awt.AlphaComposite;
 import java.awt.Color;
+import java.awt.Composite;
 import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * 맵은 테마 타일셋의 BMP 그림으로, 캐릭터는 고른 마스코트의 BMP 그림({@link CharacterSprites})을 고른 고정색으로 칠해 그린다.
- * 물풍선과 물줄기는 {@link BalloonSprites} 그림이다.
+ * 물풍선과 물줄기는 {@link BalloonSprites}, 바닥에 떨어진 아이템은 {@link ItemSprites} 그림이다.
  * 바닥 그림이 없는 테마는 단색 바닥을, 그림이 없는 타일은 기호를 적은 임시 상자를 그린다.
  * 호출 전에 Graphics2D의 원점이 맵 왼쪽 위로 옮겨져 있어야 한다.
  *
@@ -31,6 +38,9 @@ import java.util.Objects;
  * <p>캐릭터는 상태에 따라 다른 그림이다. 갇히면 물풍선 속 그림, 빠져나오는 중이면 바늘 그림, 탈락하면 쓰러진 그림이
  * {@link Player#DYING_JUMP_SECONDS}초 동안 포물선으로 {@link #DYING_JUMP_HEIGHT}px 솟았다 떨어진 뒤,
  * {@link Player#DYING_BLINK_SECONDS}초 동안 {@link #BLINK_SECONDS}초씩 보였다 숨었다 하고 사라진다.</p>
+ *
+ * <p>덤불에 숨은 캐릭터·물풍선·아이템·물줄기는 {@link Concealment}를 보고 아예 그리지 않는다.
+ * 화면을 보는 플레이어가 들어간 덤불만 {@link #REVEALED_BUSH_ALPHA} 불투명도로 그려 안이 비쳐 보이게 한다.</p>
  */
 public final class WorldRenderer {
 
@@ -52,54 +62,131 @@ public final class WorldRenderer {
     public static final int DYING_JUMP_HEIGHT = T;
     /** 탈락 연출 끝에 깜빡일 때 한 번 보이거나 숨는 시간(초). 보임·숨음 한 쌍이 0.2초다 */
     public static final double BLINK_SECONDS = 0.1;
+    /** 화면을 보는 플레이어가 들어간 덤불의 불투명도. 안에 든 것이 비쳐 보인다 */
+    public static final float REVEALED_BUSH_ALPHA = 0.5f;
+    /** 바닥에 떨어진 아이템이 칸 가운데보다 떠 있는 높이(px) */
+    static final int ITEM_LIFT = 4;
+    /** 떠 있는 아이템이 위아래로 흔들리는 폭(px). 가운데 높이에서 위아래로 이만큼 */
+    static final int ITEM_BOB = 2;
+    /** 아이템이 한 번 오르내리는 시간(초) */
+    static final double ITEM_BOB_SECONDS = 1.0;
 
     private static final double FRAME_BOUNDARY_SLACK = 1e-6;
 
     private final Tileset tileset;
     private final CharacterSprites characters;
     private final BalloonSprites balloons;
+    private final ItemSprites items;
 
-    public WorldRenderer(Tileset tileset, CharacterSprites characters, BalloonSprites balloons) {
+    public WorldRenderer(Tileset tileset, CharacterSprites characters, BalloonSprites balloons, ItemSprites items) {
         this.tileset = Objects.requireNonNull(tileset);
         this.characters = Objects.requireNonNull(characters);
         this.balloons = Objects.requireNonNull(balloons);
+        this.items = Objects.requireNonNull(items);
     }
 
-    /** 물풍선 그림을 기본 위치에서 새로 읽는다. 미리 읽어 둔 그림이 없는 테스트에서 쓴다. */
+    /** 아이템 그림을 기본 위치에서 새로 읽는다. 미리 읽어 둔 그림이 없는 테스트에서 쓴다. */
+    public WorldRenderer(Tileset tileset, CharacterSprites characters, BalloonSprites balloons) {
+        this(tileset, characters, balloons, ItemSprites.load());
+    }
+
+    /** 물풍선·아이템 그림을 기본 위치에서 새로 읽는다. 미리 읽어 둔 그림이 없는 테스트에서 쓴다. */
     public WorldRenderer(Tileset tileset, CharacterSprites characters) {
         this(tileset, characters, BalloonSprites.load());
     }
 
-    /**
-     * 블록·덤불 등 물체, 물줄기, 물풍선, 캐릭터. 바닥을 먼저 그린 뒤에 부른다.
-     *
-     * <p>위쪽 줄부터 그려서 아래쪽 물체가 앞에 보이게 한다. 한 줄 안에서는 블록 → 물줄기 → 물풍선 → 캐릭터 → 덤불 순서다.
-     * 그래서 아래 줄 블록이 칸 위로 솟은 부분은 윗줄의 물줄기·물풍선·캐릭터를 가리고,
-     * 덤불은 안에 들어간 캐릭터와 물풍선을 가린다.</p>
-     */
+    /** 이 컴퓨터에서 조작하는 플레이어들이 보는 화면으로 그린다. {@link #drawObjects(Graphics2D, GameWorld, Concealment)} 참고 */
     public void drawObjects(Graphics2D g, GameWorld world) {
+        drawObjects(g, world, Concealment.of(world));
+    }
+
+    /**
+     * 블록·덤불 등 물체, 아이템, 물줄기, 물풍선, 캐릭터. 바닥을 먼저 그린 뒤에 부른다.
+     *
+     * <p>위쪽 줄부터 그려서 아래쪽 물체가 앞에 보이게 한다. 한 줄 안에서는 블록 → 아이템 → 물줄기 → 물풍선 → 캐릭터 → 덤불 순서다.
+     * 그래서 아래 줄 블록이 칸 위로 솟은 부분은 윗줄의 아이템·물줄기·물풍선·캐릭터를 가린다.
+     * 덤불 칸 안의 것은 concealment가 숨기는 칸이면 그리지 않고, 드러난 덤불은 반투명하게 덮는다.</p>
+     *
+     * @param concealment 덤불 안의 것을 이 화면에서 볼 수 있는지
+     */
+    public void drawObjects(Graphics2D g, GameWorld world, Concealment concealment) {
         TileMap map = world.map();
         BalloonField field = world.balloonField();
         List<Player> players = world.players();
         for (int row = 0; row < map.rows(); row++) {
-            drawRow(g, map, row, false);
-            drawWater(g, field, row);
-            drawBalloons(g, field, row);
+            drawBlocks(g, map, world.boxPusher(), row);
+            drawItems(g, world, row, concealment);
+            drawWater(g, field, row, concealment);
+            drawBalloons(g, field, row, concealment);
             for (Player player : players) {
-                if (player.row() == row) {
+                if (player.row() == row && !concealment.hides(player)) {
                     drawPlayer(g, player);
                 }
             }
-            drawRow(g, map, row, true);
+            drawBushes(g, map, row, concealment);
         }
     }
 
-    /** row줄의 물줄기 칸. 늦게 터진 물줄기가 위에 온다 */
-    private void drawWater(Graphics2D g, BalloonField field, int row) {
+    /** row줄의 덤불이 아닌 물체. 밀려 미끄러지는 블럭은 떠난 칸과 도착 칸 사이에 그린다 */
+    private void drawBlocks(Graphics2D g, TileMap map, BoxPusher pusher, int row) {
+        for (int col = 0; col < map.columns(); col++) {
+            Tile tile = map.tileAt(col, row);
+            if (tile.isGround() || tile == Tile.BUSH) {
+                continue;
+            }
+            Optional<SlidingBlock> slide = pusher.slidingInto(col, row);
+            int dx = slide.map(SlidingBlock::offsetX).orElse(0);
+            int dy = slide.map(SlidingBlock::offsetY).orElse(0);
+            drawTile(g, map, tile, col, row, col * T + dx, row * T + dy);
+        }
+    }
+
+    /** row줄의 덤불. 화면을 보는 플레이어가 들어간 덤불은 반투명하게 그려 안에 든 것이 비쳐 보인다 */
+    private void drawBushes(Graphics2D g, TileMap map, int row, Concealment concealment) {
+        for (int col = 0; col < map.columns(); col++) {
+            if (map.tileAt(col, row) != Tile.BUSH) {
+                continue;
+            }
+            if (concealment.isRevealedBush(col, row)) {
+                Composite composite = g.getComposite();
+                g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, REVEALED_BUSH_ALPHA));
+                drawTile(g, map, Tile.BUSH, col, row);
+                g.setComposite(composite);
+            } else {
+                drawTile(g, map, Tile.BUSH, col, row);
+            }
+        }
+    }
+
+    /**
+     * row줄의 바닥 아이템. 그림 가로 가운데를 칸 가운데에 맞추고, 칸 바닥에 그림자를 깐 채
+     * {@link #ITEM_LIFT}px 떠서 위아래로 {@link #ITEM_BOB}px씩 흔들린다.
+     */
+    private void drawItems(Graphics2D g, GameWorld world, int row, Concealment concealment) {
+        int top = itemTop(row, world.elapsedSeconds());
+        for (FieldItem item : world.items().all()) {
+            if (item.row() != row || concealment.hides(item.col(), item.row())) {
+                continue;
+            }
+            int left = item.col() * T + (T - ItemType.IMAGE_SIZE) / 2;
+            g.setColor(SHADOW);
+            g.fillOval(item.col() * T + 8, row * T + T - 9, T - 16, 7);
+            g.drawImage(items.image(item.type()), left, top, null);
+        }
+    }
+
+    /** seconds초에 row줄 아이템 그림의 위쪽 끝 y(px) */
+    static int itemTop(int row, double seconds) {
+        int bob = (int) Math.round(ITEM_BOB * Math.sin(2 * Math.PI * seconds / ITEM_BOB_SECONDS));
+        return row * T + (T - ItemType.IMAGE_SIZE) / 2 - ITEM_LIFT - bob;
+    }
+
+    /** row줄의 물줄기 칸. 늦게 터진 물줄기가 위에 온다. 숨은 덤불 칸의 물줄기는 그리지 않는다 */
+    private void drawWater(Graphics2D g, BalloonField field, int row, Concealment concealment) {
         for (Explosion explosion : field.explosions()) {
             int frame = explosion.frame();
             for (WaterCell cell : explosion.cells()) {
-                if (cell.row() == row) {
+                if (cell.row() == row && !concealment.hides(cell.col(), cell.row())) {
                     g.drawImage(balloons.water(cell, frame), cell.col() * T, row * T, null);
                 }
             }
@@ -110,9 +197,9 @@ public final class WorldRenderer {
      * row줄의 놓인 물풍선. 몸체 가운데({@link BalloonSprites#BALLOON_CENTER_X}, {@link BalloonSprites#BALLOON_CENTER_Y})를
      * 칸 가운데에 맞춘다. 반투명 그림자는 그림에 들어 있어서 왼쪽 아래로 칸 밖까지 몇 px 깔린다.
      */
-    private void drawBalloons(Graphics2D g, BalloonField field, int row) {
+    private void drawBalloons(Graphics2D g, BalloonField field, int row, Concealment concealment) {
         for (WaterBalloon balloon : field.balloons()) {
-            if (balloon.row() == row) {
+            if (balloon.row() == row && !concealment.hides(balloon.col(), balloon.row())) {
                 g.drawImage(balloons.balloon(balloon.age()), balloon.col() * T + T / 2 - BalloonSprites.BALLOON_CENTER_X,
                         row * T + T / 2 - BalloonSprites.BALLOON_CENTER_Y, null);
             }
@@ -139,24 +226,20 @@ public final class WorldRenderer {
         }
     }
 
-    private void drawRow(Graphics2D g, TileMap map, int row, boolean overPlayers) {
-        for (int col = 0; col < map.columns(); col++) {
-            Tile tile = map.tileAt(col, row);
-            if (!tile.isGround() && isOverPlayers(tile) == overPlayers) {
-                drawTile(g, map, tile, col, row);
-            }
-        }
+    private void drawTile(Graphics2D g, TileMap map, Tile tile, int col, int row) {
+        drawTile(g, map, tile, col, row, col * T, row * T);
     }
 
-    private void drawTile(Graphics2D g, TileMap map, Tile tile, int col, int row) {
+    /** (col, row) 칸의 tile 그림을 칸 왼쪽 위가 (px, py)인 자리에 그린다 */
+    private void drawTile(Graphics2D g, TileMap map, Tile tile, int col, int row, int px, int py) {
         if (tile == Tile.FLOOR || !map.isTileOrigin(col, row)) {
             return;
         }
         TileSprite sprite = tileset.sprite(tile, col, row);
         if (sprite != null) {
-            sprite.draw(g, col * T, row * T);
+            sprite.draw(g, px, py);
         } else {
-            drawMissing(g, tile, col * T, row * T);
+            drawMissing(g, tile, px, py);
         }
     }
 
@@ -170,10 +253,6 @@ public final class WorldRenderer {
         FontMetrics fm = g.getFontMetrics();
         String text = String.valueOf(tile.symbol());
         g.drawString(text, px + (width - fm.stringWidth(text)) / 2, py + (T - fm.getHeight()) / 2 + fm.getAscent());
-    }
-
-    private static boolean isOverPlayers(Tile tile) {
-        return tile == Tile.BUSH;
     }
 
     /**

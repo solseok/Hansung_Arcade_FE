@@ -14,6 +14,7 @@ import hansung.arcade.ingame.map.TileMap;
 import hansung.arcade.ingame.match.MatchMode;
 import hansung.arcade.ingame.render.BalloonSprites;
 import hansung.arcade.ingame.render.CharacterSprites;
+import hansung.arcade.ingame.render.ItemSprites;
 import hansung.arcade.ingame.render.Tileset;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -49,6 +50,7 @@ public final class StartScreenStep implements BootStep {
         HudSkin skin = context.get(HudSkin.class);
         CharacterSprites characters = context.get(CharacterSprites.class);
         BalloonSprites balloons = context.get(BalloonSprites.class);
+        ItemSprites items = context.get(ItemSprites.class);
         GameProperties properties = context.get(GameProperties.class);
         List<PlayerProfile> players = localProfiles(properties);
         MatchMode mode = matchMode(properties);
@@ -59,7 +61,7 @@ public final class StartScreenStep implements BootStep {
 
         SwingThread.runAndWait(() -> {
             InGamePanel inGamePanel = new InGamePanel(new GameWorld(map, players, mode), tileset, skin, characters,
-                    balloons);
+                    balloons, items);
             window.show(inGamePanel);
             inGamePanel.start();
         });

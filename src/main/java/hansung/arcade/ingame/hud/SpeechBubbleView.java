@@ -2,6 +2,7 @@ package hansung.arcade.ingame.hud;
 
 import hansung.arcade.ingame.GameWorld;
 import hansung.arcade.ingame.entity.Player;
+import hansung.arcade.ingame.render.Concealment;
 
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
@@ -49,9 +50,11 @@ final class SpeechBubbleView implements HudPart {
     public void paint(Graphics2D g, GameWorld world) {
         int originX = HudLayout.mapOriginX(world.map());
         int originY = HudLayout.mapOriginY(world.map());
+        // 덤불에 숨은 사람의 말풍선은 띄우지 않는다. 말풍선으로 숨은 자리가 드러나지 않게 (채팅 목록에는 남는다)
+        Concealment concealment = Concealment.of(world);
         for (Player player : world.players()) {
             String said = world.speechBubbles().textOf(player.id());
-            if (said == null) {
+            if (said == null || concealment.hides(player)) {
                 continue;
             }
             BufferedImage bubble = cache.computeIfAbsent(said, this::render);

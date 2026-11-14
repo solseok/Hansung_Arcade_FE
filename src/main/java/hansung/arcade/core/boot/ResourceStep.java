@@ -9,6 +9,7 @@ import hansung.arcade.ingame.map.Tile;
 import hansung.arcade.ingame.map.TileMap;
 import hansung.arcade.ingame.render.BalloonSprites;
 import hansung.arcade.ingame.render.CharacterSprites;
+import hansung.arcade.ingame.render.ItemSprites;
 import hansung.arcade.ingame.render.Tileset;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,6 +40,7 @@ public final class ResourceStep implements BootStep {
 
         context.register(CharacterSprites.class, CharacterSprites.load());
         context.register(BalloonSprites.class, BalloonSprites.load());
+        context.register(ItemSprites.class, ItemSprites.load());
 
         HudFonts fonts = HudFonts.load();
         if (!fonts.missing().isEmpty()) {
