@@ -10,12 +10,14 @@ import hansung.arcade.ingame.entity.Mascot;
 import hansung.arcade.ingame.entity.PlayerProfile;
 import hansung.arcade.ingame.hud.HudSkin;
 import hansung.arcade.ingame.map.TileMap;
+import hansung.arcade.ingame.render.CharacterSprites;
 import hansung.arcade.ingame.render.Tileset;
 
 /**
  * 5단계: 첫 화면을 조립해 창에 띄운다.
  * 아웃게임과 연결되기 전까지는 인게임 화면을 바로 띄운다. 연결 후에는 로비 화면으로 바꾼다.
  * 그때까지 내 닉네임과 캐릭터는 설정값 player.nickname, player.character 로 정한다.
+ * 캐릭터 선택 화면이 없으므로 설정이 없으면 기본 캐릭터({@link Mascot#DEFAULT})를 쓴다.
  */
 public final class StartScreenStep implements BootStep {
 
@@ -30,10 +32,11 @@ public final class StartScreenStep implements BootStep {
         TileMap map = context.get(TileMap.class);
         Tileset tileset = context.get(Tileset.class);
         HudSkin skin = context.get(HudSkin.class);
+        CharacterSprites characters = context.get(CharacterSprites.class);
         PlayerProfile me = localProfile(context.get(GameProperties.class));
 
         SwingThread.runAndWait(() -> {
-            InGamePanel inGamePanel = new InGamePanel(new GameWorld(map, me), tileset, skin);
+            InGamePanel inGamePanel = new InGamePanel(new GameWorld(map, me), tileset, skin, characters);
             window.show(inGamePanel);
             inGamePanel.start();
         });
@@ -41,7 +44,7 @@ public final class StartScreenStep implements BootStep {
 
     static PlayerProfile localProfile(GameProperties properties) {
         String nickname = properties.get("player.nickname", "Player");
-        String character = properties.get("player.character", Mascot.SANGSANGBUGI.id());
+        String character = properties.get("player.character", Mascot.DEFAULT.id());
         Mascot mascot;
         try {
             mascot = Mascot.fromId(character);

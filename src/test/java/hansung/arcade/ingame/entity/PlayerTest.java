@@ -28,10 +28,79 @@ class PlayerTest {
 
         player.update(Direction.RIGHT, 0.1, map);
 
-        assertEquals(TileMap.centerX(0) + Player.BASE_SPEED * 0.1, player.x(), 1e-9);
+        // 기본 캐릭터 상상부기는 이동속도 5단계 = 초당 4.5타일
+        assertEquals(TileMap.centerX(0) + 4.5 * T * 0.1, player.x(), 1e-9);
         assertEquals(TileMap.centerY(0), player.y(), 1e-9);
         assertTrue(player.isMoving());
         assertEquals(Direction.RIGHT, player.facing());
+    }
+
+    @Test
+    void 이동속도_단계가_오르면_그만큼_더_멀리_간다() {
+        TileMap map = MapLoader.parse("open", List.of("1....", "....."));
+        Player player = new Player(1, 0, 0);
+        player.addSpeedLevel(1);
+
+        player.update(Direction.RIGHT, 0.1, map);
+
+        assertEquals(6, player.speedLevel());
+        assertEquals(TileMap.centerX(0) + 5.0 * T * 0.1, player.x(), 1e-9);
+    }
+
+    @Test
+    void 능력치는_고른_캐릭터의_시작값으로_시작한다() {
+        Player bugi = playerOf(Mascot.SANGSANGBUGI);
+        assertEquals(1, bugi.balloons());
+        assertEquals(1, bugi.waterRange());
+        assertEquals(5, bugi.speedLevel());
+        assertEquals(4.5 * T, bugi.speed(), 1e-9);
+
+        Player nyangi = playerOf(Mascot.HANSUNGNYANGI);
+        assertEquals(2, nyangi.balloons());
+        assertEquals(1, nyangi.waterRange());
+        assertEquals(4, nyangi.speedLevel());
+        assertEquals(4.0 * T, nyangi.speed(), 1e-9);
+
+        assertEquals(2, playerOf(Mascot.SANGZZI).waterRange());
+    }
+
+    @Test
+    void 능력치는_캐릭터의_최댓값을_넘지_않는다() {
+        Player bugi = playerOf(Mascot.SANGSANGBUGI);
+        for (int i = 0; i < 20; i++) {
+            bugi.addBalloons(1);
+            bugi.addWaterRange(1);
+            bugi.addSpeedLevel(1);
+        }
+        assertEquals(6, bugi.balloons());
+        assertEquals(7, bugi.waterRange());
+        assertEquals(9, bugi.speedLevel());
+        assertEquals(6.5 * T, bugi.speed(), 1e-9);
+
+        Player kkukku = playerOf(Mascot.KKUKKU);
+        kkukku.addBalloons(Integer.MAX_VALUE);
+        kkukku.addWaterRange(Integer.MAX_VALUE);
+        kkukku.addSpeedLevel(Integer.MAX_VALUE);
+        assertEquals(10, kkukku.balloons());
+        assertEquals(8, kkukku.waterRange());
+        assertEquals(8, kkukku.speedLevel());
+    }
+
+    @Test
+    void 이동속도는_1단계까지_내려가고_물풍선과_물줄기는_시작값_아래로_내려가지_않는다() {
+        Player nyangi = playerOf(Mascot.HANSUNGNYANGI);
+        nyangi.addSpeedLevel(-100);
+        nyangi.addBalloons(-100);
+        nyangi.addWaterRange(-100);
+
+        assertEquals(1, nyangi.speedLevel());
+        assertEquals(2.5 * T, nyangi.speed(), 1e-9);
+        assertEquals(2, nyangi.balloons());
+        assertEquals(1, nyangi.waterRange());
+    }
+
+    private static Player playerOf(Mascot mascot) {
+        return new Player(1, new PlayerProfile("tester", mascot), 0, 0);
     }
 
     @Test
@@ -81,7 +150,7 @@ class PlayerTest {
                 "1..",
                 "..."));
         Player player = new Player(1, 0, 1);
-        run(player, Direction.UP, map, 0.12); // 8프레임, 16px 위로 치우침
+        run(player, Direction.UP, map, 0.08); // 5프레임, 15px 위로 치우침
         double offsetBefore = player.y() - TileMap.centerY(1);
         assertTrue(offsetBefore < -10, "테스트 준비 실패: " + offsetBefore);
 
@@ -101,7 +170,7 @@ class PlayerTest {
                 ".#.",
                 "..."));
         Player player = new Player(1, 0, 0);
-        run(player, Direction.RIGHT, map, 0.12); // 8프레임, 16px 오른쪽으로 치우침
+        run(player, Direction.RIGHT, map, 0.08); // 5프레임, 15px 오른쪽으로 치우침
         double offsetBefore = player.x() - TileMap.centerX(0);
         assertTrue(offsetBefore > 10, "테스트 준비 실패: " + offsetBefore);
 
@@ -119,8 +188,9 @@ class PlayerTest {
                 "1..",
                 "##."));
         Player player = new Player(1, 0, 0);
-        run(player, Direction.RIGHT, map, 0.12);
+        run(player, Direction.RIGHT, map, 0.08); // 5프레임, 15px 오른쪽으로 치우침
         double xBefore = player.x();
+        assertTrue(player.col() == 0 && xBefore - TileMap.centerX(0) > 10, "테스트 준비 실패: x=" + xBefore);
 
         run(player, Direction.DOWN, map, 1.0);
 

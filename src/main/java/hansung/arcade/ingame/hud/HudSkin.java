@@ -1,6 +1,7 @@
 package hansung.arcade.ingame.hud;
 
 import hansung.arcade.ingame.entity.Mascot;
+import hansung.arcade.ingame.render.CharacterSprites;
 import hansung.arcade.ingame.render.SpriteSheet;
 
 import java.awt.Font;
@@ -38,10 +39,6 @@ public record HudSkin(
         TextArt nickname,
         Map<Mascot, BufferedImage> portraits) {
 
-    private static final String PORTRAIT_DIR = "/sprites/characters/";
-    /** 캐릭터 그림 한 장(70 x 70) */
-    private static final int CHARACTER_FRAME = 70;
-
     public HudSkin {
         portraits = Map.copyOf(portraits);
     }
@@ -70,8 +67,8 @@ public record HudSkin(
     private static Map<Mascot, BufferedImage> loadPortraits() {
         Map<Mascot, BufferedImage> portraits = new EnumMap<>(Mascot.class);
         for (Mascot mascot : Mascot.values()) {
-            SpriteSheet.find(PORTRAIT_DIR + mascot.id() + "_front.bmp")
-                    .map(sheet -> sheet.frames(CHARACTER_FRAME).get(0))
+            SpriteSheet.find(CharacterSprites.DIRECTORY + mascot.id() + "_front.bmp")
+                    .map(sheet -> sheet.frames(CharacterSprites.FRAME_SIZE).get(0))
                     .map(HudSkin::portraitOf)
                     .ifPresent(portrait -> portraits.put(mascot, portrait));
         }
