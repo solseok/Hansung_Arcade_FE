@@ -6,13 +6,7 @@ import hansung.arcade.ingame.render.HudRenderer;
 import hansung.arcade.ingame.render.Tileset;
 import hansung.arcade.ingame.render.WorldRenderer;
 
-import javax.swing.AbstractAction;
-import javax.swing.ActionMap;
-import javax.swing.InputMap;
-import javax.swing.JComponent;
 import javax.swing.JPanel;
-import javax.swing.KeyStroke;
-import javax.swing.SwingUtilities;
 import javax.swing.Timer;
 import java.awt.Color;
 import java.awt.Dimension;
@@ -21,11 +15,10 @@ import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.Toolkit;
-import java.awt.Window;
-import java.awt.event.ActionEvent;
+import java.awt.event.FocusAdapter;
+import java.awt.event.FocusEvent;
+import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
-import java.awt.event.WindowAdapter;
-import java.awt.event.WindowEvent;
 import java.awt.geom.AffineTransform;
 
 /**
@@ -33,6 +26,9 @@ import java.awt.geom.AffineTransform;
  *
  * <p>게임 루프는 Swing Timer로 EDT에서 돌기 때문에 입력·갱신·그리기가 모두 같은 스레드에서 일어난다.
  * 갱신은 고정 간격(1/60초)으로 해서 프레임이 흔들려도 이동 속도가 일정하다.</p>
+ *
+ * <p>방향키는 이 패널이 포커스를 가지고 있을 때 받는다. 키 바인딩(InputMap)은 수정 키까지 일치해야 해서
+ * Shift·Ctrl을 누른 채 방향키를 떼면 뗌 이벤트를 놓치므로, 키 코드만 보는 KeyListener를 쓴다.</p>
  */
 public final class InGamePanel extends JPanel {
 
@@ -54,9 +50,27 @@ public final class InGamePanel extends JPanel {
     private final WorldRenderer worldRenderer;
     private final HudRenderer hudRenderer = new HudRenderer();
     private final Timer loopTimer;
-    private final WindowAdapter focusLossHandler = new WindowAdapter() {
+    private final KeyAdapter directionKeys = new KeyAdapter() {
         @Override
-        public void windowLostFocus(WindowEvent e) {
+        public void keyPressed(KeyEvent e) {
+            Direction direction = DirectionInput.directionOf(e.getKeyCode());
+            if (direction != null) {
+                input.press(direction);
+            }
+        }
+
+        @Override
+        public void keyReleased(KeyEvent e) {
+            Direction direction = DirectionInput.directionOf(e.getKeyCode());
+            if (direction != null) {
+                input.release(direction);
+            }
+        }
+    };
+    /** 다른 창이나 다른 컴포넌트로 포커스가 넘어가면 키 뗌 이벤트가 오지 않으므로 누른 키를 비운다. */
+    private final FocusAdapter focusLossHandler = new FocusAdapter() {
+        @Override
+        public void focusLost(FocusEvent e) {
             input.clear();
         }
     };
@@ -75,7 +89,8 @@ public final class InGamePanel extends JPanel {
         setPreferredSize(new Dimension(width, height));
         setBackground(BACKGROUND);
         setFocusable(true);
-        bindDirectionKeys();
+        addKeyListener(directionKeys);
+        addFocusListener(focusLossHandler);
         loopTimer = new Timer(1000 / 60, e -> tick());
         loopTimer.setCoalesce(true);
     }
@@ -104,49 +119,8 @@ public final class InGamePanel extends JPanel {
         repaint();
     }
 
-    private void bindDirectionKeys() {
-        bindDirection(KeyEvent.VK_UP, Direction.UP);
-        bindDirection(KeyEvent.VK_DOWN, Direction.DOWN);
-        bindDirection(KeyEvent.VK_LEFT, Direction.LEFT);
-        bindDirection(KeyEvent.VK_RIGHT, Direction.RIGHT);
-    }
-
-    private void bindDirection(int keyCode, Direction direction) {
-        InputMap inputMap = getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
-        ActionMap actionMap = getActionMap();
-        String pressKey = "press-" + direction;
-        String releaseKey = "release-" + direction;
-        inputMap.put(KeyStroke.getKeyStroke(keyCode, 0, false), pressKey);
-        inputMap.put(KeyStroke.getKeyStroke(keyCode, 0, true), releaseKey);
-        actionMap.put(pressKey, new AbstractAction() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                input.press(direction);
-            }
-        });
-        actionMap.put(releaseKey, new AbstractAction() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                input.release(direction);
-            }
-        });
-    }
-
-    @Override
-    public void addNotify() {
-        super.addNotify();
-        Window window = SwingUtilities.getWindowAncestor(this);
-        if (window != null) {
-            window.addWindowFocusListener(focusLossHandler);
-        }
-    }
-
     @Override
     public void removeNotify() {
-        Window window = SwingUtilities.getWindowAncestor(this);
-        if (window != null) {
-            window.removeWindowFocusListener(focusLossHandler);
-        }
         stop();
         super.removeNotify();
     }

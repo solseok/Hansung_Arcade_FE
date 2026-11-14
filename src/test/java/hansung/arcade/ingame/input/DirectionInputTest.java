@@ -3,6 +3,8 @@ package hansung.arcade.ingame.input;
 import hansung.arcade.ingame.entity.Direction;
 import org.junit.jupiter.api.Test;
 
+import java.awt.event.KeyEvent;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
@@ -42,6 +44,16 @@ class DirectionInputTest {
         assertEquals(Direction.UP, input.current());
         input.release(Direction.UP);
         assertEquals(Direction.LEFT, input.current());
+    }
+
+    @Test
+    void 방향키_코드를_방향으로_바꾸고_다른_키는_무시한다() {
+        assertEquals(Direction.UP, DirectionInput.directionOf(KeyEvent.VK_UP));
+        assertEquals(Direction.DOWN, DirectionInput.directionOf(KeyEvent.VK_DOWN));
+        assertEquals(Direction.LEFT, DirectionInput.directionOf(KeyEvent.VK_LEFT));
+        assertEquals(Direction.RIGHT, DirectionInput.directionOf(KeyEvent.VK_RIGHT));
+        assertNull(DirectionInput.directionOf(KeyEvent.VK_SPACE));
+        assertNull(DirectionInput.directionOf(KeyEvent.VK_SHIFT));
     }
 
     @Test
