@@ -208,4 +208,128 @@ class PlayerTest {
         player.eliminate();
         assertFalse(player.isAlive());
     }
+
+    private static void ticks(Player player, Direction input, TileMap map, int count) {
+        for (int i = 0; i < count; i++) {
+            player.update(input, FRAME, map);
+        }
+    }
+
+    @Test
+    void 물줄기에_맞으면_갇히고_3초에_한_칸_속도로만_움직인다() {
+        TileMap map = MapLoader.parse("open", List.of("1....", "....."));
+        Player player = new Player(1, 0, 0);
+
+        assertTrue(player.trap(2));
+        assertEquals(PlayerState.TRAPPED, player.state());
+        assertEquals(2, player.trapperId().orElseThrow());
+        assertTrue(player.isAlive());
+
+        ticks(player, Direction.RIGHT, map, 180);
+
+        assertEquals(TileMap.centerX(0) + T, player.x(), 1e-6);
+        assertTrue(player.isMoving());
+    }
+
+    @Test
+    void 갇혀_있으면_물풍선을_놓지_못하고_다시_갇히지도_않는다() {
+        Player player = new Player(1, 0, 0);
+        assertTrue(player.canPlaceBalloon());
+
+        player.trap(1);
+
+        assertFalse(player.canPlaceBalloon());
+        assertFalse(player.trap(2));
+        assertEquals(1, player.trapperId().orElseThrow());
+    }
+
+    @Test
+    void 갇힌_지_5초가_되는_틱에_시간이_다_된다() {
+        TileMap map = MapLoader.parse("open", List.of("1...."));
+        Player player = new Player(1, 0, 0);
+        player.trap(1);
+
+        ticks(player, null, map, 299);
+        assertFalse(player.isTrapTimeUp());
+        ticks(player, null, map, 1);
+        assertTrue(player.isTrapTimeUp());
+        // 시간이 다 돼도 탈락은 게임 상태가 정한다 (kill을 누구에게 줄지 같이 정해야 해서)
+        assertTrue(player.isAlive());
+    }
+
+    @Test
+    void 빠져나오는_동안은_움직이지_못하고_0_5초_뒤_아래를_보고_보통_상태로_돌아온다() {
+        TileMap map = MapLoader.parse("open", List.of("1....", "....."));
+        Player player = new Player(1, 0, 0);
+        assertFalse(player.escape(), "갇히지 않았으면 빠져나올 것도 없다");
+        player.trap(1);
+        ticks(player, Direction.RIGHT, map, 30);
+        double x = player.x();
+
+        assertTrue(player.escape());
+        ticks(player, Direction.RIGHT, map, 29);
+        assertEquals(PlayerState.ESCAPING, player.state());
+        assertEquals(x, player.x(), 1e-9);
+        assertFalse(player.isMoving());
+        assertFalse(player.canPlaceBalloon());
+        assertFalse(player.trap(2), "빠져나오는 중에는 다시 갇히지 않는다");
+
+        // 30번째 틱에 풀려나고, 다음 틱부터 다시 걷는다
+        ticks(player, null, map, 1);
+        assertEquals(PlayerState.NORMAL, player.state());
+        assertEquals(Direction.DOWN, player.facing());
+        assertTrue(player.canPlaceBalloon());
+        ticks(player, Direction.RIGHT, map, 1);
+        assertTrue(player.x() > x);
+    }
+
+    @Test
+    void 탈락하면_그_순간_살아_있지_않고_2초_연출이_끝나면_사라진다() {
+        TileMap map = MapLoader.parse("open", List.of("1....", "....."));
+        Player player = new Player(1, 0, 0);
+        player.trap(2);
+
+        player.eliminate();
+        assertFalse(player.isAlive());
+        assertEquals(PlayerState.DYING, player.state());
+        assertEquals(0, player.stateTime());
+
+        ticks(player, Direction.RIGHT, map, 119);
+        assertEquals(PlayerState.DYING, player.state());
+        assertEquals(TileMap.centerX(0), player.x(), 1e-9, "탈락하면 움직이지 않는다");
+        ticks(player, null, map, 1);
+        assertEquals(PlayerState.GONE, player.state());
+        assertFalse(player.trap(2));
+        assertFalse(player.escape());
+    }
+
+    @Test
+    void 장애물로_막은_칸에는_들어가지_못한다() {
+        TileMap map = MapLoader.parse("open", List.of("1...."));
+        Player player = new Player(1, 0, 0);
+
+        for (int i = 0; i < 60; i++) {
+            player.update(Direction.RIGHT, FRAME, (col, row) -> map.isSolid(col, row) || col == 2);
+        }
+
+        assertEquals(2 * T - Player.HALF_HITBOX, player.x(), 1.5);
+    }
+
+    @Test
+    void 충돌_박스가_걸친_칸과_닿은_캐릭터를_가린다() {
+        TileMap map = MapLoader.parse("open", List.of("1....", "....."));
+        Player player = new Player(1, 0, 0);
+        assertTrue(player.overlapsTile(0, 0));
+        assertFalse(player.overlapsTile(1, 0));
+
+        ticks(player, Direction.RIGHT, map, 3);
+        assertTrue(player.overlapsTile(0, 0));
+        assertTrue(player.overlapsTile(1, 0));
+        assertFalse(player.overlapsTile(0, 1));
+
+        Player near = new Player(2, 0, 0);
+        Player next = new Player(3, 1, 0);
+        assertTrue(player.touches(near));
+        assertFalse(near.touches(next), "옆 칸 가운데끼리는 닿지 않는다");
+    }
 }
