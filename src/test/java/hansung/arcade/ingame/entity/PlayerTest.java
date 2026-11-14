@@ -60,6 +60,39 @@ class PlayerTest {
     }
 
     @Test
+    void 맵_오른쪽_아래쪽_끝에도_딱_붙어_멈춘다() {
+        TileMap map = MapLoader.parse("edge", List.of("1.."));
+        Player player = new Player(1, 0, 0);
+
+        run(player, Direction.RIGHT, map, 2.0);
+        run(player, Direction.DOWN, map, 1.0);
+
+        double rightEdge = player.x() + Player.HALF_HITBOX;
+        double bottomEdge = player.y() + Player.HALF_HITBOX;
+        assertTrue(rightEdge <= map.pixelWidth() && rightEdge > map.pixelWidth() - 1.5, "오른쪽 끝: " + rightEdge);
+        assertTrue(bottomEdge <= map.pixelHeight() && bottomEdge > map.pixelHeight() - 1.5, "아래쪽 끝: " + bottomEdge);
+    }
+
+    @Test
+    void 가로로_갈_때도_위로_어긋나_있으면_아래로_미끄러져_들어간다() {
+        // 1행에서 오른쪽으로 가려 하는데 플레이어가 0행 쪽으로 치우쳐 있다. (1,1)은 통로, (1,0)은 바위
+        TileMap map = MapLoader.parse("corner", List.of(
+                ".#.",
+                "1..",
+                "..."));
+        Player player = new Player(1, 0, 1);
+        run(player, Direction.UP, map, 0.12); // 8프레임, 16px 위로 치우침
+        double offsetBefore = player.y() - TileMap.centerY(1);
+        assertTrue(offsetBefore < -10, "테스트 준비 실패: " + offsetBefore);
+
+        run(player, Direction.RIGHT, map, 1.0);
+
+        double tolerance = T / 2.0 - Player.HALF_HITBOX;
+        assertEquals(TileMap.centerY(1), player.y(), tolerance);
+        assertTrue(player.col() >= 1, "통로로 들어가지 못함: col=" + player.col());
+    }
+
+    @Test
     void 통로_입구에서_어긋나_있으면_모서리를_타고_미끄러져_들어간다() {
         // 0행에서 아래로 내려가려 하는데 플레이어가 1열 쪽으로 반 칸 가까이 치우쳐 있다.
         // (0,1)은 통로, (1,1)은 바위
