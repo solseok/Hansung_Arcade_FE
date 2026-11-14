@@ -68,7 +68,7 @@ class PlayerTest {
                 ".#.",
                 "..."));
         Player player = new Player(1, 0, 0);
-        run(player, Direction.RIGHT, map, 0.12); // 약 14px 오른쪽으로 치우침
+        run(player, Direction.RIGHT, map, 0.12); // 8프레임, 16px 오른쪽으로 치우침
         double offsetBefore = player.x() - TileMap.centerX(0);
         assertTrue(offsetBefore > 10, "테스트 준비 실패: " + offsetBefore);
 

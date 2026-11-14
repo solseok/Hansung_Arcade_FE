@@ -14,7 +14,7 @@ import java.util.Properties;
  * 실행 설정. resources/application.properties 값을 실행 인자 {@code --키=값}이 덮어쓴다.
  *
  * <pre>
- * ./gradlew run --args="--game.start-map=camp08 --network.mode=offline"
+ * ./gradlew run --args="--game.start-map=camp/camp08 --network.mode=offline"
  * </pre>
  */
 public final class GameProperties {
