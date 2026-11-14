@@ -1,6 +1,7 @@
 package hansung.arcade.core.boot;
 
 import hansung.arcade.core.game.GameProperties;
+import hansung.arcade.ingame.entity.CharacterColor;
 import hansung.arcade.ingame.entity.Mascot;
 import hansung.arcade.ingame.entity.PlayerProfile;
 import hansung.arcade.ingame.match.MatchMode;
@@ -10,6 +11,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -35,6 +37,31 @@ class StartScreenStepTest {
     void 닉네임을_비워_두면_기본_닉네임을_쓴다() {
         GameProperties properties = GameProperties.of(Map.of(), List.of("--player.nickname=   "));
         assertEquals("Player", StartScreenStep.localProfile(properties).nickname());
+    }
+
+    @Test
+    void 고정색은_설정값_player_color로_정한다() {
+        GameProperties properties = GameProperties.of(Map.of("player.color", ""),
+                List.of("--player.character=sangzzi", "--player.color=Magenta"));
+
+        assertEquals(new PlayerProfile("Player", Mascot.SANGZZI, CharacterColor.MAGENTA),
+                StartScreenStep.localProfile(properties));
+    }
+
+    @Test
+    void 고정색을_비워_두거나_적지_않으면_원래_색이다() {
+        assertNull(StartScreenStep.localProfile(GameProperties.of(Map.of("player.color", ""), List.of())).color());
+        assertNull(StartScreenStep.localProfile(GameProperties.of(Map.of(), List.of("--player.color=  "))).color());
+        assertNull(StartScreenStep.localProfile(GameProperties.of(Map.of(), List.of())).color());
+    }
+
+    @Test
+    void 없는_색을_적으면_설정_이름과_가능한_색을_알려_주며_실패한다() {
+        GameProperties properties = GameProperties.of(Map.of("player.color", "pink"), List.of());
+
+        IllegalStateException e = assertThrows(IllegalStateException.class, () -> StartScreenStep.localProfile(properties));
+        assertTrue(e.getMessage().contains("player.color=pink"), e.getMessage());
+        assertTrue(e.getMessage().contains("sky"), e.getMessage());
     }
 
     @Test

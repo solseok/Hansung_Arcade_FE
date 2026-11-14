@@ -3,6 +3,8 @@ package hansung.arcade.ingame.entity;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -45,5 +47,20 @@ class PlayerProfileTest {
         assertEquals(2, new PlayerProfile("부기", Mascot.SANGSANGBUGI, 2).team());
         assertThrows(IllegalArgumentException.class, () -> new PlayerProfile("부기", Mascot.SANGSANGBUGI, 0));
         assertThrows(IllegalArgumentException.class, () -> new PlayerProfile("부기", Mascot.SANGSANGBUGI, -1));
+    }
+
+    @Test
+    void 고정색을_고르지_않으면_원래_색이다() {
+        assertNull(new PlayerProfile("부기", Mascot.SANGSANGBUGI).color());
+        assertNull(PlayerProfile.placeholder(1).color());
+        assertEquals(new PlayerProfile("부기", Mascot.SANGSANGBUGI, null), new PlayerProfile("부기", Mascot.SANGSANGBUGI));
+    }
+
+    @Test
+    void 고른_고정색을_가진다() {
+        PlayerProfile profile = new PlayerProfile("냥이", Mascot.HANSUNGNYANGI, CharacterColor.SKY);
+
+        assertEquals(CharacterColor.SKY, profile.color());
+        assertNotEquals(new PlayerProfile("냥이", Mascot.HANSUNGNYANGI), profile);
     }
 }
