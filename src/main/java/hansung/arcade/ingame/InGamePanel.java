@@ -14,6 +14,7 @@ import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
+import java.awt.Shape;
 import java.awt.Toolkit;
 import java.awt.event.FocusAdapter;
 import java.awt.event.FocusEvent;
@@ -143,11 +144,12 @@ public final class InGamePanel extends JPanel {
             g.fillRoundRect(MARGIN - 4, TOP_BAR - 4, fieldWidth + 8, fieldHeight + 8, 10, 10);
 
             AffineTransform base = g.getTransform();
+            Shape clip = g.getClip();
             g.translate(MARGIN, TOP_BAR);
             g.clipRect(0, -TOP_BAR, fieldWidth, fieldHeight + TOP_BAR);
             worldRenderer.draw(g, world);
             g.setTransform(base);
-            g.setClip(null);
+            g.setClip(clip);
 
             int hudX = MARGIN + fieldWidth + MARGIN;
             hudRenderer.draw(g, world, hudX, TOP_BAR - 4, HUD_WIDTH, fieldHeight + 8, fps);

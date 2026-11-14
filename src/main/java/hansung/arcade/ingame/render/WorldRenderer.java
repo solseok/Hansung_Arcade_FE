@@ -12,6 +12,7 @@ import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Graphics2D;
 import java.awt.Shape;
+import java.awt.Stroke;
 import java.awt.geom.Ellipse2D;
 import java.awt.image.BufferedImage;
 import java.util.EnumSet;
@@ -42,6 +43,7 @@ public final class WorldRenderer {
             new Color(0x2BB673), new Color(0xF27A3D), new Color(0x35C2C9), new Color(0xE05BB5),
     };
     private static final Font NAME_FONT = new Font(Font.SANS_SERIF, Font.BOLD, 10);
+    private static final Stroke BODY_OUTLINE = new BasicStroke(1.5f);
 
     private final Tileset tileset;
 
@@ -50,7 +52,7 @@ public final class WorldRenderer {
     }
 
     public static Color playerColor(int playerId) {
-        return PLAYER_COLORS[(playerId - 1) % PLAYER_COLORS.length];
+        return PLAYER_COLORS[Math.floorMod(playerId - 1, PLAYER_COLORS.length)];
     }
 
     public void draw(Graphics2D g, GameWorld world) {
@@ -152,8 +154,11 @@ public final class WorldRenderer {
         g.setColor(new Color(255, 255, 255, 90));
         g.fill(new Ellipse2D.Double(x - 10, bodyY + 4, 9, 7));
         g.setColor(color.darker().darker());
-        g.setStroke(new BasicStroke(1.5f));
+        // 선 굵기를 되돌려 놓지 않으면 뒤에 그리는 HUD 테두리까지 굵어진다.
+        Stroke previous = g.getStroke();
+        g.setStroke(BODY_OUTLINE);
         g.draw(body);
+        g.setStroke(previous);
 
         drawFace(g, player.facing(), x, bodyY + 15);
         drawNameTag(g, "P" + player.id(), x, bodyY - 4, color);
