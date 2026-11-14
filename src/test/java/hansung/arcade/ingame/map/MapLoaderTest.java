@@ -22,19 +22,27 @@ class MapLoaderTest {
         assertEquals("camp", map.theme());
         assertEquals(15, map.columns());
         assertEquals(13, map.rows());
-        assertEquals(List.of(new Point(0, 6), new Point(14, 6)), map.spawnPoints());
+        assertEquals(List.of(new Point(0, 6), new Point(3, 3), new Point(0, 1), new Point(2, 12),
+                new Point(14, 6), new Point(11, 9), new Point(14, 11), new Point(12, 0)), map.spawnPoints());
     }
 
-    @Test
-    void 기본_맵의_스폰_지점은_바닥이고_상하좌우_중_한_곳_이상_비어있다() {
-        TileMap map = MapLoader.loadResource("camp/camp08");
+    @ParameterizedTest
+    @ValueSource(strings = {"camp/camp08", "patrit/patrit14", "village/village10"})
+    void 리소스_맵의_스폰_지점은_지나갈_수_있고_상하좌우_중_한_곳_이상은_지나가거나_부술_수_있다(String id) {
+        TileMap map = MapLoader.loadResource(id);
 
         for (Point spawn : map.spawnPoints()) {
             assertFalse(map.isSolid(spawn.x, spawn.y), "스폰 지점이 막혀 있음: " + spawn);
-            boolean hasExit = !map.isSolid(spawn.x - 1, spawn.y) || !map.isSolid(spawn.x + 1, spawn.y)
-                    || !map.isSolid(spawn.x, spawn.y - 1) || !map.isSolid(spawn.x, spawn.y + 1);
+            // 블록·밀기 상자로 둘러싸여도 부수면 나갈 수 있다 (패트릿 6번처럼)
+            boolean hasExit = canOpen(map, spawn.x - 1, spawn.y) || canOpen(map, spawn.x + 1, spawn.y)
+                    || canOpen(map, spawn.x, spawn.y - 1) || canOpen(map, spawn.x, spawn.y + 1);
             assertTrue(hasExit, "스폰 지점에서 나갈 길이 없음: " + spawn);
         }
+    }
+
+    private static boolean canOpen(TileMap map, int col, int row) {
+        // 맵 바깥은 부술 수 없는 벽이다
+        return map.isInside(col, row) && (!map.isSolid(col, row) || map.tileAt(col, row).isDestructible());
     }
 
     @Test
@@ -154,6 +162,69 @@ class MapLoaderTest {
         assertEquals("테스트", map.name());
         assertEquals(3, map.columns());
         assertEquals(1, MapLoader.parse("test", List.of("\uFEFF1")).columns());
+    }
+
+    @Test
+    void 스폰_층에_적으면_타일은_그대로_두고_스폰_지점만_정한다() {
+        TileMap map = MapLoader.parse("test", List.of(
+                "._|",
+                "T.=",
+                "[spawn]",
+                ".2.",
+                "1.3"));
+
+        assertEquals(Tile.ROAD, map.tileAt(1, 0));
+        assertEquals(Tile.ROAD_LANE, map.tileAt(2, 0));
+        assertEquals(Tile.BUSH, map.tileAt(0, 1));
+        assertEquals(Tile.CROSSWALK, map.tileAt(2, 1));
+        assertEquals(List.of(new Point(0, 1), new Point(1, 0), new Point(2, 1)), map.spawnPoints());
+    }
+
+    @Test
+    void 빌리지_맵의_길_위_스폰은_길_타일을_그대로_둔다() {
+        TileMap map = MapLoader.loadResource("village/village10");
+
+        assertEquals(new Point(7, 0), map.spawnPoints().get(4));
+        assertEquals(Tile.ROAD_LANE, map.tileAt(7, 0));
+        assertEquals(new Point(6, 12), map.spawnPoints().get(2));
+        assertEquals(Tile.ROAD, map.tileAt(6, 12));
+    }
+
+    @Test
+    void 스폰_층_크기가_타일_층과_다르면_실패한다() {
+        assertThrows(IllegalArgumentException.class,
+                () -> MapLoader.parse("test", List.of("..", "..", "[spawn]", "1.")));
+        assertThrows(IllegalArgumentException.class,
+                () -> MapLoader.parse("test", List.of("..", "..", "[spawn]", "1.", "...")));
+    }
+
+    @Test
+    void 스폰_층에는_숫자와_점만_쓸_수_있다() {
+        assertThrows(IllegalArgumentException.class,
+                () -> MapLoader.parse("test", List.of("..", "[spawn]", "1B")));
+    }
+
+    @Test
+    void 지나갈_수_없는_칸에는_스폰을_둘_수_없다() {
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                () -> MapLoader.parse("test", List.of(".B", "[spawn]", ".1")));
+        assertTrue(e.getMessage().contains("(1, 0)"), e.getMessage());
+    }
+
+    @Test
+    void 타일_층_숫자와_스폰_층을_함께_쓰면_실패한다() {
+        assertThrows(IllegalArgumentException.class,
+                () -> MapLoader.parse("test", List.of("1.", "[spawn]", ".2")));
+    }
+
+    @Test
+    void 스폰_층에서도_번호가_겹치거나_빠지면_실패한다() {
+        assertThrows(IllegalArgumentException.class,
+                () -> MapLoader.parse("test", List.of("...", "[spawn]", "1.1")));
+        assertThrows(IllegalArgumentException.class,
+                () -> MapLoader.parse("test", List.of("...", "[spawn]", "1.3")));
+        assertThrows(IllegalArgumentException.class,
+                () -> MapLoader.parse("test", List.of("...", "[spawn]", "...")));
     }
 
     @Test
