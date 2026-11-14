@@ -13,6 +13,6 @@ public record StatRange(int base, int max) {
 
     /** value를 시작값~최댓값 안으로 맞춘다. 더한 값이 int 범위를 넘어도 되도록 long으로 받는다. */
     public int clamp(long value) {
-        return (int) Math.max(base, Math.min(max, value));
+        return Math.clamp(value, base, max);
     }
 }

@@ -49,7 +49,11 @@ public enum Mascot {
         return waterRange;
     }
 
-    /** 이동속도 단계. 실제 속도는 {@link SpeedLevel}로 바꾼다. */
+    /**
+     * 이동속도 단계. 실제 속도는 {@link SpeedLevel}로 바꾼다.
+     * 다른 능력치와 달리 느려질 때는 시작값 아래({@link SpeedLevel#MIN})까지 내려갈 수 있다.
+     * 그래서 범위를 맞출 때 {@link StatRange#clamp}가 아니라 {@link Player#addSpeedLevel}의 규칙을 따른다.
+     */
     public StatRange speed() {
         return speed;
     }

@@ -191,6 +191,6 @@ public final class Player {
      */
     public void addSpeedLevel(int delta) {
         int max = profile.mascot().speed().max();
-        speedLevel = (int) Math.max(SpeedLevel.MIN, Math.min(max, (long) speedLevel + delta));
+        speedLevel = Math.clamp((long) speedLevel + delta, SpeedLevel.MIN, max);
     }
 }
