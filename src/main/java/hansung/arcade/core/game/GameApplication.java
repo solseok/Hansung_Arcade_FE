@@ -7,6 +7,7 @@ import hansung.arcade.core.boot.PropertiesStep;
 import hansung.arcade.core.boot.ResourceStep;
 import hansung.arcade.core.boot.StartScreenStep;
 import hansung.arcade.core.boot.SwingStep;
+import hansung.arcade.core.ui.SwingThread;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -43,8 +44,12 @@ public final class GameApplication {
         try {
             application.boot(args);
         } catch (BootException e) {
-            reportFailure(e);
-            System.exit(1);
+            try {
+                reportFailure(e);
+            } finally {
+                // 대화상자를 띄우다 실패해도 반쯤 뜬 상태로 남지 않게 반드시 종료한다.
+                System.exit(1);
+            }
         }
     }
 
@@ -84,7 +89,8 @@ public final class GameApplication {
     private static void reportFailure(BootException e) {
         log.error(e.getMessage(), e.getCause());
         if (!GraphicsEnvironment.isHeadless()) {
-            JOptionPane.showMessageDialog(null, e.getMessage(), "실행 실패", JOptionPane.ERROR_MESSAGE);
+            SwingThread.runAndWait(() ->
+                    JOptionPane.showMessageDialog(null, e.getMessage(), "실행 실패", JOptionPane.ERROR_MESSAGE));
         }
     }
 }

@@ -13,8 +13,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class GameApplicationTest {
 
@@ -76,6 +78,19 @@ class GameApplicationTest {
         assertEquals(List.of("첫째", "둘째"), log);
         assertEquals("둘째", e.stepName());
         assertInstanceOf(IllegalStateException.class, e.getCause());
+    }
+
+    @Test
+    void 실패_원인에_메시지가_없으면_예외_이름을_알려준다() {
+        List<BootStep> steps = List.of(new RecordingStep("고장", new ArrayList<>(), () -> {
+            throw new IllegalStateException();
+        }));
+
+        BootException e = assertThrows(BootException.class,
+                () -> new GameApplication(GameApplicationTest.class, steps).boot());
+
+        assertTrue(e.getMessage().contains("IllegalStateException"), e.getMessage());
+        assertFalse(e.getMessage().contains("null"), e.getMessage());
     }
 
     @Test
