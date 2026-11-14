@@ -7,13 +7,15 @@ import hansung.arcade.ingame.hud.HudSkin;
 import hansung.arcade.ingame.map.MapLoader;
 import hansung.arcade.ingame.map.Tile;
 import hansung.arcade.ingame.map.TileMap;
+import hansung.arcade.ingame.render.CharacterSprites;
 import hansung.arcade.ingame.render.Tileset;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
  * 4단계: 화면에 필요한 리소스를 미리 읽어 등록한다. 파일이 깨져 있으면 창을 띄우기 전에 실패한다.
- * 맵과 맵 테마의 타일 그림(BMP), HUD 글꼴과 캐릭터 얼굴 그림을 읽는다. 사운드 로더도 준비되면 이 단계에 추가한다.
+ * 맵과 맵 테마의 타일 그림(BMP), 캐릭터 그림, HUD 글꼴과 캐릭터 얼굴 그림을 읽는다.
+ * 사운드 로더도 준비되면 이 단계에 추가한다.
  */
 public final class ResourceStep implements BootStep {
 
@@ -33,6 +35,8 @@ public final class ResourceStep implements BootStep {
         context.register(Tileset.class, tileset);
         log.info("시작 맵: {} ({}, {}x{}, 테마 {})", map.name(), mapId, map.columns(), map.rows(), map.theme());
         warnMissingArt(map, tileset);
+
+        context.register(CharacterSprites.class, CharacterSprites.load());
 
         HudFonts fonts = HudFonts.load();
         if (!fonts.missing().isEmpty()) {

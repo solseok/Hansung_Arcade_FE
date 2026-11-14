@@ -45,11 +45,6 @@ public final class WorldRenderer {
     private final Tileset tileset;
     private final CharacterSprites characters;
 
-    /** 캐릭터 그림은 기본 위치(resources/sprites/characters)에서 읽는다. */
-    public WorldRenderer(Tileset tileset) {
-        this(tileset, CharacterSprites.load());
-    }
-
     public WorldRenderer(Tileset tileset, CharacterSprites characters) {
         this.tileset = Objects.requireNonNull(tileset);
         this.characters = Objects.requireNonNull(characters);

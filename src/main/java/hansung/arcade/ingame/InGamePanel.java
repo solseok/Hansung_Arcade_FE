@@ -6,6 +6,7 @@ import hansung.arcade.ingame.hud.HudLayout;
 import hansung.arcade.ingame.hud.HudSkin;
 import hansung.arcade.ingame.hud.InGameHud;
 import hansung.arcade.ingame.input.DirectionInput;
+import hansung.arcade.ingame.render.CharacterSprites;
 import hansung.arcade.ingame.render.Tileset;
 import hansung.arcade.ingame.render.WorldRenderer;
 
@@ -72,9 +73,9 @@ public final class InGamePanel extends JPanel {
     private long lastTickNanos;
     private double accumulator;
 
-    public InGamePanel(GameWorld world, Tileset tileset, HudSkin skin) {
+    public InGamePanel(GameWorld world, Tileset tileset, HudSkin skin, CharacterSprites characters) {
         this.world = world;
-        this.worldRenderer = new WorldRenderer(tileset);
+        this.worldRenderer = new WorldRenderer(tileset, characters);
         this.hud = new InGameHud(skin, world.map(), tileset);
         setPreferredSize(new Dimension(HudLayout.WIDTH, HudLayout.HEIGHT));
         // 바탕은 HUD 그림이 화면 전체를 덮으므로 따로 지우지 않는다.
@@ -84,6 +85,11 @@ public final class InGamePanel extends JPanel {
         addFocusListener(focusLossHandler);
         loopTimer = new Timer(1000 / 60, e -> tick());
         loopTimer.setCoalesce(true);
+    }
+
+    /** 캐릭터 그림을 기본 위치에서 새로 읽는다. 미리 읽어 둔 그림이 없는 테스트에서 쓴다. */
+    public InGamePanel(GameWorld world, Tileset tileset, HudSkin skin) {
+        this(world, tileset, skin, CharacterSprites.load());
     }
 
     public void start() {
