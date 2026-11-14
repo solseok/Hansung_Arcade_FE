@@ -62,6 +62,26 @@ public final class HudPalette {
     public static final Color BUBBLE = new Color(0, 0, 0, 51);
     public static final Color BUBBLE_EDGE = new Color(0xFFFFFF);
 
+    /** 결과 배너 띠: 전광판 격자색을 80% 덮은 바탕에 위아래 밝은 선. 맵이 살짝 비친다 */
+    public static final Color RESULT_BAND = new Color(0x06, 0x30, 0x6D, 0xCC);
+    public static final Color RESULT_BAND_EDGE = DISPLAY_LABEL;
+    /** 결과 글씨 그림자 (검은색 50%) */
+    public static final Color RESULT_SHADOW = new Color(0, 0, 0, 0x80);
+    /** 결과 글씨 윗변에 한 도트씩 넣는 밝은 줄 */
+    public static final Color RESULT_HIGHLIGHT = Color.WHITE;
+    /** 이겼을 때: 위에서 아래로 노랑 → 주황, 짙은 갈색 테두리 */
+    public static final Color WIN_TOP = new Color(0xFFF59A);
+    public static final Color WIN_BOTTOM = new Color(0xFFA514);
+    public static final Color WIN_OUTLINE = new Color(0x5A2600);
+    /** 졌을 때: 위에서 아래로 연하늘 → 파랑, 남색 테두리 */
+    public static final Color LOSE_TOP = new Color(0xE2F0FF);
+    public static final Color LOSE_BOTTOM = new Color(0x6A96DE);
+    public static final Color LOSE_OUTLINE = new Color(0x13255A);
+    /** 비겼을 때: 위에서 아래로 연두 → 초록, 짙은 초록 테두리 */
+    public static final Color DRAW_TOP = new Color(0xEEFFE2);
+    public static final Color DRAW_BOTTOM = new Color(0x5FCB82);
+    public static final Color DRAW_OUTLINE = new Color(0x114728);
+
     private HudPalette() {
     }
 
