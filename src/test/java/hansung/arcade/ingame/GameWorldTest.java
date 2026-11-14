@@ -54,6 +54,20 @@ class GameWorldTest {
     }
 
     @Test
+    void 남이_보낸_글도_한_줄_64바이트로_다듬고_빈_글은_올리지_않는다() {
+        world.receiveChat(new ChatMessage(myId + 1, "꼬꼬", ""));
+        world.receiveChat(new ChatMessage(myId + 1, "꼬꼬", " \n "));
+        assertTrue(world.chatLog().messages().isEmpty());
+        assertNull(world.speechBubbles().textOf(myId + 1));
+
+        // "첫 줄 "이 6바이트라 뒤에 한글 29자(58바이트)까지 들어간다
+        world.receiveChat(new ChatMessage(myId + 1, "꼬꼬", "첫 줄\n" + "가".repeat(40)));
+        String cleaned = "첫 줄 " + "가".repeat(29);
+        assertEquals(List.of(new ChatMessage(myId + 1, "꼬꼬", cleaned)), world.chatLog().messages());
+        assertEquals(cleaned, world.speechBubbles().textOf(myId + 1));
+    }
+
+    @Test
     void 채팅을_치면_친_플레이어의_말풍선이_뜬다() {
         world.sendChat("안녕");
         world.receiveChat(new ChatMessage(myId + 1, "꼬꼬", "반가워"));

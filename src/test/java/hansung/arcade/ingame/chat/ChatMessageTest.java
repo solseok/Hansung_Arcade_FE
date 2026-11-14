@@ -43,7 +43,36 @@ class ChatMessageTest {
     }
 
     @Test
-    void 이모지처럼_두_칸짜리_글자의_가운데는_자르지_않는다() {
+    void 빈칸으로_보이는_글자뿐인_글은_빈_글로_다듬는다() {
+        // 한글 채움 문자, 폭 없는 공백, 줄 바꿈 없는 공백
+        assertEquals("", ChatMessage.clean("\u3164"));
+        assertEquals("", ChatMessage.clean("\u200B\u200B"));
+        assertEquals("", ChatMessage.clean("\u00A0 \u3164"));
+        // 글 사이의 공백은 그대로 두고 앞뒤만 뗀다
+        assertEquals("가 나", ChatMessage.clean("\u3164가 나\u00A0"));
+    }
+
+    @Test
+    void 줄을_나누거나_글자_방향을_바꾸는_글자는_남기지_않는다() {
+        // 줄 구분, 문단 구분은 공백으로
+        assertEquals("a b", ChatMessage.clean("a\u2028b"));
+        assertEquals("a b", ChatMessage.clean("a\u2029b"));
+        // 글자 방향 뒤집기와 폭 없는 공백은 지운다
+        assertEquals("abc", ChatMessage.clean("a\u202Eb\u200Bc"));
+        // 짝이 맞지 않는 서로게이트
+        assertEquals("ab", ChatMessage.clean("a\uD83Db"));
+    }
+
+    @Test
+    void 자모를_풀어쓴_한글은_한_글자로_합쳐서_센다() {
+        // ㅎ + ㅏ + ㄴ 을 따로 적은 "한" (맥의 파일 이름을 붙여넣으면 이렇게 들어온다)
+        String decomposed = "\u1112\u1161\u11AB";
+        assertEquals("한", ChatMessage.clean(decomposed));
+        assertEquals(2, ChatMessage.byteLength(ChatMessage.clean(decomposed)));
+    }
+
+    @Test
+    void 이모지_같은_서로게이트_쌍의_가운데는_자르지_않는다() {
         String smile = "😀";
         assertEquals(4, ChatMessage.byteLength(smile));
         assertEquals("a", ChatMessage.truncateToBytes("a" + smile, 4));
