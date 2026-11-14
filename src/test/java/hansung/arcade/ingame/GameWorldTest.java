@@ -7,6 +7,7 @@ import hansung.arcade.ingame.entity.Direction;
 import hansung.arcade.ingame.entity.Mascot;
 import hansung.arcade.ingame.entity.Player;
 import hansung.arcade.ingame.entity.PlayerProfile;
+import hansung.arcade.ingame.input.PlayerCommand;
 import hansung.arcade.ingame.map.MapLoader;
 import hansung.arcade.ingame.match.MatchClock;
 import hansung.arcade.ingame.match.MatchMode;
@@ -14,6 +15,7 @@ import hansung.arcade.ingame.match.MatchOutcome;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -89,11 +91,11 @@ class GameWorldTest {
     void 말풍선이_먼저_내려가고_채팅_목록은_조금_더_남는다() {
         world.sendChat("안녕");
 
-        world.update(SpeechBubbles.VISIBLE_SECONDS, null);
+        world.update(SpeechBubbles.VISIBLE_SECONDS, Map.of());
         assertNull(world.speechBubbles().textOf(myId));
         assertEquals(1, world.chatLog().messages().size());
 
-        world.update(ChatLog.VISIBLE_SECONDS - SpeechBubbles.VISIBLE_SECONDS, null);
+        world.update(ChatLog.VISIBLE_SECONDS - SpeechBubbles.VISIBLE_SECONDS, Map.of());
         assertTrue(world.chatLog().messages().isEmpty());
     }
 
@@ -137,7 +139,7 @@ class GameWorldTest {
         world.sendChat("gg");
 
         for (int i = 0; i < 60; i++) {
-            world.update(TICK, Direction.RIGHT);
+            world.update(TICK, Map.of(world.localPlayer().id(), PlayerCommand.moving(Direction.RIGHT)));
         }
 
         assertEquals(x, me.x());
@@ -145,7 +147,7 @@ class GameWorldTest {
         assertEquals(elapsed + 1, world.elapsedSeconds(), 1e-9);
         assertEquals(0, world.match().clock().remainingSeconds());
         // 끝난 뒤에 친 채팅도 시간이 지나면 내려간다
-        world.update(ChatLog.VISIBLE_SECONDS, null);
+        world.update(ChatLog.VISIBLE_SECONDS, Map.of());
         assertTrue(world.chatLog().messages().isEmpty());
     }
 
@@ -153,14 +155,14 @@ class GameWorldTest {
     void 경기_중에는_방향키대로_움직인다() {
         double x = world.localPlayer().x();
 
-        world.update(TICK, Direction.RIGHT);
+        world.update(TICK, Map.of(world.localPlayer().id(), PlayerCommand.moving(Direction.RIGHT)));
 
         assertTrue(world.localPlayer().x() > x);
     }
 
     private void tick(int n) {
         for (int i = 0; i < n; i++) {
-            world.update(TICK, null);
+            world.update(TICK, Map.of());
         }
     }
 }

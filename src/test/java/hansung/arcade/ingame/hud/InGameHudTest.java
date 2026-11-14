@@ -14,6 +14,7 @@ import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 import java.util.List;
+import java.util.Map;
 
 import static hansung.arcade.ingame.hud.HudLayout.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -187,7 +188,7 @@ class InGameHudTest {
     /** 혼자 하는 판이라 시간이 다 될 때까지 갱신한다 */
     private static void playToEnd(GameWorld world) {
         for (int i = 0; i < MatchClock.DURATION_SECONDS * MatchClock.TICKS_PER_SECOND; i++) {
-            world.update(1.0 / MatchClock.TICKS_PER_SECOND, null);
+            world.update(1.0 / MatchClock.TICKS_PER_SECOND, Map.of());
         }
         assertTrue(world.match().isOver());
     }

@@ -6,6 +6,7 @@ import hansung.arcade.ingame.entity.Direction;
 import hansung.arcade.ingame.entity.Mascot;
 import hansung.arcade.ingame.entity.Player;
 import hansung.arcade.ingame.entity.PlayerProfile;
+import hansung.arcade.ingame.input.PlayerCommand;
 import hansung.arcade.ingame.map.MapLoader;
 import hansung.arcade.ingame.map.TileMap;
 import org.junit.jupiter.api.Test;
@@ -14,6 +15,7 @@ import java.awt.Graphics2D;
 import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
@@ -115,7 +117,7 @@ class CharacterSpritesTest {
 
         // 왼쪽으로 7프레임 걸으면 왼쪽을 보는 걷는 그림의 둘째 장이다
         for (int i = 0; i < 7; i++) {
-            world.update(1.0 / 60, Direction.LEFT);
+            world.update(1.0 / 60, Map.of(player.id(), PlayerCommand.moving(Direction.LEFT)));
         }
         BufferedImage walkingLeft = SPRITES.frame(Mascot.KKUKKU, Direction.LEFT, true, player.walkTime());
         assertNotSame(SPRITES.frame(Mascot.KKUKKU, Direction.LEFT, true, 0), walkingLeft);

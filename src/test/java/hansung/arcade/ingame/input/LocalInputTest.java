@@ -1,0 +1,168 @@
+package hansung.arcade.ingame.input;
+
+import hansung.arcade.ingame.entity.Direction;
+import org.junit.jupiter.api.Test;
+
+import javax.swing.JPanel;
+import java.awt.Component;
+import java.awt.event.KeyEvent;
+import java.util.List;
+
+import static java.awt.event.InputEvent.SHIFT_DOWN_MASK;
+import static java.awt.event.KeyEvent.KEY_LOCATION_LEFT;
+import static java.awt.event.KeyEvent.KEY_LOCATION_RIGHT;
+import static java.awt.event.KeyEvent.KEY_LOCATION_STANDARD;
+import static java.awt.event.KeyEvent.VK_LEFT;
+import static java.awt.event.KeyEvent.VK_SHIFT;
+import static java.awt.event.KeyEvent.VK_SPACE;
+import static java.awt.event.KeyEvent.VK_UP;
+import static java.awt.event.KeyEvent.VK_W;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+/**
+ * 키 이벤트를 직접 만들어 넣고, 틱마다 꺼내는 명령을 확인한다. 한 번의 {@link LocalInput#takeCommands()}가 한 틱이다.
+ */
+class LocalInputTest {
+
+    private static final Component SOURCE = new JPanel();
+    private static final int ME = 1;
+
+    private final LocalInput solo = new LocalInput(List.of(ME));
+
+    @Test
+    void 물풍선_키는_누른_뒤_첫_틱에만_한_번_들어간다() {
+        press(solo, VK_SPACE);
+
+        assertTrue(command(solo, ME).placeBalloon());
+        // 아직 누르고 있어도 다음 틱부터는 들어가지 않는다
+        assertFalse(command(solo, ME).placeBalloon());
+        assertFalse(command(solo, ME).placeBalloon());
+    }
+
+    @Test
+    void 누르고_있는_동안_되풀이되는_누름은_새로_누른_것으로_치지_않는다() {
+        press(solo, VK_SPACE);
+        command(solo, ME);
+
+        // OS 키 자동 반복
+        press(solo, VK_SPACE);
+        press(solo, VK_SPACE);
+        assertFalse(command(solo, ME).placeBalloon());
+
+        // 떼고 다시 누르면 또 들어간다
+        release(solo, VK_SPACE);
+        press(solo, VK_SPACE);
+        assertTrue(command(solo, ME).placeBalloon());
+    }
+
+    @Test
+    void 틱이_돌기_전에_눌렀다_떼도_다음_틱에_들어간다() {
+        press(solo, VK_SPACE);
+        release(solo, VK_SPACE);
+
+        assertTrue(command(solo, ME).placeBalloon());
+        assertFalse(command(solo, ME).placeBalloon());
+    }
+
+    @Test
+    void 한_프레임에_틱이_여러_번_돌아도_막_눌린_키는_한_틱에만_들어간다() {
+        press(solo, VK_SPACE);
+        press(solo, VK_SHIFT, KEY_LOCATION_LEFT, SHIFT_DOWN_MASK);
+        press(solo, VK_UP);
+
+        // 한 프레임에 세 틱이 돈다
+        List<PlayerCommand> ticks = List.of(command(solo, ME), command(solo, ME), command(solo, ME));
+
+        assertEquals(List.of(true, false, false), ticks.stream().map(PlayerCommand::placeBalloon).toList());
+        assertEquals(List.of(true, false, false), ticks.stream().map(PlayerCommand::useItem).toList());
+        // 이동은 누르고 있는 동안 틱마다 들어간다
+        assertEquals(List.of(Direction.UP, Direction.UP, Direction.UP), ticks.stream().map(PlayerCommand::move).toList());
+    }
+
+    @Test
+    void 아무것도_안_누르면_가만히_있는다() {
+        assertEquals(PlayerCommand.IDLE, command(solo, ME));
+    }
+
+    @Test
+    void 받은_키만_받았다고_알린다() {
+        assertTrue(press(solo, VK_UP));
+        assertTrue(press(solo, VK_SPACE));
+        assertFalse(press(solo, VK_W));
+        assertTrue(release(solo, VK_UP));
+        assertFalse(release(solo, VK_W));
+    }
+
+    @Test
+    void 채팅_입력칸에서는_방향키만_받고_Space와_Shift는_글자_입력에_맡긴다() {
+        assertFalse(solo.keyPressed(key(KeyEvent.KEY_PRESSED, VK_SPACE, KEY_LOCATION_STANDARD, 0), true));
+        assertFalse(solo.keyPressed(key(KeyEvent.KEY_PRESSED, VK_SHIFT, KEY_LOCATION_LEFT, SHIFT_DOWN_MASK), true));
+        assertTrue(solo.keyPressed(key(KeyEvent.KEY_PRESSED, VK_LEFT, KEY_LOCATION_STANDARD, 0), true));
+
+        PlayerCommand command = command(solo, ME);
+        assertEquals(PlayerCommand.moving(Direction.LEFT), command);
+    }
+
+    @Test
+    void 포커스를_잃어_비우면_누르던_키도_막_누른_키도_없어진다() {
+        press(solo, VK_UP);
+        press(solo, VK_SPACE);
+
+        solo.clear();
+
+        assertEquals(PlayerCommand.IDLE, command(solo, ME));
+        // 뗌 이벤트를 못 받았어도 다시 누르면 새로 누른 것이다
+        press(solo, VK_SPACE);
+        assertTrue(command(solo, ME).placeBalloon());
+    }
+
+    @Test
+    void Shift를_뗀_이벤트를_놓쳐도_Shift가_모두_떼진_뒤에는_다시_누를_수_있다() {
+        press(solo, VK_SHIFT, KEY_LOCATION_RIGHT, SHIFT_DOWN_MASK);
+        assertTrue(command(solo, ME).useItem());
+        // 오른쪽 Shift의 뗌 이벤트가 오지 않았다. 다른 키 이벤트에 Shift가 눌려 있지 않다고 나온다
+        press(solo, VK_UP);
+        release(solo, VK_UP);
+
+        press(solo, VK_SHIFT, KEY_LOCATION_RIGHT, SHIFT_DOWN_MASK);
+        assertTrue(command(solo, ME).useItem());
+    }
+
+    @Test
+    void Shift를_누르고_있는_동안에는_다른_키를_눌러도_누른_채로_둔다() {
+        press(solo, VK_SHIFT, KEY_LOCATION_LEFT, SHIFT_DOWN_MASK);
+        command(solo, ME);
+        press(solo, VK_UP, KEY_LOCATION_STANDARD, SHIFT_DOWN_MASK);
+
+        // 자동 반복으로 다시 온 Shift 누름은 새로 누른 것이 아니다
+        press(solo, VK_SHIFT, KEY_LOCATION_LEFT, SHIFT_DOWN_MASK);
+        assertFalse(command(solo, ME).useItem());
+    }
+
+    static PlayerCommand command(LocalInput input, int playerId) {
+        return input.takeCommands().get(playerId);
+    }
+
+    static boolean press(LocalInput input, int keyCode) {
+        return press(input, keyCode, KEY_LOCATION_STANDARD, 0);
+    }
+
+    static boolean press(LocalInput input, int keyCode, int location, int modifiersEx) {
+        return input.keyPressed(key(KeyEvent.KEY_PRESSED, keyCode, location, modifiersEx), false);
+    }
+
+    static boolean release(LocalInput input, int keyCode) {
+        return release(input, keyCode, KEY_LOCATION_STANDARD);
+    }
+
+    static boolean release(LocalInput input, int keyCode, int location) {
+        return input.keyReleased(key(KeyEvent.KEY_RELEASED, keyCode, location, 0));
+    }
+
+    static KeyEvent key(int id, int keyCode, int location, int modifiersEx) {
+        return new KeyEvent(SOURCE, id, 0, modifiersEx, keyCode, KeyEvent.CHAR_UNDEFINED, location);
+    }
+}

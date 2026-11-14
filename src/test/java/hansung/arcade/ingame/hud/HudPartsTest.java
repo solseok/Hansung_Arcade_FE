@@ -10,6 +10,7 @@ import hansung.arcade.ingame.render.Tileset;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -81,7 +82,7 @@ class HudPartsTest {
     /** 게임 루프처럼 1/60초씩 n번 갱신한다 */
     private static void tick(GameWorld world, int n) {
         for (int i = 0; i < n; i++) {
-            world.update(1.0 / 60, null);
+            world.update(1.0 / 60, Map.of());
         }
     }
 }

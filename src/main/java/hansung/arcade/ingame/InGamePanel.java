@@ -6,7 +6,8 @@ import hansung.arcade.ingame.hud.ChatField;
 import hansung.arcade.ingame.hud.HudLayout;
 import hansung.arcade.ingame.hud.HudSkin;
 import hansung.arcade.ingame.hud.InGameHud;
-import hansung.arcade.ingame.input.DirectionInput;
+import hansung.arcade.ingame.input.KeyBindings;
+import hansung.arcade.ingame.input.LocalInput;
 import hansung.arcade.ingame.render.CharacterSprites;
 import hansung.arcade.ingame.render.Tileset;
 import hansung.arcade.ingame.render.WorldRenderer;
@@ -25,6 +26,7 @@ import java.awt.event.FocusEvent;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.geom.AffineTransform;
+import java.util.List;
 
 /**
  * 인게임 화면(800 x 600). 아웃게임에서는 이 패널을 프레임에 붙이고 {@link #start()}만 호출하면 된다.
@@ -33,42 +35,43 @@ import java.awt.geom.AffineTransform;
  * <p>게임 루프는 Swing Timer로 EDT에서 돌기 때문에 입력·갱신·그리기가 모두 같은 스레드에서 일어난다.
  * 갱신은 고정 간격(1/60초)으로 해서 프레임이 흔들려도 이동 속도가 일정하다.</p>
  *
- * <p>방향키는 이 패널이 포커스를 가지고 있을 때 받는다. 키 바인딩(InputMap)은 수정 키까지 일치해야 해서
+ * <p>이동·물풍선·아이템 키({@link KeyBindings})는 이 패널이 포커스를 가지고 있을 때 받아, 틱마다 플레이어별 명령으로
+ * 바꿔 {@link GameWorld#update}에 넘긴다. 키 바인딩(InputMap)은 수정 키까지 일치해야 해서
  * Shift·Ctrl을 누른 채 방향키를 떼면 뗌 이벤트를 놓치므로, 키 코드만 보는 KeyListener를 쓴다.</p>
  *
  * <p>Enter를 누르면 맵 왼쪽 아래에 채팅 입력칸({@link ChatField})이 열리고 포커스가 그리로 간다.
- * 다시 Enter를 치면 채팅을 올리고, Esc를 치면 올리지 않고 닫는다. 입력칸이 열려 있어도 방향키는 캐릭터를 움직인다.</p>
+ * 다시 Enter를 치면 채팅을 올리고, Esc를 치면 올리지 않고 닫는다. 입력칸이 열려 있어도 방향키는 캐릭터를 움직이고,
+ * 나머지 키(글자, Space, Shift 등)는 글을 치는 데 쓴다.</p>
  */
 public final class InGamePanel extends JPanel {
 
-    private static final double FIXED_STEP = 1.0 / 60;
+    static final double FIXED_STEP = 1.0 / 60;
     /** 창을 끌거나 멈췄다 돌아왔을 때 한꺼번에 몰아서 갱신하지 않도록 상한을 둔다. */
     private static final double MAX_FRAME_TIME = 0.25;
     /** 맵 프레임 테두리 두께. 충돌 박스보다 넓은 캐릭터 그림은 좌우로 이만큼 맵 영역 밖까지 보인다. */
     private static final int FRAME_EDGE = HudLayout.FRAME_INNER_EDGE + HudLayout.FRAME_OUTER_EDGE;
 
     private final GameWorld world;
-    private final DirectionInput input = new DirectionInput();
+    private final LocalInput input;
     private final WorldRenderer worldRenderer;
     private final InGameHud hud;
     private final Timer loopTimer;
     private final ChatField chatField;
-    /** 패널과 채팅 입력칸 양쪽에 붙는다. 입력칸에서는 방향키가 커서 대신 캐릭터를 움직이도록 이벤트를 소비한다. */
-    private final KeyAdapter directionKeys = new KeyAdapter() {
+    /**
+     * 패널과 채팅 입력칸 양쪽에 붙는다. 받은 키는 소비해서, 입력칸에서는 방향키가 커서 대신 캐릭터를 움직인다.
+     * 입력칸에서 누른 글자 키·Space·Shift 같은 키는 받지 않고 글자로 들어가게 둔다.
+     */
+    private final KeyAdapter playerKeys = new KeyAdapter() {
         @Override
         public void keyPressed(KeyEvent e) {
-            Direction direction = DirectionInput.directionOf(e.getKeyCode());
-            if (direction != null) {
-                input.press(direction);
+            if (input.keyPressed(e, e.getSource() == chatField)) {
                 e.consume();
             }
         }
 
         @Override
         public void keyReleased(KeyEvent e) {
-            Direction direction = DirectionInput.directionOf(e.getKeyCode());
-            if (direction != null) {
-                input.release(direction);
+            if (input.keyReleased(e)) {
                 e.consume();
             }
         }
@@ -128,19 +131,20 @@ public final class InGamePanel extends JPanel {
 
     public InGamePanel(GameWorld world, Tileset tileset, HudSkin skin, CharacterSprites characters) {
         this.world = world;
+        this.input = new LocalInput(List.of(world.localPlayer().id()));
         this.worldRenderer = new WorldRenderer(tileset, characters);
         this.hud = new InGameHud(skin, world.map(), tileset);
         setPreferredSize(new Dimension(HudLayout.WIDTH, HudLayout.HEIGHT));
         // 바탕은 HUD 그림이 화면 전체를 덮으므로 따로 지우지 않는다.
         setOpaque(true);
         setFocusable(true);
-        addKeyListener(directionKeys);
+        addKeyListener(playerKeys);
         addKeyListener(chatKeys);
         addFocusListener(focusLossHandler);
         // 채팅 입력칸은 HudLayout.CHAT_BAR 자리에 고정이라 배치 관리자를 쓰지 않는다
         setLayout(null);
         chatField = new ChatField(skin.chatText());
-        chatField.addKeyListener(directionKeys);
+        chatField.addKeyListener(playerKeys);
         chatField.addKeyListener(chatKeys);
         chatField.addFocusListener(focusLossHandler);
         add(chatField);
@@ -170,9 +174,14 @@ public final class InGamePanel extends JPanel {
         return chatField;
     }
 
-    /** 지금 누르고 있는 이동 방향. 없으면 null. 테스트에서 키가 어디서 눌려도 전달되는지 확인할 때 쓴다. */
+    /** 내 캐릭터(1P)가 지금 누르고 있는 이동 방향. 없으면 null. 테스트에서 키가 어디서 눌려도 전달되는지 확인할 때 쓴다. */
     Direction heldDirection() {
-        return input.current();
+        return input.heldDirection(0);
+    }
+
+    /** 키 입력 상태. 테스트에서 틱이 돈 뒤 막 눌린 키가 남았는지 확인할 때 쓴다. */
+    LocalInput input() {
+        return input;
     }
 
     private void openChat() {
@@ -198,13 +207,21 @@ public final class InGamePanel extends JPanel {
 
     private void tick() {
         long now = System.nanoTime();
-        accumulator += Math.min((now - lastTickNanos) / 1e9, MAX_FRAME_TIME);
+        advance(Math.min((now - lastTickNanos) / 1e9, MAX_FRAME_TIME));
         lastTickNanos = now;
+        repaint();
+    }
+
+    /**
+     * 흐른 시간 seconds를 고정 간격 틱으로 나눠 게임을 진행한다. 한 프레임에 틱이 여러 번 돌 수도, 한 번도 안 돌 수도 있다.
+     * 명령은 틱마다 새로 만들어서, 막 눌린 물풍선·아이템 키는 누른 뒤 첫 틱에 한 번만 들어가고 틱이 돌 때까지 남아 있다.
+     */
+    void advance(double seconds) {
+        accumulator += seconds;
         while (accumulator >= FIXED_STEP) {
-            world.update(FIXED_STEP, input.current());
+            world.update(FIXED_STEP, input.takeCommands());
             accumulator -= FIXED_STEP;
         }
-        repaint();
     }
 
     @Override

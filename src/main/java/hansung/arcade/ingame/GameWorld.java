@@ -3,15 +3,16 @@ package hansung.arcade.ingame;
 import hansung.arcade.ingame.chat.ChatLog;
 import hansung.arcade.ingame.chat.ChatMessage;
 import hansung.arcade.ingame.chat.SpeechBubbles;
-import hansung.arcade.ingame.entity.Direction;
 import hansung.arcade.ingame.entity.Player;
 import hansung.arcade.ingame.entity.PlayerProfile;
+import hansung.arcade.ingame.input.PlayerCommand;
 import hansung.arcade.ingame.map.TileMap;
 import hansung.arcade.ingame.match.Match;
 import hansung.arcade.ingame.match.MatchMode;
 
 import java.awt.Point;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 인게임 상태(맵 + 플레이어 + 올라온 채팅 + 경기 진행). Swing에 의존하지 않아서 테스트와 이후 네트워크 동기화에 그대로 쓸 수 있다.
@@ -41,10 +42,20 @@ public final class GameWorld {
         this.match = new Match(mode, players());
     }
 
-    public void update(double dt, Direction localInput) {
+    /**
+     * 게임을 dt초(한 틱) 진행한다.
+     *
+     * @param commands 플레이어 번호마다 이번 틱에 할 일. 없는 플레이어는 아무것도 하지 않는다 ({@link PlayerCommand#IDLE})
+     */
+    public void update(double dt, Map<Integer, PlayerCommand> commands) {
         elapsedSeconds += dt;
-        // 경기가 끝나면 누르고 있어도 멈춰 선다
-        localPlayer.update(match.isOver() ? null : localInput, dt, map);
+        for (Player player : players()) {
+            // 경기가 끝나면 누르고 있어도 멈춰 선다
+            PlayerCommand command = match.isOver() ? PlayerCommand.IDLE
+                    : commands.getOrDefault(player.id(), PlayerCommand.IDLE);
+            player.update(command.move(), dt, map);
+            // 막 눌린 물풍선(command.placeBalloon())·아이템(command.useItem()) 키는 아직 아무 효과가 없다
+        }
         // 이 틱의 탈락·kill·save를 모두 반영한 뒤에 시계를 흘리고 승패를 가린다
         match.update(dt);
         chatLog.expire(elapsedSeconds);

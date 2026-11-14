@@ -28,6 +28,7 @@ import java.awt.event.KeyListener;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import static hansung.arcade.ingame.hud.HudLayout.CHAT_BAR;
 import static hansung.arcade.ingame.hud.HudLayout.CHAT_LINE_PITCH;
@@ -333,7 +334,7 @@ class InGamePanelTest {
         // 안쪽은 맵이 비치되 검은색 20%만큼 어두워진다
         assertDarkenedByFifth(before.getRGB(centerX, bubbleTop + 2), after.getRGB(centerX, bubbleTop + 2));
 
-        world.update(hansung.arcade.ingame.chat.SpeechBubbles.VISIBLE_SECONDS, null);
+        world.update(hansung.arcade.ingame.chat.SpeechBubbles.VISIBLE_SECONDS, Map.of());
         BufferedImage later = paint(panel);
         assertEquals(before.getRGB(centerX, bubbleTop), later.getRGB(centerX, bubbleTop));
         assertEquals(before.getRGB(centerX, bubbleTop + 2), later.getRGB(centerX, bubbleTop + 2));
