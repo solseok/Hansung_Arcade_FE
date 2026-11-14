@@ -7,12 +7,17 @@ import hansung.arcade.ingame.entity.Direction;
 import hansung.arcade.ingame.entity.Player;
 import hansung.arcade.ingame.entity.PlayerProfile;
 import hansung.arcade.ingame.map.TileMap;
+import hansung.arcade.ingame.match.Match;
+import hansung.arcade.ingame.match.MatchMode;
 
 import java.awt.Point;
 import java.util.List;
 
 /**
- * 인게임 상태(맵 + 플레이어 + 올라온 채팅). Swing에 의존하지 않아서 테스트와 이후 네트워크 동기화에 그대로 쓸 수 있다.
+ * 인게임 상태(맵 + 플레이어 + 올라온 채팅 + 경기 진행). Swing에 의존하지 않아서 테스트와 이후 네트워크 동기화에 그대로 쓸 수 있다.
+ *
+ * <p>경기({@link Match})가 끝나면 이동 입력은 더 받지 않지만, 시간({@link #elapsedSeconds()})은 계속 흘러서
+ * 채팅이 사라지고 이후 붙을 연출(탈락, 물줄기가 사라지는 모습 등)도 이어진다.</p>
  */
 public final class GameWorld {
 
@@ -20,18 +25,28 @@ public final class GameWorld {
     private final Player localPlayer;
     private final ChatLog chatLog = new ChatLog();
     private final SpeechBubbles speechBubbles = new SpeechBubbles();
+    private final Match match;
     private double elapsedSeconds;
 
-    /** @param localProfile 이 컴퓨터에서 조작하는 플레이어의 닉네임·캐릭터 */
+    /** 개인전으로 시작한다. */
     public GameWorld(TileMap map, PlayerProfile localProfile) {
+        this(map, localProfile, MatchMode.SOLO);
+    }
+
+    /** @param localProfile 이 컴퓨터에서 조작하는 플레이어의 닉네임·캐릭터·팀 */
+    public GameWorld(TileMap map, PlayerProfile localProfile, MatchMode mode) {
         this.map = map;
         Point spawn = map.spawnPoints().get(0);
         this.localPlayer = new Player(1, localProfile, spawn.x, spawn.y);
+        this.match = new Match(mode, players());
     }
 
     public void update(double dt, Direction localInput) {
         elapsedSeconds += dt;
-        localPlayer.update(localInput, dt, map);
+        // 경기가 끝나면 누르고 있어도 멈춰 선다
+        localPlayer.update(match.isOver() ? null : localInput, dt, map);
+        // 이 틱의 탈락·kill·save를 모두 반영한 뒤에 시계를 흘리고 승패를 가린다
+        match.update(dt);
         chatLog.expire(elapsedSeconds);
         speechBubbles.expire(elapsedSeconds);
     }
@@ -71,6 +86,11 @@ public final class GameWorld {
         return speechBubbles;
     }
 
+    /** 이번 판의 경기 시계·kill·save·승패 */
+    public Match match() {
+        return match;
+    }
+
     public TileMap map() {
         return map;
     }
@@ -83,6 +103,7 @@ public final class GameWorld {
         return List.of(localPlayer);
     }
 
+    /** 게임을 시작한 뒤 흐른 시간(초). 경기가 끝나도 계속 흐른다. 경기의 남은 시간은 {@link Match#clock()}을 본다 */
     public double elapsedSeconds() {
         return elapsedSeconds;
     }
