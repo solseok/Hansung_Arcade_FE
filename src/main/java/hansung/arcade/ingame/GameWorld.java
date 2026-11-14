@@ -1,6 +1,7 @@
 package hansung.arcade.ingame;
 
 import hansung.arcade.ingame.balloon.BalloonField;
+import hansung.arcade.ingame.balloon.Explosion;
 import hansung.arcade.ingame.chat.ChatLog;
 import hansung.arcade.ingame.chat.ChatMessage;
 import hansung.arcade.ingame.chat.SpeechBubbles;
@@ -9,27 +10,37 @@ import hansung.arcade.ingame.entity.Player;
 import hansung.arcade.ingame.entity.PlayerProfile;
 import hansung.arcade.ingame.entity.PlayerState;
 import hansung.arcade.ingame.input.PlayerCommand;
+import hansung.arcade.ingame.item.FieldItems;
+import hansung.arcade.ingame.item.ItemDrops;
+import hansung.arcade.ingame.item.ItemEffects;
 import hansung.arcade.ingame.map.TileMap;
 import hansung.arcade.ingame.match.Match;
 import hansung.arcade.ingame.match.MatchMode;
 
 import java.awt.Point;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.random.RandomGenerator;
 
 /**
- * 인게임 상태(맵 + 플레이어 + 물풍선 + 올라온 채팅 + 경기 진행). Swing에 의존하지 않아서 테스트와 이후 네트워크 동기화에 그대로 쓸 수 있다.
+ * 인게임 상태(맵 + 플레이어 + 물풍선 + 바닥 아이템 + 올라온 채팅 + 경기 진행). Swing에 의존하지 않아서 테스트와 이후 네트워크 동기화에 그대로 쓸 수 있다.
  *
  * <p>물풍선 싸움 규칙은 {@link #update} 한 틱 안에서 이 순서로 처리한다.</p>
  * <ol>
  *   <li>플레이어가 움직인다. 놓인 물풍선은 막힌 칸이다 (놓는 순간 그 칸에 있던 사람은 빠져나갈 수 있다).</li>
  *   <li>때가 된 물풍선이 터지고, 다 보인 물줄기가 사라진다 ({@link BalloonField}).</li>
  *   <li>물풍선 키를 막 누른 플레이어가 선 칸에 물풍선을 놓는다.</li>
+ *   <li>이번 틱에 터진 물줄기가 막혀 멈춘 블럭을 맞힌다. 한 틱에 여럿이 같은 블럭을 맞혀도 한 번만 맞는다.
+ *       다 부서진 블럭 자리에는 {@link ItemDrops} 확률로 아이템이 나온다.</li>
+ *   <li>물줄기가 덮은 칸의 아이템은 사라진다. 블럭 자리는 물줄기가 들어가지 않은 칸이라 방금 나온 아이템은 남는다.</li>
  *   <li>물줄기가 덮은 칸에 선(충돌 박스 가운데가 있는) 플레이어는 누구의 물줄기든 물풍선에 갇힌다.</li>
  *   <li>갇힌 사람에게 다른 플레이어가 닿으면, 같은 편이면 구하고(save) 상대면 터뜨린다(kill, 탈락).</li>
  *   <li>갇힌 채 5초가 지나면 탈락한다. 가둔 물줄기의 주인이 상대면 그 주인이 kill을 얻는다.</li>
+ *   <li>보통 상태인 플레이어가 선 칸의 아이템을 먹는다 ({@link ItemEffects}). 갇히거나 탈락한 사람은 먹지 못한다.</li>
  *   <li>이 틱의 탈락·kill·save를 모두 반영한 뒤 경기 시계를 흘리고 승패를 가린다.</li>
  * </ol>
  *
@@ -41,6 +52,8 @@ public final class GameWorld {
 
     private final TileMap map;
     private final BalloonField balloonField;
+    private final FieldItems items = new FieldItems();
+    private final ItemDrops itemDrops;
     /** 이 컴퓨터의 첫 플레이어(1P). 채팅은 이 플레이어가 친 것으로 올라간다 */
     private final Player localPlayer;
     /** 이 컴퓨터에서 조작하는 플레이어들. 1P, 2P 순서 */
@@ -73,6 +86,15 @@ public final class GameWorld {
      * @param mode          개인전·팀전
      */
     public GameWorld(TileMap map, List<PlayerProfile> localProfiles, MatchMode mode) {
+        this(map, localProfiles, mode, RandomGenerator.getDefault());
+    }
+
+    /**
+     * 난수를 정해 둔 게임. 블럭에서 아이템이 나오는지·무엇인지를 이 난수로 정하므로, 테스트에서 결과를 고정할 때 쓴다.
+     *
+     * @param random 아이템 드롭에 쓸 난수
+     */
+    public GameWorld(TileMap map, List<PlayerProfile> localProfiles, MatchMode mode, RandomGenerator random) {
         List<Point> spawns = map.spawnPoints();
         if (localProfiles.isEmpty()) {
             throw new IllegalArgumentException("플레이어가 한 명은 있어야 합니다.");
@@ -83,6 +105,7 @@ public final class GameWorld {
         }
         this.map = map;
         this.balloonField = new BalloonField(map);
+        this.itemDrops = new ItemDrops(random);
         List<Player> players = new ArrayList<>();
         for (int i = 0; i < localProfiles.size(); i++) {
             Point spawn = spawns.get(i);
@@ -116,9 +139,15 @@ public final class GameWorld {
                     balloonField.place(player, players);
                 }
             }
+        }
+        // 경기가 끝나도 이미 놓인 물풍선은 터지므로 블럭도 계속 부서진다
+        breakBlocks(balloonField.takeNewExplosions());
+        items.removeWhere(balloonField::isWet);
+        if (playing) {
             trapSoakedPlayers();
             settleTouches();
             eliminateTimedOut();
+            pickUpItems();
         }
         // 이 틱의 탈락·kill·save를 모두 반영한 뒤에 시계를 흘리고 승패를 가린다
         match.update(dt);
@@ -129,6 +158,32 @@ public final class GameWorld {
     /** player가 들어갈 수 없는 칸: 맵의 막힌 칸과, player가 지나갈 수 없는 물풍선 칸 */
     private Obstacles obstaclesFor(Player player) {
         return (col, row) -> map.isSolid(col, row) || balloonField.blocks(player, col, row);
+    }
+
+    /**
+     * 이번 틱에 터진 물줄기들이 막혀 멈춘 칸의 블럭을 한 번씩 맞힌다. 물줄기는 처음 만난 막힌 칸에서 멈추므로
+     * 블럭이 여럿 이어져 있어도 맨 앞 하나만 맞는다. 같은 틱의 연쇄 폭발은 모두 이 틱이 시작될 때의 맵으로 물줄기를 뻗었으므로,
+     * 여럿이 같은 블럭을 맞혀도 한 번만 맞는다. 다 부서진 블럭 자리에는 아이템이 나올 수 있다.
+     */
+    private void breakBlocks(List<Explosion> explosions) {
+        Set<Point> hit = new LinkedHashSet<>();
+        for (Explosion explosion : explosions) {
+            hit.addAll(explosion.blockedCells());
+        }
+        for (Point cell : hit) {
+            if (map.hitBlock(cell.x, cell.y)) {
+                itemDrops.rollForBrokenBlock().ifPresent(item -> items.place(cell.x, cell.y, item));
+            }
+        }
+    }
+
+    /** 보통 상태인 플레이어가 선(충돌 박스 가운데가 있는) 칸의 아이템을 먹는다 */
+    private void pickUpItems() {
+        for (Player player : players()) {
+            if (player.state() == PlayerState.NORMAL) {
+                items.take(player.col(), player.row()).ifPresent(item -> ItemEffects.apply(player, item));
+            }
+        }
     }
 
     /** 물줄기가 덮은 칸에 선 사람을 가둔다. 자기나 같은 편의 물줄기여도 갇힌다 */
@@ -229,6 +284,11 @@ public final class GameWorld {
     /** 맵 위의 물풍선과 물줄기 */
     public BalloonField balloonField() {
         return balloonField;
+    }
+
+    /** 맵 바닥에 놓인 아이템. 비행기처럼 아이템을 떨어뜨리는 쪽은 여기에 {@link FieldItems#place 놓는다} */
+    public FieldItems items() {
+        return items;
     }
 
     /** 이 컴퓨터의 첫 플레이어(1P). 한 키보드 2인 모드에서도 채팅은 1P가 친 것으로 올라간다. */
