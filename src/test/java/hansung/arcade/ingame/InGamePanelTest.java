@@ -280,11 +280,21 @@ class InGamePanelTest {
 
         world.sendChat("Hi");
         BufferedImage both = paint(panel);
-        // 내 줄이 아래에 새로 놓이고, 남의 줄은 한 줄 위로 올라가도 그대로 흰색이다
+        // 남의 줄은 글자 모양 그대로 한 줄 위로 올라가 흰색으로 남고, 내 줄에는 흰 픽셀이 없다.
+        // 돋움체가 아닌 글꼴은 글자가 칸 위아래로 1~2px 나갈 수 있어서, 칸 안의 픽셀 수를 세지 않고 픽셀 자리를 그대로 견준다.
+        for (int y = CHAT_AREA.y() + CHAT_LINE_PITCH; y < CHAT_AREA.bottom(); y++) {
+            for (int x = CHAT_AREA.x(); x < CHAT_AREA.right(); x++) {
+                assertEquals(isColor(othersOnly, x, y, WHITE), isColor(both, x, y - CHAT_LINE_PITCH, WHITE),
+                        "(%d, %d)".formatted(x, y));
+            }
+        }
+        assertEquals(count(othersOnly, CHAT_AREA, WHITE), count(both, CHAT_AREA, WHITE));
+        // 내 줄은 새 줄 자리(남의 줄 아래)에 내 색으로 놓인다
+        assertTrue(count(both, CHAT_AREA, MINE) > 50);
+        Box mine = colorBounds(both, CHAT_AREA, MINE);
         int bottomLineTop = CHAT_LOG_BOTTOM - CHAT_TEXT_HEIGHT;
-        assertTrue(count(both, lineBox(bottomLineTop), MINE) > 50);
-        assertEquals(0, count(both, lineBox(bottomLineTop), WHITE));
-        assertEquals(count(othersOnly, CHAT_AREA, WHITE), count(both, lineBox(bottomLineTop - CHAT_LINE_PITCH), WHITE));
+        assertTrue(mine.y() >= bottomLineTop - slack && mine.bottom() <= CHAT_LOG_BOTTOM + slack, "내 줄 " + mine);
+        assertTrue(mine.y() > whiteBounds(both, CHAT_AREA).y(), "내 줄 " + mine);
     }
 
     @Test
@@ -421,13 +431,18 @@ class InGamePanelTest {
 
     /** area 안의 흰 픽셀(채팅 글자와 커서)을 모두 담는 영역 */
     private static Box whiteBounds(BufferedImage screen, Box area) {
+        return colorBounds(screen, area, WHITE);
+    }
+
+    /** area 안에서 색이 rgb인 픽셀을 모두 담는 영역 */
+    private static Box colorBounds(BufferedImage screen, Box area, int rgb) {
         int minX = Integer.MAX_VALUE;
         int minY = Integer.MAX_VALUE;
         int maxX = -1;
         int maxY = -1;
         for (int y = area.y(); y < area.bottom(); y++) {
             for (int x = area.x(); x < area.right(); x++) {
-                if ((screen.getRGB(x, y) & 0xFFFFFF) == WHITE) {
+                if (isColor(screen, x, y, rgb)) {
                     minX = Math.min(minX, x);
                     minY = Math.min(minY, y);
                     maxX = Math.max(maxX, x);
@@ -435,8 +450,12 @@ class InGamePanelTest {
                 }
             }
         }
-        assertTrue(maxX >= 0, "흰 픽셀이 없다: " + area);
+        assertTrue(maxX >= 0, "#%06X 픽셀이 없다: %s".formatted(rgb, area));
         return new Box(minX, minY, maxX - minX + 1, maxY - minY + 1);
+    }
+
+    private static boolean isColor(BufferedImage screen, int x, int y, int rgb) {
+        return (screen.getRGB(x, y) & 0xFFFFFF) == rgb;
     }
 
     /** area 안에서 색이 rgb인 픽셀 수 */
