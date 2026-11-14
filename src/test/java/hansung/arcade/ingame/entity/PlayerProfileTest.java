@@ -27,10 +27,10 @@ class PlayerProfileTest {
     }
 
     @Test
-    void 임시_정보는_번호마다_캐릭터를_돌아가며_준다() {
-        assertEquals(new PlayerProfile("P1", Mascot.values()[0]), PlayerProfile.placeholder(1));
-        assertEquals(Mascot.values()[1], PlayerProfile.placeholder(2).mascot());
-        assertEquals(Mascot.values()[0], PlayerProfile.placeholder(Mascot.values().length + 1).mascot());
+    void 임시_정보는_번호와_상관없이_기본_캐릭터인_상상부기를_쓴다() {
+        assertEquals(Mascot.SANGSANGBUGI, Mascot.DEFAULT);
+        assertEquals(new PlayerProfile("P1", Mascot.SANGSANGBUGI), PlayerProfile.placeholder(1));
+        assertEquals(Mascot.SANGSANGBUGI, PlayerProfile.placeholder(2).mascot());
         assertEquals(PlayerProfile.placeholder(3), new Player(3, 0, 0).profile());
     }
 }

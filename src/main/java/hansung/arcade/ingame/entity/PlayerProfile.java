@@ -16,9 +16,8 @@ public record PlayerProfile(String nickname, Mascot mascot) {
         }
     }
 
-    /** 아웃게임에서 정보를 받기 전에 쓰는 임시 정보. 번호마다 캐릭터를 돌아가며 준다. */
+    /** 아웃게임에서 정보를 받기 전에 쓰는 임시 정보. 캐릭터는 기본 캐릭터({@link Mascot#DEFAULT})다. */
     public static PlayerProfile placeholder(int playerId) {
-        Mascot[] mascots = Mascot.values();
-        return new PlayerProfile("P" + playerId, mascots[Math.floorMod(playerId - 1, mascots.length)]);
+        return new PlayerProfile("P" + playerId, Mascot.DEFAULT);
     }
 }
