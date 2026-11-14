@@ -8,6 +8,7 @@ import hansung.arcade.ingame.GameWorld;
 import hansung.arcade.ingame.InGamePanel;
 import hansung.arcade.ingame.entity.Mascot;
 import hansung.arcade.ingame.entity.PlayerProfile;
+import hansung.arcade.ingame.hud.HudSkin;
 import hansung.arcade.ingame.map.TileMap;
 import hansung.arcade.ingame.render.Tileset;
 
@@ -28,10 +29,11 @@ public final class StartScreenStep implements BootStep {
         GameWindow window = context.get(GameWindow.class);
         TileMap map = context.get(TileMap.class);
         Tileset tileset = context.get(Tileset.class);
+        HudSkin skin = context.get(HudSkin.class);
         PlayerProfile me = localProfile(context.get(GameProperties.class));
 
         SwingThread.runAndWait(() -> {
-            InGamePanel inGamePanel = new InGamePanel(new GameWorld(map, me), tileset);
+            InGamePanel inGamePanel = new InGamePanel(new GameWorld(map, me), tileset, skin);
             window.show(inGamePanel);
             inGamePanel.start();
         });

@@ -1,16 +1,17 @@
 package hansung.arcade.ingame;
 
 import hansung.arcade.ingame.entity.Direction;
+import hansung.arcade.ingame.hud.Box;
+import hansung.arcade.ingame.hud.HudLayout;
+import hansung.arcade.ingame.hud.HudSkin;
+import hansung.arcade.ingame.hud.InGameHud;
 import hansung.arcade.ingame.input.DirectionInput;
-import hansung.arcade.ingame.render.HudRenderer;
 import hansung.arcade.ingame.render.Tileset;
 import hansung.arcade.ingame.render.WorldRenderer;
 
 import javax.swing.JPanel;
 import javax.swing.Timer;
-import java.awt.Color;
 import java.awt.Dimension;
-import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
@@ -23,7 +24,8 @@ import java.awt.event.KeyEvent;
 import java.awt.geom.AffineTransform;
 
 /**
- * 인게임 화면. 아웃게임에서는 이 패널을 프레임에 붙이고 {@link #start()}만 호출하면 된다.
+ * 인게임 화면(800 x 600). 아웃게임에서는 이 패널을 프레임에 붙이고 {@link #start()}만 호출하면 된다.
+ * 맵은 {@link HudLayout#FIELD} 자리에 그리고, 나머지 화면 장식은 {@link InGameHud}가 그린다.
  *
  * <p>게임 루프는 Swing Timer로 EDT에서 돌기 때문에 입력·갱신·그리기가 모두 같은 스레드에서 일어난다.
  * 갱신은 고정 간격(1/60초)으로 해서 프레임이 흔들려도 이동 속도가 일정하다.</p>
@@ -33,23 +35,14 @@ import java.awt.geom.AffineTransform;
  */
 public final class InGamePanel extends JPanel {
 
-    private static final int MARGIN = 20;
-    /** 제목 줄 높이. 맨 윗줄 블록 그림이 칸 위로 솟는 높이(캠프 미사일 28px)만큼 제목 아래에 여유를 둔다. */
-    private static final int TOP_BAR = 64;
-    private static final int HUD_WIDTH = 140;
     private static final double FIXED_STEP = 1.0 / 60;
     /** 창을 끌거나 멈췄다 돌아왔을 때 한꺼번에 몰아서 갱신하지 않도록 상한을 둔다. */
     private static final double MAX_FRAME_TIME = 0.25;
 
-    private static final Color BACKGROUND = new Color(0x1B2836);
-    private static final Color FIELD_BORDER = new Color(0x3E5871);
-    private static final Color TITLE = new Color(0xE8EEF4);
-    private static final Font TITLE_FONT = new Font(Font.SANS_SERIF, Font.BOLD, 16);
-
     private final GameWorld world;
     private final DirectionInput input = new DirectionInput();
     private final WorldRenderer worldRenderer;
-    private final HudRenderer hudRenderer = new HudRenderer();
+    private final InGameHud hud;
     private final Timer loopTimer;
     private final KeyAdapter directionKeys = new KeyAdapter() {
         @Override
@@ -78,17 +71,14 @@ public final class InGamePanel extends JPanel {
 
     private long lastTickNanos;
     private double accumulator;
-    private int framesThisSecond;
-    private long fpsWindowStart;
-    private int fps;
 
-    public InGamePanel(GameWorld world, Tileset tileset) {
+    public InGamePanel(GameWorld world, Tileset tileset, HudSkin skin) {
         this.world = world;
         this.worldRenderer = new WorldRenderer(tileset);
-        int width = MARGIN + world.map().pixelWidth() + MARGIN + HUD_WIDTH + MARGIN;
-        int height = TOP_BAR + world.map().pixelHeight() + MARGIN * 2;
-        setPreferredSize(new Dimension(width, height));
-        setBackground(BACKGROUND);
+        this.hud = new InGameHud(skin, world.map(), tileset);
+        setPreferredSize(new Dimension(HudLayout.WIDTH, HudLayout.HEIGHT));
+        // 바탕은 HUD 그림이 화면 전체를 덮으므로 따로 지우지 않는다.
+        setOpaque(true);
         setFocusable(true);
         addKeyListener(directionKeys);
         addFocusListener(focusLossHandler);
@@ -98,7 +88,6 @@ public final class InGamePanel extends JPanel {
 
     public void start() {
         lastTickNanos = System.nanoTime();
-        fpsWindowStart = lastTickNanos;
         accumulator = 0;
         loopTimer.start();
         requestFocusInWindow();
@@ -128,46 +117,50 @@ public final class InGamePanel extends JPanel {
 
     @Override
     protected void paintComponent(Graphics graphics) {
-        super.paintComponent(graphics);
         Graphics2D g = (Graphics2D) graphics.create();
         try {
-            g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
-
-            g.setFont(TITLE_FONT);
-            g.setColor(TITLE);
-            g.drawString("HANSUNG ARCADE", MARGIN, 27);
-
-            int fieldWidth = world.map().pixelWidth();
-            int fieldHeight = world.map().pixelHeight();
-            g.setColor(FIELD_BORDER);
-            g.fillRoundRect(MARGIN - 4, TOP_BAR - 4, fieldWidth + 8, fieldHeight + 8, 10, 10);
-
-            AffineTransform base = g.getTransform();
-            Shape clip = g.getClip();
-            g.translate(MARGIN, TOP_BAR);
-            g.clipRect(0, -TOP_BAR, fieldWidth, fieldHeight + TOP_BAR);
-            worldRenderer.draw(g, world);
-            g.setTransform(base);
-            g.setClip(clip);
-
-            int hudX = MARGIN + fieldWidth + MARGIN;
-            hudRenderer.draw(g, world, hudX, TOP_BAR - 4, HUD_WIDTH, fieldHeight + 8, fps);
+            hud.paintBelowWorld(g);
+            paintWorld(g);
+            hud.paintAboveWorld(g, world);
         } finally {
             g.dispose();
         }
-        countFrame();
         // 리눅스에서 화면 갱신이 밀려 끊겨 보이는 현상 방지
         Toolkit.getDefaultToolkit().sync();
     }
 
-    private void countFrame() {
-        framesThisSecond++;
-        long now = System.nanoTime();
-        if (now - fpsWindowStart >= 1_000_000_000L) {
-            fps = framesThisSecond;
-            framesThisSecond = 0;
-            fpsWindowStart = now;
-        }
+    /**
+     * 맵을 그린다. 바닥은 맵 영역 안에만 깔고 둥근 귀퉁이를 프레임색으로 다시 덮은 뒤,
+     * 블록·캐릭터는 위쪽을 자르지 않고 그려서 맨 윗줄 그림이 칸 위로 솟은 부분이 프레임 테두리 위에 겹쳐 보이게 한다.
+     * 맵이 15 x 13칸보다 작으면 영역 가운데에 둔다.
+     */
+    private void paintWorld(Graphics2D g) {
+        Box field = HudLayout.FIELD;
+        int originX = field.x() + (field.width() - world.map().pixelWidth()) / 2;
+        int originY = field.y() + (field.height() - world.map().pixelHeight()) / 2;
+        // HUD는 도트 느낌으로 그리지만, 아직 도형으로 그리는 캐릭터는 매끈하게 둔다 (스프라이트로 바꾸면 끈다).
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+
+        inMap(g, originX, originY, field.y(), () -> worldRenderer.drawGround(g, world));
+        hud.paintFieldCorners(g);
+        // 위쪽은 창 끝까지 열어 두고, 좌우와 아래만 맵 영역으로 자른다
+        inMap(g, originX, originY, 0, () -> worldRenderer.drawObjects(g, world));
+
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_OFF);
+        g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_OFF);
+    }
+
+    /** 원점을 맵 왼쪽 위로 옮기고, 맵 영역의 좌우·아래와 clipTop 위쪽을 잘라 draw를 부른 뒤 되돌린다. */
+    private static void inMap(Graphics2D g, int originX, int originY, int clipTop, Runnable draw) {
+        Box field = HudLayout.FIELD;
+        AffineTransform transform = g.getTransform();
+        Shape clip = g.getClip();
+        g.clipRect(field.x(), clipTop, field.width(), field.bottom() - clipTop);
+        g.translate(originX, originY);
+        draw.run();
+        g.setTransform(transform);
+        g.setClip(clip);
     }
 }
+

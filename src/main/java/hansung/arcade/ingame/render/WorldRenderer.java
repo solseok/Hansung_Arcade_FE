@@ -24,6 +24,9 @@ import java.util.Set;
  * 맵은 테마 타일셋의 BMP 그림으로, 캐릭터는 아직 Java2D 도형으로 그린다.
  * 바닥 그림이 없는 테마는 단색 바닥을, 그림이 없는 타일은 기호를 적은 임시 상자를 그린다.
  * 호출 전에 Graphics2D의 원점이 맵 왼쪽 위로 옮겨져 있어야 한다.
+ *
+ * <p>바닥({@link #drawGround})과 그 위 물체({@link #drawObjects})를 따로 그린다. 블록·나무·집 그림은 칸보다 키가 커서
+ * 맨 윗줄에서는 맵 위로 솟으므로, 화면은 바닥만 맵 영역 안으로 자르고 물체는 맵 테두리 위에 겹쳐 그릴 수 있다.</p>
  */
 public final class WorldRenderer {
 
@@ -55,9 +58,9 @@ public final class WorldRenderer {
         return PLAYER_COLORS[Math.floorMod(playerId - 1, PLAYER_COLORS.length)];
     }
 
-    public void draw(Graphics2D g, GameWorld world) {
+    /** 블록·덤불 등 물체와 캐릭터. 바닥을 먼저 그린 뒤에 부른다. */
+    public void drawObjects(Graphics2D g, GameWorld world) {
         TileMap map = world.map();
-        drawGround(g, map);
         // 위쪽 줄부터 그려서 아래쪽 물체가 앞에 보이게 한다.
         // 덤불은 같은 줄 캐릭터보다 나중에 그려서 안에 들어간 캐릭터를 가린다.
         List<Player> players = world.players();
@@ -72,8 +75,9 @@ public final class WorldRenderer {
         }
     }
 
-    /** 바닥 그림과, 바닥에 붙어 있어 아무것도 가리지 않는 타일(길, 바닥 가시)을 먼저 깐다. */
-    private void drawGround(Graphics2D g, TileMap map) {
+    /** 바닥 그림과, 바닥에 붙어 있어 아무것도 가리지 않는 타일(길, 바닥 가시). 맵 칸 밖으로 나가지 않는다. */
+    public void drawGround(Graphics2D g, GameWorld world) {
+        TileMap map = world.map();
         for (int row = 0; row < map.rows(); row++) {
             for (int col = 0; col < map.columns(); col++) {
                 BufferedImage floor = tileset.floor(col, row);

@@ -2,6 +2,8 @@ package hansung.arcade.core.boot;
 
 import hansung.arcade.core.game.GameContext;
 import hansung.arcade.core.game.GameProperties;
+import hansung.arcade.ingame.hud.HudFonts;
+import hansung.arcade.ingame.hud.HudSkin;
 import hansung.arcade.ingame.map.MapLoader;
 import hansung.arcade.ingame.map.Tile;
 import hansung.arcade.ingame.map.TileMap;
@@ -11,7 +13,7 @@ import org.slf4j.LoggerFactory;
 
 /**
  * 4단계: 화면에 필요한 리소스를 미리 읽어 등록한다. 파일이 깨져 있으면 창을 띄우기 전에 실패한다.
- * 맵과 맵 테마의 타일 그림(BMP)을 읽는다. 사운드 로더도 준비되면 이 단계에 추가한다.
+ * 맵과 맵 테마의 타일 그림(BMP), HUD 글꼴과 캐릭터 얼굴 그림을 읽는다. 사운드 로더도 준비되면 이 단계에 추가한다.
  */
 public final class ResourceStep implements BootStep {
 
@@ -31,6 +33,13 @@ public final class ResourceStep implements BootStep {
         context.register(Tileset.class, tileset);
         log.info("시작 맵: {} ({}, {}x{}, 테마 {})", map.name(), mapId, map.columns(), map.rows(), map.theme());
         warnMissingArt(map, tileset);
+
+        HudFonts fonts = HudFonts.load();
+        if (!fonts.missing().isEmpty()) {
+            log.warn("HUD 글꼴 {}이(가) 없어 기본 글꼴로 대신합니다. (Michroma는 resources{}에 두면 씁니다)",
+                    fonts.missing(), HudFonts.MICHROMA_RESOURCE);
+        }
+        context.register(HudSkin.class, HudSkin.load(fonts));
     }
 
     /** 그림이 빠져 있어도 게임은 띄우고(임시 표시), 무엇이 빠졌는지 로그로 알린다. */
