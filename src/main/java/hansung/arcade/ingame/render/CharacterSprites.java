@@ -19,7 +19,8 @@ public final class CharacterSprites {
     /** 그림 위쪽 끝에서 발끝까지의 높이. 발 아래로는 투명한 여백이 남아 있다. */
     public static final int FEET_Y = 65;
 
-    private static final String DIRECTORY = "/sprites/characters/";
+    /** 캐릭터 그림이 들어 있는 리소스 폴더 */
+    public static final String DIRECTORY = "/sprites/characters/";
     /** 걷는 그림 한 장을 보여 주는 시간(초) */
     private static final double WALK_FRAME_SECONDS = 0.1;
     /**
