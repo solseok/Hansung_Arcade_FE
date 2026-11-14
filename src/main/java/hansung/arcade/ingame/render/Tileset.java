@@ -18,7 +18,9 @@ import java.util.regex.Pattern;
  * 한 테마의 타일 그림 묶음. resources/image/{테마}/ 의 BMP를 파일 이름 규칙으로 찾아 읽는다.
  *
  * <p>모든 테마가 같은 파일 이름을 쓰고, 테마 폴더에는 그 테마에 필요한 파일만 두면 된다.
- * 한 파일에 40px 폭(여러 칸짜리 타일은 그 배수) 프레임을 가로로 이어 붙인다.</p>
+ * 한 파일에 40px 폭(여러 칸짜리 타일은 그 배수) 프레임을 가로로 이어 붙인다.
+ * 블록 등 물체 그림은 둘레의 투명한 여백을 잘라 칸 너비를 꽉 채우게 키워 쓰므로({@link TileSprite#fitted}),
+ * 그림 안에 여백이 조금 남아 있어도 이웃 블록과 틈 없이 붙는다.</p>
  *
  * <p>바닥은 tile_NN_이름.bmp (예: tile_01_grass, tile_02_road) 로 번호만 맞추면 이름은 자유다.
  * 지금은 가장 앞 번호(보통 tile_01)를 맵 전체 바닥으로 깐다. 앞 두 장을 밝은 장·어두운 장으로 나눠
@@ -110,7 +112,7 @@ public final class Tileset {
             }
             SpriteSheet.find(dir + art.file() + ".bmp").ifPresent(sheet -> sheets.put(art.file(),
                     sheet.frames(T * tile.width()).stream()
-                            .map(frame -> TileSprite.standing(frame, tile.width()))
+                            .map(frame -> TileSprite.fitted(frame, tile.width()))
                             .toList()));
         });
 
