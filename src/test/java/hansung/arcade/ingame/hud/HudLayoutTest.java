@@ -48,6 +48,39 @@ class HudLayoutTest {
     }
 
     @Test
+    void 채팅_바는_맵_영역_왼쪽에서_15px_아래에서_17px에_있고_프레임_폭의_3분의_1에서_끝난다() {
+        // 첫 지시: 맵 테두리 안쪽으로 왼쪽 16 (15), 아래 19 (17), 높이 14 (12)
+        assertEquals(FIELD.x() + 15, CHAT_BAR.x());
+        assertEquals(FIELD.bottom() - 17, CHAT_BAR.bottom());
+        assertEquals(12, CHAT_BAR.height());
+        assertEquals(CHAT_TEXT_HEIGHT, CHAT_BAR.height());
+        assertTrue(Math.abs(CHAT_BAR.right() - (FRAME.x() + FRAME.width() / 3.0)) <= 1, "오른쪽 끝 " + CHAT_BAR.right());
+        // 글자 테두리 1px까지 맵 영역 안에 들어온다
+        assertTrue(FIELD.contains(CHAT_BAR.inset(-CHAT_OUTLINE)));
+    }
+
+    @Test
+    void 올라온_채팅은_맵_영역_아래에서_105px_위에_놓이고_입력_바와_겹치지_않는다() {
+        // 첫 지시: 채팅이 보이는 곳은 120 (105) 떨어져 있다
+        assertEquals(FIELD.bottom() - 105, CHAT_LOG_BOTTOM);
+        assertTrue(CHAT_LOG_BOTTOM + CHAT_OUTLINE < CHAT_BAR.y() - CHAT_OUTLINE);
+        // 줄 사이에 테두리끼리 겹치지 않는다
+        assertEquals(CHAT_TEXT_HEIGHT + 2, CHAT_LINE_PITCH);
+    }
+
+    @Test
+    void 말풍선은_최대_폭_129px이고_글자_여백은_위아래_9_왼쪽_9_오른쪽_14다() {
+        // 지시: 최대 폭 140 (129), 모서리 8 (7), 여백 위아래 10 (9) · 왼쪽 10 (9) · 오른쪽 15 (14)
+        assertEquals(129, BUBBLE_MAX_WIDTH);
+        assertEquals(7, BUBBLE_RADIUS);
+        assertEquals(9, BUBBLE_PADDING_TOP);
+        assertEquals(9, BUBBLE_PADDING_BOTTOM);
+        assertEquals(9, BUBBLE_PADDING_LEFT);
+        assertEquals(14, BUBBLE_PADDING_RIGHT);
+        assertEquals(BUBBLE_MAX_WIDTH, BUBBLE_PADDING_LEFT + BUBBLE_TEXT_WIDTH + BUBBLE_PADDING_RIGHT);
+    }
+
+    @Test
     void 오른쪽_열은_간격을_지킨_채_나가기가_창_바닥에서_9px_위에_오도록_놓인다() {
         assertEquals(FRAME.right() + 9, PLAYER_LIST.x());
         // 첫 지시 크기: 168 x 417 (155 x 365), 112 (98), 41 (36)

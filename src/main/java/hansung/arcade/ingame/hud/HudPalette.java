@@ -53,6 +53,15 @@ public final class HudPalette {
     public static final Color KEY_BADGE = ITEM_SLOT;
     public static final Color KEY_DIGIT = Color.WHITE;
 
+    /** 맵 위 채팅 글자와 그 둘레 1px 테두리 */
+    public static final Color CHAT_TEXT = new Color(0xFFFFFF);
+    public static final Color CHAT_OUTLINE = new Color(0x000000);
+    /** 채팅 목록에서 내가 친 줄 */
+    public static final Color CHAT_TEXT_MINE = new Color(0xDFDB86);
+    /** 말풍선: 검은색을 20%만 덮은 바탕에 흰 테두리 */
+    public static final Color BUBBLE = new Color(0, 0, 0, 51);
+    public static final Color BUBBLE_EDGE = new Color(0xFFFFFF);
+
     private HudPalette() {
     }
 

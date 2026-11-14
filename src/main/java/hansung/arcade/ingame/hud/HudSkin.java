@@ -26,6 +26,8 @@ import java.util.Map;
  * @param keyNumber    아이템 칸 단축키 번호
  * @param exitLabel    "나가기" (HY윤고딕)
  * @param nickname     플레이어 목록 닉네임
+ * @param chatText     맵 위 채팅 글자 (돋움체, 흰 글자에 검은 테두리). 입력칸·다른 플레이어의 채팅·말풍선에 쓴다
+ * @param myChatText   채팅 목록에서 내가 친 줄 (같은 글꼴, #DFDB86)
  * @param portraits    플레이어 목록에 넣을 캐릭터 얼굴. 그림 파일이 없는 캐릭터는 빠져 있다
  */
 public record HudSkin(
@@ -36,6 +38,8 @@ public record HudSkin(
         TextArt keyNumber,
         TextArt exitLabel,
         TextArt nickname,
+        OutlineText chatText,
+        OutlineText myChatText,
         Map<Mascot, BufferedImage> portraits) {
 
     private static final String PORTRAIT_DIR = "/sprites/characters/";
@@ -55,6 +59,7 @@ public record HudSkin(
         Font keyFont = HudFonts.fitInkHeight(fonts.gyeonGothic(8), "0", 7);
         Font exitFont = HudFonts.fitInkHeight(fonts.yunGothic(18), "나가기", HudLayout.EXIT_TEXT_HEIGHT);
         Font nicknameFont = HudFonts.fitInkHeight(fonts.gyeonGothic(12), "가", HudLayout.NICKNAME_HEIGHT);
+        Font chatFont = fonts.dotumChe(HudLayout.CHAT_TEXT_HEIGHT);
 
         return new HudSkin(
                 new FontTextArt(timerLabelFont, HudPalette.DISPLAY_LABEL),
@@ -64,6 +69,8 @@ public record HudSkin(
                 new FontTextArt(keyFont, HudPalette.KEY_DIGIT),
                 new FontTextArt(exitFont, HudPalette.EXIT_TEXT, HudPalette.EXIT_BUTTON_EDGE),
                 new FontTextArt(nicknameFont, HudPalette.NICKNAME, HudPalette.edgeOf(HudPalette.PLAYER_SLOT)),
+                new OutlineText(chatFont, HudLayout.CHAT_TEXT_HEIGHT, HudPalette.CHAT_TEXT, HudPalette.CHAT_OUTLINE),
+                new OutlineText(chatFont, HudLayout.CHAT_TEXT_HEIGHT, HudPalette.CHAT_TEXT_MINE, HudPalette.CHAT_OUTLINE),
                 loadPortraits());
     }
 
