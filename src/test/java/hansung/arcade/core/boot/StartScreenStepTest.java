@@ -3,6 +3,7 @@ package hansung.arcade.core.boot;
 import hansung.arcade.core.game.GameProperties;
 import hansung.arcade.ingame.entity.Mascot;
 import hansung.arcade.ingame.entity.PlayerProfile;
+import hansung.arcade.ingame.match.MatchMode;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -42,5 +43,36 @@ class StartScreenStepTest {
 
         IllegalStateException e = assertThrows(IllegalStateException.class, () -> StartScreenStep.localProfile(properties));
         assertTrue(e.getMessage().contains("player.character"), e.getMessage());
+    }
+
+    @Test
+    void 팀은_설정값_player_team으로_정하고_없으면_1팀이다() {
+        GameProperties properties = GameProperties.of(Map.of(), List.of("--player.team=2"));
+        assertEquals(2, StartScreenStep.localProfile(properties).team());
+
+        assertEquals(1, StartScreenStep.localProfile(GameProperties.of(Map.of(), List.of())).team());
+    }
+
+    @Test
+    void 팀_번호가_1보다_작으면_설정_이름과_함께_실패한다() {
+        GameProperties properties = GameProperties.of(Map.of("player.team", "0"), List.of());
+
+        IllegalStateException e = assertThrows(IllegalStateException.class, () -> StartScreenStep.localProfile(properties));
+        assertTrue(e.getMessage().contains("player.team"), e.getMessage());
+    }
+
+    @Test
+    void 경기_방식은_설정값_game_match_mode로_정하고_없으면_개인전이다() {
+        assertEquals(MatchMode.SOLO, StartScreenStep.matchMode(GameProperties.of(Map.of(), List.of())));
+        assertEquals(MatchMode.TEAM, StartScreenStep.matchMode(
+                GameProperties.of(Map.of("game.match-mode", "solo"), List.of("--game.match-mode=team"))));
+    }
+
+    @Test
+    void 없는_경기_방식을_적으면_설정_이름과_함께_실패한다() {
+        GameProperties properties = GameProperties.of(Map.of("game.match-mode", "duo"), List.of());
+
+        IllegalStateException e = assertThrows(IllegalStateException.class, () -> StartScreenStep.matchMode(properties));
+        assertTrue(e.getMessage().contains("game.match-mode"), e.getMessage());
     }
 }
