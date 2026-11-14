@@ -48,15 +48,51 @@ class HudLayoutTest {
     }
 
     @Test
+    void 채팅_바는_맵_영역_왼쪽에서_15px_아래에서_17px에_있고_프레임_폭의_3분의_1에서_끝난다() {
+        // 첫 지시 → 환산: 맵 테두리 안쪽으로 왼쪽 16 → 15, 아래 19 → 17, 높이 14 → 12
+        assertEquals(FIELD.x() + 15, CHAT_BAR.x());
+        assertEquals(FIELD.bottom() - 17, CHAT_BAR.bottom());
+        assertEquals(12, CHAT_BAR.height());
+        assertEquals(CHAT_TEXT_HEIGHT, CHAT_BAR.height());
+        assertTrue(Math.abs(CHAT_BAR.right() - (FRAME.x() + FRAME.width() / 3.0)) <= 1, "오른쪽 끝 " + CHAT_BAR.right());
+        // 글자 테두리 1px까지 맵 영역 안에 들어온다
+        assertTrue(FIELD.contains(CHAT_BAR.inset(-CHAT_OUTLINE)));
+    }
+
+    @Test
+    void 올라온_채팅은_맵_영역_아래에서_105px_위에_놓이고_입력_바와_겹치지_않는다() {
+        // 첫 지시 → 환산: 채팅이 보이는 곳은 120 → 105 떨어져 있다
+        assertEquals(FIELD.bottom() - 105, CHAT_LOG_BOTTOM);
+        assertTrue(CHAT_LOG_BOTTOM + CHAT_OUTLINE < CHAT_BAR.y() - CHAT_OUTLINE);
+        // 줄 간격 14: 글자 칸 12에 위아래 테두리 1씩을 더해 줄끼리 테두리가 겹치지 않는다
+        assertEquals(14, CHAT_LINE_PITCH);
+    }
+
+    @Test
+    void 말풍선은_최대_폭_129px이고_글자_여백은_위아래_9_왼쪽_9_오른쪽_14다() {
+        // 지시 → 환산: 최대 폭 140 → 129, 모서리 8 → 7, 여백 위아래 10 → 9 · 왼쪽 10 → 9 · 오른쪽 15 → 14
+        assertEquals(129, BUBBLE_MAX_WIDTH);
+        assertEquals(7, BUBBLE_RADIUS);
+        assertEquals(9, BUBBLE_PADDING_TOP);
+        assertEquals(9, BUBBLE_PADDING_BOTTOM);
+        assertEquals(9, BUBBLE_PADDING_LEFT);
+        assertEquals(14, BUBBLE_PADDING_RIGHT);
+        // 여백을 뺀 글자 폭 106: 돋움체(한글 12px, 영문 6px)로 한 줄에 한글 8자, 영문 17자까지 들어가고 한 글자 더는 넘친다
+        assertEquals(106, BUBBLE_TEXT_WIDTH);
+        assertTrue(8 * 12 <= BUBBLE_TEXT_WIDTH && 9 * 12 > BUBBLE_TEXT_WIDTH);
+        assertTrue(17 * 6 <= BUBBLE_TEXT_WIDTH && 18 * 6 > BUBBLE_TEXT_WIDTH);
+    }
+
+    @Test
     void 오른쪽_열은_간격을_지킨_채_나가기가_창_바닥에서_9px_위에_오도록_놓인다() {
         assertEquals(FRAME.right() + 9, PLAYER_LIST.x());
-        // 첫 지시 크기: 168 x 417 (155 x 365), 112 (98), 41 (36)
+        // 첫 지시 → 환산 크기: 168 x 417 → 155 x 365, 112 → 98, 41 → 36
         assertEquals(365, PLAYER_LIST.height());
         assertEquals(98, ITEM_PANEL.height());
         assertEquals(36, EXIT.height());
         assertEquals(PLAYER_LIST.bottom() + 4, ITEM_PANEL.y());
         assertEquals(ITEM_PANEL.bottom() + 4, EXIT.y());
-        // 나가기 받침은 창 바닥에서 10 (9) 위
+        // 나가기 받침은 창 바닥에서 10 → 9 위 (지시 → 환산)
         assertEquals(HEIGHT - 9, EXIT.bottom());
         // 나가기 받침만 오른쪽으로 1px 나온다
         assertEquals(PLAYER_LIST.right() + 1, EXIT.right());

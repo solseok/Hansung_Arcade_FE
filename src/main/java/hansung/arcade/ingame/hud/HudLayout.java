@@ -41,6 +41,39 @@ public final class HudLayout {
     public static final int MAP_ICON_SIZE = 13;
     public static final int MAP_LABEL_PADDING = 5;
 
+    // ── 맵 위 채팅 ────────────────────────────────────────────
+    // 입력 바와 올라온 채팅 모두 배경 없이 글자만 맵 위에 얹는다. 위치는 맵 테두리 안쪽 끝(맵 영역) 기준이다.
+    /** 채팅 글자 칸 높이 (14). 돋움체 12px 글자가 위아래로 딱 맞는다 */
+    public static final int CHAT_TEXT_HEIGHT = 12;
+    /** 채팅 글자 둘레 테두리 (1). 글자 칸 바깥으로 나간다. 1px보다 가늘 수 없어 그대로 두었다 */
+    public static final int CHAT_OUTLINE = 1;
+    /** 채팅 입력 바: 맵 영역 왼쪽에서 15 (16), 아래에서 17 (19). 오른쪽 끝은 맵 프레임 폭의 1/3 지점 */
+    public static final Box CHAT_BAR = chatBar();
+    /** 올라온 채팅 가장 아래 줄의 바닥: 맵 영역 아래에서 105 (120). 새 채팅이 여기 놓이고 먼저 온 줄은 위로 밀린다 */
+    public static final int CHAT_LOG_BOTTOM = FIELD.bottom() - 105;
+    /** 올라온 채팅의 줄 간격. 글자 칸에 위아래 테두리를 더해 줄끼리 테두리가 겹치지 않는다 */
+    public static final int CHAT_LINE_PITCH = CHAT_TEXT_HEIGHT + 2 * CHAT_OUTLINE;
+
+    // ── 채팅을 친 플레이어 머리 위 말풍선 ─────────────────────────────
+    /** 말풍선 최대 폭 (140). 글이 이보다 길어지면 줄을 바꾼다 */
+    public static final int BUBBLE_MAX_WIDTH = 129;
+    public static final int BUBBLE_RADIUS = 7;                                      // (8)
+    /** 말풍선 흰 테두리 두께 */
+    public static final int BUBBLE_EDGE = 1;
+    /** 말풍선 끝에서 글자 칸까지: 위아래 9 (10), 왼쪽 9 (10), 오른쪽 14 (15) */
+    public static final int BUBBLE_PADDING_TOP = 9;
+    public static final int BUBBLE_PADDING_BOTTOM = 9;
+    public static final int BUBBLE_PADDING_LEFT = 9;
+    public static final int BUBBLE_PADDING_RIGHT = 14;
+    /** 말풍선 안에서 한 줄에 들어가는 글자 폭 */
+    public static final int BUBBLE_TEXT_WIDTH = BUBBLE_MAX_WIDTH - BUBBLE_PADDING_LEFT - BUBBLE_PADDING_RIGHT;
+    /**
+     * 말풍선 바닥은 캐릭터 위치(충돌 박스 중심)에서 이만큼 위다. 캐릭터 스프라이트 그림(70 x 70)을 놓았을 때
+     * 그림 위쪽 끝이 오는 자리로, 머리 꼭대기보다 2~6px 높다: 발이 중심에서 14 아래, 그림 위쪽 끝이 발에서 65 위 (65 - 14).
+     * 캐릭터를 그리는 쪽에서 이 두 수치가 바뀌면 같이 고친다. 캐릭터를 도형으로 그리는 동안에는 이름표보다 14px쯤 위에 뜬다.
+     */
+    public static final int BUBBLE_ABOVE_PLAYER = 51;
+
     // ── 오른쪽 열: 플레이어 목록 → 아이템 상자 → 나가기 ──────────────────────
     // 세 상자는 크기와 간격을 그대로 둔 채 한 덩어리로, 나가기 받침이 창 바닥에서 9 (10) 위에 오도록 놓는다.
     /** 프레임 검은 테두리에서 9 (10) 떨어진 오른쪽 열의 왼쪽 끝 */
@@ -155,6 +188,21 @@ public final class HudLayout {
         int edges = 2 * (FRAME_INNER_EDGE + FRAME_OUTER_EDGE);
         int height = 13 * TileMap.TILE_SIZE + edges;
         return new Box(14, bottom - height, 15 * TileMap.TILE_SIZE + edges, height);
+    }
+
+    /** 맵의 왼쪽 위가 놓이는 화면 좌표. 맵이 15 x 13칸보다 작으면 맵 영역 가운데에 둔다. */
+    public static int mapOriginX(TileMap map) {
+        return FIELD.x() + (FIELD.width() - map.pixelWidth()) / 2;
+    }
+
+    public static int mapOriginY(TileMap map) {
+        return FIELD.y() + (FIELD.height() - map.pixelHeight()) / 2;
+    }
+
+    private static Box chatBar() {
+        int left = FIELD.x() + 15;
+        int right = FRAME.x() + Math.round(FRAME.width() / 3f);
+        return new Box(left, FIELD.bottom() - 17 - CHAT_TEXT_HEIGHT, right - left, CHAT_TEXT_HEIGHT);
     }
 
     /** index번째(0부터) 플레이어 슬롯 */
