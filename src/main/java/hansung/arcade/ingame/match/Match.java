@@ -99,6 +99,14 @@ public final class Match {
         return clock;
     }
 
+    /**
+     * a와 b가 승패를 함께하는 같은 편인지. 개인전은 자기 자신만 같은 편이고, 팀전은 팀 번호가 같으면 같은 편이다.
+     * 물풍선에 갇힌 사람에게 닿았을 때 구할지(같은 편) 터뜨릴지(상대) 가를 때 쓴다.
+     */
+    public boolean isAlly(Player a, Player b) {
+        return sideOf(a) == sideOf(b);
+    }
+
     /** 승패가 정해져 경기가 끝났는지 */
     public boolean isOver() {
         return result != null;

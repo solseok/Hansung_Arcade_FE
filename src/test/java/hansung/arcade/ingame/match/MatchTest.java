@@ -306,6 +306,21 @@ class MatchTest {
         return player(id, PlayerProfile.DEFAULT_TEAM);
     }
 
+    @Test
+    void 같은_편은_개인전에서는_자기_자신뿐이고_팀전에서는_팀_번호가_같은_사람이다() {
+        Player a1 = player(1, 1);
+        Player a2 = player(2, 1);
+        Player b1 = player(3, 2);
+
+        Match solo = new Match(MatchMode.SOLO, List.of(a1, a2, b1));
+        assertTrue(solo.isAlly(a1, a1));
+        assertFalse(solo.isAlly(a1, a2), "개인전은 팀 번호가 같아도 상대다");
+
+        Match team = new Match(MatchMode.TEAM, List.of(a1, a2, b1));
+        assertTrue(team.isAlly(a1, a2));
+        assertFalse(team.isAlly(a2, b1));
+    }
+
     private static Player player(int id, int team) {
         return new Player(id, new PlayerProfile("P" + id, Mascot.DEFAULT, team), 0, 0);
     }
