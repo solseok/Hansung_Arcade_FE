@@ -17,10 +17,22 @@ repositories {
 }
 
 dependencies {
+    // 로깅: 코드에서는 SLF4J API로 로그를 남기고, 실제 출력은 Logback이 맡는다 (설정: resources/logback.xml)
+    // Logback은 HSU 색상 컨버터(core.log)가 직접 쓰므로 implementation
+    implementation 'org.slf4j:slf4j-api:2.0.18'
+    implementation 'ch.qos.logback:logback-classic:1.5.38'
+
+    testImplementation platform('org.junit:junit-bom:5.12.2')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
 }
 
 application {
-    mainClass = 'HansungArcadeApplication'
+    mainClass = 'hansung.arcade.HansungArcadeApplication'
 }
 
 tasks.withType(JavaCompile).configureEach {

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <!--
+        로그 색상. 기본은 한성대 전용색상(hansung.arcade.core.ui.HsuColor), ERROR·WARN만 눈에 띄게 빨강·주황.
+          %hsu(...){색 이름}         HSU 색 (BLUE, SKY_BLUE, GRAY, LIGHT_GREEN ...)
+          %levelColor(...)           레벨별 색 (ERROR 빨강, WARN 주황, INFO 초록, DEBUG 하늘)
+          %levelColor(...){alert}    WARN·ERROR일 때만 색
+          %traceColor(%ex)           스택 트레이스: 예외 줄은 레벨 색, at ... 줄은 회색
+        색을 끄려면 환경변수 NO_COLOR=1
+    -->
+    <conversionRule conversionWord="hsu" class="hansung.arcade.core.log.HsuColorConverter"/>
+    <conversionRule conversionWord="levelColor" class="hansung.arcade.core.log.LevelColorConverter"/>
+    <conversionRule conversionWord="traceColor" class="hansung.arcade.core.log.StackTraceColorConverter"/>
+
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <charset>UTF-8</charset>
+            <pattern>%hsu(%d{HH:mm:ss.SSS}){GRAY} %levelColor(%-5level) %hsu([%thread]){GRAY} %hsu(%logger{20}){SKY_BLUE} %hsu(-){GRAY} %levelColor(%msg){alert}%n%traceColor(%ex)</pattern>
+        </encoder>
+    </appender>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+</configuration>
