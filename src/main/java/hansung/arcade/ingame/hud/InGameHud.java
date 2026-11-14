@@ -10,7 +10,7 @@ import java.util.List;
 
 /**
  * 맵을 뺀 인게임 화면 전체(맵 프레임, 맵 이름표, 플레이어 목록, 아이템 상자, 나가기, 내 아이템 바, 맵 위에 올라온 채팅과 말풍선,
- * 경기가 끝나면 맵 위에 뜨는 결과 배너).
+ * 2인 모드의 1P·2P 표시, 경기가 끝나면 맵 위에 뜨는 결과 배너).
  *
  * <p>바뀌지 않는 부분은 만들 때 두 장의 그림(맵 아래 층, 맨 위 층)으로 한 번만 그려 두고,
  * 매 프레임에는 그 그림을 붙인 뒤 타이머·플레이어처럼 바뀌는 부분만 그린다.</p>
@@ -34,6 +34,7 @@ public final class InGameHud {
                 new ExitButton(skin),
                 new ItemBar(skin),
                 new ChatLogView(skin.chatText(), skin.myChatText()),
+                new PlayerTagView(skin.chatText()),
                 new SpeechBubbleView(skin.chatText()),
                 new ResultBanner(skin));
 
