@@ -161,6 +161,54 @@ class CharacterSpritesTest {
         assertDrawn(SPRITES.frame(Mascot.HANSUNGNYANGI, CharacterColor.GREEN, Direction.DOWN, false, 0), world);
     }
 
+    /** 캐릭터 그림 파일 하나를 바로 읽은 프레임들 (비교용) */
+    private static List<BufferedImage> fileFrames(String fileName) {
+        return SpriteSheet.find(CharacterSprites.DIRECTORY + fileName).orElseThrow().frames(CharacterSprites.FRAME_SIZE);
+    }
+
+    @Test
+    void 갇힌_그림은_5초를_셋으로_나눠_bubble_1_2_3을_쓰고_각각_네_장을_0_2초씩_되풀이한다() {
+        assertSamePixels(fileFrames("kkokko_bubble_1.bmp").get(0), SPRITES.trapped(Mascot.KKOKKO, null, 0));
+        assertSamePixels(fileFrames("kkokko_bubble_1.bmp").get(1), SPRITES.trapped(Mascot.KKOKKO, null, 0.3));
+        assertSame(SPRITES.trapped(Mascot.KKOKKO, null, 0), SPRITES.trapped(Mascot.KKOKKO, null, 0.8));
+        // 5/3초가 지나면 bubble_2, 10/3초가 지나면 bubble_3
+        assertSamePixels(fileFrames("kkokko_bubble_1.bmp").get(0), SPRITES.trapped(Mascot.KKOKKO, null, 1.6));
+        assertSamePixels(fileFrames("kkokko_bubble_2.bmp").get(2), SPRITES.trapped(Mascot.KKOKKO, null, 2.0));
+        assertSamePixels(fileFrames("kkokko_bubble_3.bmp").get(0), SPRITES.trapped(Mascot.KKOKKO, null, 4.0));
+        assertSamePixels(fileFrames("kkokko_bubble_3.bmp").get(1), SPRITES.trapped(Mascot.KKOKKO, null, 4.3));
+    }
+
+    @Test
+    void 빠져나오는_그림은_needle_다섯_장을_0_1초씩_한_번_보여_주고_마지막_장에서_멈춘다() {
+        List<BufferedImage> needle = fileFrames("sangzzi_needle.bmp");
+        assertEquals(5, needle.size());
+        assertSamePixels(needle.get(0), SPRITES.escaping(Mascot.SANGZZI, null, 0.05));
+        assertSamePixels(needle.get(1), SPRITES.escaping(Mascot.SANGZZI, null, 0.15));
+        assertSamePixels(needle.get(4), SPRITES.escaping(Mascot.SANGZZI, null, 0.45));
+        assertSamePixels(needle.get(4), SPRITES.escaping(Mascot.SANGZZI, null, 0.7));
+    }
+
+    @Test
+    void 쓰러진_그림은_die_2_세_장을_0_15초씩_되풀이한다() {
+        List<BufferedImage> dizzy = fileFrames("kkukku_die_2.bmp");
+        assertSamePixels(dizzy.get(0), SPRITES.dying(Mascot.KKUKKU, null, 0));
+        assertSamePixels(dizzy.get(1), SPRITES.dying(Mascot.KKUKKU, null, 0.15));
+        assertSamePixels(dizzy.get(2), SPRITES.dying(Mascot.KKUKKU, null, 0.3));
+        assertSame(SPRITES.dying(Mascot.KKUKKU, null, 0), SPRITES.dying(Mascot.KKUKKU, null, 0.45));
+    }
+
+    @Test
+    void 갇힘_빠져나옴_쓰러짐_그림도_고정색으로_칠해_캐릭터와_색마다_한_번만_만든다() {
+        BufferedImage trapped = SPRITES.trapped(Mascot.SANGZZI, CharacterColor.RED, 0);
+        assertSame(trapped, SPRITES.trapped(Mascot.SANGZZI, CharacterColor.RED, 0));
+        assertSamePixels(CharacterRecolor.recolor(SPRITES.trapped(Mascot.SANGZZI, null, 0), Mascot.SANGZZI,
+                CharacterColor.RED), trapped);
+        assertSamePixels(CharacterRecolor.recolor(SPRITES.escaping(Mascot.SANGZZI, null, 0.25), Mascot.SANGZZI,
+                CharacterColor.RED), SPRITES.escaping(Mascot.SANGZZI, CharacterColor.RED, 0.25));
+        assertSamePixels(CharacterRecolor.recolor(SPRITES.dying(Mascot.SANGZZI, null, 0), Mascot.SANGZZI,
+                CharacterColor.RED), SPRITES.dying(Mascot.SANGZZI, CharacterColor.RED, 0));
+    }
+
     private static void assertSamePixels(BufferedImage expected, BufferedImage actual) {
         assertEquals(expected.getWidth(), actual.getWidth());
         assertEquals(expected.getHeight(), actual.getHeight());
