@@ -5,7 +5,6 @@ import hansung.arcade.ingame.entity.Mascot;
 import hansung.arcade.ingame.entity.PlayerProfile;
 import hansung.arcade.ingame.map.MapLoader;
 import hansung.arcade.ingame.map.TileMap;
-import hansung.arcade.ingame.match.MatchClock;
 import hansung.arcade.ingame.render.Tileset;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -15,7 +14,6 @@ import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 import static hansung.arcade.ingame.hud.HudLayout.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -140,114 +138,6 @@ class InGameHudTest {
         Box filled = playerSlot(0);
         Box empty = playerSlot(1);
         assertTrue(countChanged(screen, filled, HudPalette.PLAYER_SLOT) > countChanged(screen, empty, HudPalette.PLAYER_SLOT) + 50);
-    }
-
-    @Test
-    void 경기가_끝나기_전에는_결과_배너가_없다() {
-        BufferedImage screen = render(false);
-
-        assertEquals(0, count(screen, RESULT_BAND, HudPalette.RESULT_BAND_EDGE));
-        assertEquals(0, count(screen, RESULT_BAND, HudPalette.WIN_BOTTOM));
-    }
-
-    @Test
-    void 이기면_맵_가운데_띠_위에_WIN_색_글씨를_띄운다() {
-        GameWorld won = new GameWorld(map, new PlayerProfile("tester", Mascot.KKUKKU));
-        playToEnd(won);
-        BufferedImage screen = render(won);
-
-        // 띠 위아래 끝의 밝은 선은 맵 영역 폭 전체에 걸친다
-        assertColor(HudPalette.RESULT_BAND_EDGE, screen, FIELD.x(), RESULT_BAND.y());
-        assertColor(HudPalette.RESULT_BAND_EDGE, screen, FIELD.right() - 1, RESULT_BAND.bottom() - 1);
-        assertTrue(count(screen, RESULT_BAND, HudPalette.WIN_BOTTOM) > 100);
-        assertTrue(count(screen, RESULT_BAND, HudPalette.WIN_OUTLINE) > 100);
-        assertEquals(0, count(screen, RESULT_BAND, HudPalette.DRAW_BOTTOM));
-        // 글씨는 띠 가운데에 놓인다
-        Box text = bounds(screen, RESULT_BAND, HudPalette.WIN_OUTLINE);
-        int middleX = text.x() + text.width() / 2;
-        int middleY = text.y() + text.height() / 2;
-        assertTrue(Math.abs(middleX - (RESULT_BAND.x() + RESULT_BAND.width() / 2)) <= RESULT_DOT, "가로 " + text);
-        assertTrue(Math.abs(middleY - (RESULT_BAND.y() + RESULT_BAND.height() / 2)) <= RESULT_DOT, "세로 " + text);
-        // 테두리를 뺀 글씨 높이: 맨 윗줄은 흰 줄, 맨 아랫줄은 가장 짙은 색이다. 글꼴 크기를 0.5 단위로 맞춰 1도트쯤 어긋날 수 있다
-        int capHeight = bounds(screen, RESULT_BAND, HudPalette.WIN_BOTTOM).bottom()
-                - bounds(screen, RESULT_BAND, HudPalette.RESULT_HIGHLIGHT).y();
-        assertTrue(Math.abs(capHeight - RESULT_TEXT_HEIGHT) <= 2 * RESULT_DOT, "글씨 높이 " + capHeight);
-    }
-
-    @Test
-    void 비기면_DRAW_색_글씨를_띄운다() {
-        GameWorld drawn = new GameWorld(map, new PlayerProfile("tester", Mascot.KKUKKU));
-        drawn.localPlayer().eliminate();
-        playToEnd(drawn);
-        BufferedImage screen = render(drawn);
-
-        assertTrue(count(screen, RESULT_BAND, HudPalette.DRAW_BOTTOM) > 100);
-        assertEquals(0, count(screen, RESULT_BAND, HudPalette.WIN_BOTTOM));
-        assertEquals(0, count(screen, RESULT_BAND, HudPalette.LOSE_BOTTOM));
-    }
-
-    @Test
-    void 누가_탈락하면_쓰러지는_연출이_끝난_뒤에_결과_배너를_띄운다() {
-        GameWorld duo = new GameWorld(MapLoader.parse("fixture/duo", List.of("1...2", ".....")),
-                List.of(new PlayerProfile("one", Mascot.KKUKKU), new PlayerProfile("two", Mascot.KKOKKO)));
-        duo.localPlayers().get(1).eliminate();
-        duo.update(1.0 / MatchClock.TICKS_PER_SECOND, Map.of());
-        assertTrue(duo.match().isOver());
-
-        assertEquals(0, count(render(duo), RESULT_BAND, HudPalette.RESULT_BAND_EDGE), "쓰러지는 2초 동안은 띄우지 않는다");
-        for (int i = 0; i < 2 * MatchClock.TICKS_PER_SECOND; i++) {
-            duo.update(1.0 / MatchClock.TICKS_PER_SECOND, Map.of());
-        }
-        assertTrue(count(render(duo), RESULT_BAND, HudPalette.WIN_BOTTOM) > 100);
-    }
-
-    /** 혼자 하는 판이라 시간이 다 될 때까지 갱신한다 */
-    private static void playToEnd(GameWorld world) {
-        for (int i = 0; i < MatchClock.DURATION_SECONDS * MatchClock.TICKS_PER_SECOND; i++) {
-            world.update(1.0 / MatchClock.TICKS_PER_SECOND, Map.of());
-        }
-        assertTrue(world.match().isOver());
-    }
-
-    private static BufferedImage render(GameWorld shown) {
-        BufferedImage screen = new BufferedImage(WIDTH, HEIGHT, BufferedImage.TYPE_INT_RGB);
-        Graphics2D g = screen.createGraphics();
-        hud.paintBelowWorld(g);
-        hud.paintAboveWorld(g, shown);
-        g.dispose();
-        return screen;
-    }
-
-    private static int count(BufferedImage screen, Box box, Color color) {
-        int count = 0;
-        for (int y = box.y(); y < box.bottom(); y++) {
-            for (int x = box.x(); x < box.right(); x++) {
-                if ((screen.getRGB(x, y) & 0xFFFFFF) == (color.getRGB() & 0xFFFFFF)) {
-                    count++;
-                }
-            }
-        }
-        return count;
-    }
-
-    /** box 안에서 color 픽셀을 모두 담는 영역 */
-    private static Box bounds(BufferedImage screen, Box box, Color color) {
-        int minX = Integer.MAX_VALUE;
-        int minY = Integer.MAX_VALUE;
-        int maxX = -1;
-        int maxY = -1;
-        for (int y = box.y(); y < box.bottom(); y++) {
-            for (int x = box.x(); x < box.right(); x++) {
-                if ((screen.getRGB(x, y) & 0xFFFFFF) == (color.getRGB() & 0xFFFFFF)) {
-                    minX = Math.min(minX, x);
-                    minY = Math.min(minY, y);
-                    maxX = Math.max(maxX, x);
-                    maxY = Math.max(maxY, y);
-                }
-            }
-        }
-        assertTrue(maxX >= 0, "색이 없다");
-        return new Box(minX, minY, maxX - minX + 1, maxY - minY + 1);
     }
 
     @Test

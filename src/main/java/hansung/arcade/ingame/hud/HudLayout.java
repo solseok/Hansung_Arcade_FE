@@ -74,17 +74,6 @@ public final class HudLayout {
      */
     public static final int BUBBLE_ABOVE_PLAYER = 51;
 
-    // ── 경기가 끝나면 맵 위에 뜨는 결과 배너 ─────────────────────────────
-    // 디자인 수치가 없어 맵 크기에 맞춰 정했다.
-    /** 결과 글씨 뒤에 깔리는 띠. 맵 영역 폭 전체, 높이 96, 맵 영역 세로 가운데 */
-    public static final Box RESULT_BAND = FIELD.child(0, (FIELD.height() - 96) / 2, FIELD.width(), 96);
-    /** 띠 위아래 끝의 밝은 선 두께 */
-    public static final int RESULT_BAND_EDGE = 2;
-    /** 결과 글씨 한 도트의 크기. 글씨를 도트 단위로 찍은 뒤 이만큼 키워 HUD처럼 각진 도트 느낌을 낸다 */
-    public static final int RESULT_DOT = 2;
-    /** 결과 글씨(WIN, LOSE, DRAW) 대문자 높이. 테두리·그림자는 뺀 값 */
-    public static final int RESULT_TEXT_HEIGHT = 60;
-
     // ── 한 키보드 2인 모드에서 캐릭터 머리 위 "1P"·"2P" 표시 (채팅과 같은 도트 글자) ──────────
     /**
      * 표시 글자 칸 아래 끝은 캐릭터 위치(충돌 박스 중심)에서 이만큼 위다. 머리가 가장 높이 솟는 꼬꼬의 머리 꼭대기
