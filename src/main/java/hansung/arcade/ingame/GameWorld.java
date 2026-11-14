@@ -1,10 +1,13 @@
 package hansung.arcade.ingame;
 
+import hansung.arcade.ingame.balloon.BalloonField;
 import hansung.arcade.ingame.chat.ChatLog;
 import hansung.arcade.ingame.chat.ChatMessage;
 import hansung.arcade.ingame.chat.SpeechBubbles;
+import hansung.arcade.ingame.entity.Obstacles;
 import hansung.arcade.ingame.entity.Player;
 import hansung.arcade.ingame.entity.PlayerProfile;
+import hansung.arcade.ingame.entity.PlayerState;
 import hansung.arcade.ingame.input.PlayerCommand;
 import hansung.arcade.ingame.map.TileMap;
 import hansung.arcade.ingame.match.Match;
@@ -14,16 +17,30 @@ import java.awt.Point;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
- * 인게임 상태(맵 + 플레이어 + 올라온 채팅 + 경기 진행). Swing에 의존하지 않아서 테스트와 이후 네트워크 동기화에 그대로 쓸 수 있다.
+ * 인게임 상태(맵 + 플레이어 + 물풍선 + 올라온 채팅 + 경기 진행). Swing에 의존하지 않아서 테스트와 이후 네트워크 동기화에 그대로 쓸 수 있다.
  *
- * <p>경기({@link Match})가 끝나면 이동 입력은 더 받지 않지만, 시간({@link #elapsedSeconds()})은 계속 흘러서
- * 채팅이 사라지고 이후 붙을 연출(탈락, 물줄기가 사라지는 모습 등)도 이어진다.</p>
+ * <p>물풍선 싸움 규칙은 {@link #update} 한 틱 안에서 이 순서로 처리한다.</p>
+ * <ol>
+ *   <li>플레이어가 움직인다. 놓인 물풍선은 막힌 칸이다 (놓는 순간 그 칸에 있던 사람은 빠져나갈 수 있다).</li>
+ *   <li>때가 된 물풍선이 터지고, 다 보인 물줄기가 사라진다 ({@link BalloonField}).</li>
+ *   <li>물풍선 키를 막 누른 플레이어가 선 칸에 물풍선을 놓는다.</li>
+ *   <li>물줄기가 덮은 칸에 선(충돌 박스 가운데가 있는) 플레이어는 누구의 물줄기든 물풍선에 갇힌다.</li>
+ *   <li>갇힌 사람에게 다른 플레이어가 닿으면, 같은 편이면 구하고(save) 상대면 터뜨린다(kill, 탈락).</li>
+ *   <li>갇힌 채 5초가 지나면 탈락한다. 가둔 물줄기의 주인이 상대면 그 주인이 kill을 얻는다.</li>
+ *   <li>이 틱의 탈락·kill·save를 모두 반영한 뒤 경기 시계를 흘리고 승패를 가린다.</li>
+ * </ol>
+ *
+ * <p>경기({@link Match})가 끝나면 이동 입력과 물풍선 놓기는 더 받지 않고, 물줄기도 보이기만 할 뿐 아무도 가두지 않는다.
+ * 그래도 시간({@link #elapsedSeconds()})은 계속 흘러서 채팅이 사라지고, 이미 놓인 물풍선이 터지고, 탈락 연출도 끝까지 이어진다.
+ * 끝날 때 갇혀 있던 사람은 결과가 바뀌지 않도록 갇힌 채로 남는다.</p>
  */
 public final class GameWorld {
 
     private final TileMap map;
+    private final BalloonField balloonField;
     /** 이 컴퓨터의 첫 플레이어(1P). 채팅은 이 플레이어가 친 것으로 올라간다 */
     private final Player localPlayer;
     /** 이 컴퓨터에서 조작하는 플레이어들. 1P, 2P 순서 */
@@ -65,6 +82,7 @@ public final class GameWorld {
                     .formatted(map.name(), spawns.size(), localProfiles.size()));
         }
         this.map = map;
+        this.balloonField = new BalloonField(map);
         List<Player> players = new ArrayList<>();
         for (int i = 0; i < localProfiles.size(); i++) {
             Point spawn = spawns.get(i);
@@ -83,17 +101,85 @@ public final class GameWorld {
      */
     public void update(double dt, Map<Integer, PlayerCommand> commands) {
         elapsedSeconds += dt;
-        for (Player player : players()) {
+        boolean playing = !match.isOver();
+        List<Player> players = players();
+        for (Player player : players) {
             // 경기가 끝나면 누르고 있어도 멈춰 선다
-            PlayerCommand command = match.isOver() ? PlayerCommand.IDLE
-                    : commands.getOrDefault(player.id(), PlayerCommand.IDLE);
-            player.update(command.move(), dt, map);
-            // 막 눌린 물풍선(command.placeBalloon())·아이템(command.useItem()) 키는 아직 아무 효과가 없다
+            PlayerCommand command = playing ? commands.getOrDefault(player.id(), PlayerCommand.IDLE) : PlayerCommand.IDLE;
+            player.update(command.move(), dt, obstaclesFor(player));
+        }
+        balloonField.update(dt, players);
+        if (playing) {
+            for (Player player : players) {
+                // 아이템 키(useItem)는 아직 아무 효과가 없다
+                if (commands.getOrDefault(player.id(), PlayerCommand.IDLE).placeBalloon()) {
+                    balloonField.place(player, players);
+                }
+            }
+            trapSoakedPlayers();
+            settleTouches();
+            eliminateTimedOut();
         }
         // 이 틱의 탈락·kill·save를 모두 반영한 뒤에 시계를 흘리고 승패를 가린다
         match.update(dt);
         chatLog.expire(elapsedSeconds);
         speechBubbles.expire(elapsedSeconds);
+    }
+
+    /** player가 들어갈 수 없는 칸: 맵의 막힌 칸과, player가 지나갈 수 없는 물풍선 칸 */
+    private Obstacles obstaclesFor(Player player) {
+        return (col, row) -> map.isSolid(col, row) || balloonField.blocks(player, col, row);
+    }
+
+    /** 물줄기가 덮은 칸에 선 사람을 가둔다. 자기나 같은 편의 물줄기여도 갇힌다 */
+    private void trapSoakedPlayers() {
+        for (Player player : players()) {
+            if (player.state() == PlayerState.NORMAL) {
+                balloonField.wetOwnerAt(player.col(), player.row()).ifPresent(player::trap);
+            }
+        }
+    }
+
+    /**
+     * 갇힌 사람에게 보통 상태의 플레이어가 닿으면 같은 편은 구하고 상대는 터뜨린다.
+     * 같은 틱에 여럿이 닿으면 번호가 작은 사람이 먼저 닿은 것으로 친다.
+     */
+    private void settleTouches() {
+        for (Player trapped : players()) {
+            if (trapped.state() != PlayerState.TRAPPED) {
+                continue;
+            }
+            for (Player other : players()) {
+                if (other == trapped || other.state() != PlayerState.NORMAL || !other.touches(trapped)) {
+                    continue;
+                }
+                if (match.isAlly(other, trapped)) {
+                    trapped.escape();
+                    match.recordSave(other.id());
+                } else {
+                    trapped.eliminate();
+                    match.recordKill(other.id());
+                }
+                break;
+            }
+        }
+    }
+
+    /** 갇힌 채 시간이 다 된 사람을 탈락시킨다. 가둔 물줄기의 주인이 상대면 그 주인에게 kill을 준다 */
+    private void eliminateTimedOut() {
+        for (Player trapped : players()) {
+            if (!trapped.isTrapTimeUp()) {
+                continue;
+            }
+            trapped.eliminate();
+            trapped.trapperId().ifPresent(ownerId -> playerById(ownerId)
+                    .filter(owner -> !match.isAlly(owner, trapped))
+                    .ifPresent(owner -> match.recordKill(owner.id())));
+        }
+    }
+
+    private Optional<Player> playerById(int id) {
+        return players().stream().filter(player -> player.id() == id).findFirst();
     }
 
     /**
@@ -138,6 +224,11 @@ public final class GameWorld {
 
     public TileMap map() {
         return map;
+    }
+
+    /** 맵 위의 물풍선과 물줄기 */
+    public BalloonField balloonField() {
+        return balloonField;
     }
 
     /** 이 컴퓨터의 첫 플레이어(1P). 한 키보드 2인 모드에서도 채팅은 1P가 친 것으로 올라간다. */
