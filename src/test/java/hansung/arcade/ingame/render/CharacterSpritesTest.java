@@ -1,6 +1,7 @@
 package hansung.arcade.ingame.render;
 
 import hansung.arcade.ingame.GameWorld;
+import hansung.arcade.ingame.entity.CharacterColor;
 import hansung.arcade.ingame.entity.Direction;
 import hansung.arcade.ingame.entity.Mascot;
 import hansung.arcade.ingame.entity.Player;
@@ -119,6 +120,53 @@ class CharacterSpritesTest {
         BufferedImage walkingLeft = SPRITES.frame(Mascot.KKUKKU, Direction.LEFT, true, player.walkTime());
         assertNotSame(SPRITES.frame(Mascot.KKUKKU, Direction.LEFT, true, 0), walkingLeft);
         assertDrawn(walkingLeft, world);
+    }
+
+    @Test
+    void 고정색을_고르지_않으면_원래_그림을_쓴다() {
+        assertSame(SPRITES.frame(Mascot.KKOKKO, Direction.UP, false, 0),
+                SPRITES.frame(Mascot.KKOKKO, null, Direction.UP, false, 0));
+    }
+
+    @Test
+    void 고정색을_칠한_그림은_캐릭터와_색마다_한_번만_만들어_둔다() {
+        BufferedImage red = SPRITES.frame(Mascot.SANGZZI, CharacterColor.RED, Direction.LEFT, true, 0.15);
+
+        assertSame(red, SPRITES.frame(Mascot.SANGZZI, CharacterColor.RED, Direction.LEFT, true, 0.15));
+        assertNotSame(red, SPRITES.frame(Mascot.SANGZZI, CharacterColor.BLUE, Direction.LEFT, true, 0.15));
+        assertNotSame(red, SPRITES.frame(Mascot.SANGZZI, Direction.LEFT, true, 0.15));
+        // 같은 걷는 장을 원래 그림에서 다시 칠한 것과 픽셀이 같다
+        BufferedImage original = SPRITES.frame(Mascot.SANGZZI, Direction.LEFT, true, 0.15);
+        assertSamePixels(CharacterRecolor.recolor(original, Mascot.SANGZZI, CharacterColor.RED), red);
+    }
+
+    @Test
+    void 고정색을_칠한_그림도_서기_걷기_규칙이_같다() {
+        BufferedImage first = SPRITES.frame(Mascot.KKUKKU, CharacterColor.SKY, Direction.DOWN, true, 0.0);
+
+        assertSame(first, SPRITES.frame(Mascot.KKUKKU, CharacterColor.SKY, Direction.DOWN, true, 0.09));
+        assertNotSame(first, SPRITES.frame(Mascot.KKUKKU, CharacterColor.SKY, Direction.DOWN, true, 0.11));
+        assertSame(first, SPRITES.frame(Mascot.KKUKKU, CharacterColor.SKY, Direction.DOWN, true, 0.41));
+        assertSame(SPRITES.frame(Mascot.KKUKKU, CharacterColor.SKY, Direction.DOWN, false, 0),
+                SPRITES.frame(Mascot.KKUKKU, CharacterColor.SKY, Direction.DOWN, false, 0.35));
+    }
+
+    @Test
+    void 맵에는_플레이어가_고른_고정색으로_칠한_그림을_그린다() {
+        TileMap map = MapLoader.parse("fixture/character", List.of("...", "...", ".1."));
+        GameWorld world = new GameWorld(map, new PlayerProfile("tester", Mascot.HANSUNGNYANGI, CharacterColor.GREEN));
+
+        assertDrawn(SPRITES.frame(Mascot.HANSUNGNYANGI, CharacterColor.GREEN, Direction.DOWN, false, 0), world);
+    }
+
+    private static void assertSamePixels(BufferedImage expected, BufferedImage actual) {
+        assertEquals(expected.getWidth(), actual.getWidth());
+        assertEquals(expected.getHeight(), actual.getHeight());
+        for (int y = 0; y < expected.getHeight(); y++) {
+            for (int x = 0; x < expected.getWidth(); x++) {
+                assertEquals(expected.getRGB(x, y), actual.getRGB(x, y), "(%d, %d)".formatted(x, y));
+            }
+        }
     }
 
     /** world를 그린 그림에서 캐릭터 자리의 픽셀이 expected와 같은지 본다. 그림을 놓은 위쪽 좌표를 돌려준다. */

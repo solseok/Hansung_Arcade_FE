@@ -2,6 +2,7 @@ package hansung.arcade.ingame.render;
 
 import hansung.arcade.ingame.GameWorld;
 import hansung.arcade.ingame.entity.Player;
+import hansung.arcade.ingame.entity.PlayerProfile;
 import hansung.arcade.ingame.map.Tile;
 import hansung.arcade.ingame.map.TileMap;
 
@@ -16,7 +17,7 @@ import java.util.Objects;
 import java.util.Set;
 
 /**
- * 맵은 테마 타일셋의 BMP 그림으로, 캐릭터는 고른 마스코트의 BMP 그림({@link CharacterSprites})으로 그린다.
+ * 맵은 테마 타일셋의 BMP 그림으로, 캐릭터는 고른 마스코트의 BMP 그림({@link CharacterSprites})을 고른 고정색으로 칠해 그린다.
  * 바닥 그림이 없는 테마는 단색 바닥을, 그림이 없는 타일은 기호를 적은 임시 상자를 그린다.
  * 호출 전에 Graphics2D의 원점이 맵 왼쪽 위로 옮겨져 있어야 한다.
  *
@@ -136,7 +137,8 @@ public final class WorldRenderer {
         g.setColor(SHADOW);
         g.fillOval(x - 14, feet - 6, 28, 9);
 
-        BufferedImage frame = characters.frame(player.profile().mascot(), player.facing(), player.isMoving(),
+        PlayerProfile profile = player.profile();
+        BufferedImage frame = characters.frame(profile.mascot(), profile.color(), player.facing(), player.isMoving(),
                 player.walkTime());
         g.drawImage(frame, x - CharacterSprites.FRAME_SIZE / 2, feet - CharacterSprites.FEET_Y, null);
     }

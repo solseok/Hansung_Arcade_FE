@@ -65,7 +65,7 @@ final class PlayerList implements HudPart {
     }
 
     private void paintPlayer(Graphics2D g, Player player, Box slot, Box portraitBox) {
-        BufferedImage portrait = skin.portraits().get(player.profile().mascot());
+        BufferedImage portrait = skin.portraits().get(player.profile().mascot(), player.profile().color());
         if (portrait != null) {
             // 얼굴 틀 안쪽 가운데, 아래쪽(어깨)은 틀 바닥에 맞춘다
             Box inside = portraitBox.inset(EDGE);

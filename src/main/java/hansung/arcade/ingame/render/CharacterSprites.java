@@ -1,5 +1,6 @@
 package hansung.arcade.ingame.render;
 
+import hansung.arcade.ingame.entity.CharacterColor;
 import hansung.arcade.ingame.entity.Direction;
 import hansung.arcade.ingame.entity.Mascot;
 
@@ -7,10 +8,14 @@ import java.awt.image.BufferedImage;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 맵 위를 돌아다니는 캐릭터 그림. 캐릭터와 방향마다 서 있는 그림 한 장과 걷는 그림 여러 장이 있다.
  * 파일은 resources/sprites/characters/ 의 {id}_{front|back|left|right}.bmp 와 {id}_walk_{...}.bmp 다.
+ *
+ * <p>고정색({@link CharacterColor})을 고르면 그 캐릭터의 그림 전부를 {@link CharacterRecolor}로 다시 칠해 쓴다.
+ * 다시 칠한 그림은 (캐릭터, 색)마다 처음 쓸 때 한 번만 만들어 두고, 그 뒤로는 만들어 둔 그림을 돌려준다.</p>
  */
 public final class CharacterSprites {
 
@@ -29,7 +34,10 @@ public final class CharacterSprites {
      */
     private static final double FRAME_BOUNDARY_SLACK = 1e-6;
 
+    /** 원래 색 그림 */
     private final Map<Mascot, Map<Direction, Pose>> poses;
+    /** 다시 칠한 그림. 게임 루프(EDT) 밖에서 그리는 테스트도 있어서 동시에 불려도 안전한 맵을 쓴다 */
+    private final Map<Colored, Map<Direction, Pose>> recolored = new ConcurrentHashMap<>();
 
     private CharacterSprites(Map<Mascot, Map<Direction, Pose>> poses) {
         this.poses = poses;
@@ -57,13 +65,38 @@ public final class CharacterSprites {
      * @param walkTime 걷기 시작한 뒤 지난 시간(초)
      */
     public BufferedImage frame(Mascot mascot, Direction facing, boolean moving, double walkTime) {
-        Pose pose = poses.get(mascot).get(facing);
+        return frame(mascot, null, facing, moving, walkTime);
+    }
+
+    /**
+     * 고정색을 color로 칠한 그림 중 지금 그릴 그림. 고르는 규칙은 {@link #frame(Mascot, Direction, boolean, double)}과 같다.
+     *
+     * @param color 고정색. null이면 원래 색 그림이다
+     */
+    public BufferedImage frame(Mascot mascot, CharacterColor color, Direction facing, boolean moving, double walkTime) {
+        Pose pose = posesOf(mascot, color).get(facing);
         if (!moving) {
             return pose.standing();
         }
         List<BufferedImage> walking = pose.walking();
         int elapsedFrames = (int) Math.floor(walkTime / WALK_FRAME_SECONDS + FRAME_BOUNDARY_SLACK);
         return walking.get(elapsedFrames % walking.size());
+    }
+
+    private Map<Direction, Pose> posesOf(Mascot mascot, CharacterColor color) {
+        Map<Direction, Pose> original = poses.get(mascot);
+        if (color == null) {
+            return original;
+        }
+        return recolored.computeIfAbsent(new Colored(mascot, color), key -> recolor(original, mascot, color));
+    }
+
+    private static Map<Direction, Pose> recolor(Map<Direction, Pose> original, Mascot mascot, CharacterColor color) {
+        Map<Direction, Pose> result = new EnumMap<>(Direction.class);
+        original.forEach((direction, pose) -> result.put(direction, new Pose(
+                CharacterRecolor.recolor(pose.standing(), mascot, color),
+                pose.walking().stream().map(frame -> CharacterRecolor.recolor(frame, mascot, color)).toList())));
+        return result;
     }
 
     private static List<BufferedImage> frames(String fileName) {
@@ -83,5 +116,8 @@ public final class CharacterSprites {
     }
 
     private record Pose(BufferedImage standing, List<BufferedImage> walking) {
+    }
+
+    private record Colored(Mascot mascot, CharacterColor color) {
     }
 }
