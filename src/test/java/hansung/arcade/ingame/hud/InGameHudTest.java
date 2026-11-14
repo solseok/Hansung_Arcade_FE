@@ -186,6 +186,21 @@ class InGameHudTest {
         assertEquals(0, count(screen, RESULT_BAND, HudPalette.LOSE_BOTTOM));
     }
 
+    @Test
+    void 누가_탈락하면_쓰러지는_연출이_끝난_뒤에_결과_배너를_띄운다() {
+        GameWorld duo = new GameWorld(MapLoader.parse("fixture/duo", List.of("1...2", ".....")),
+                List.of(new PlayerProfile("one", Mascot.KKUKKU), new PlayerProfile("two", Mascot.KKOKKO)));
+        duo.localPlayers().get(1).eliminate();
+        duo.update(1.0 / MatchClock.TICKS_PER_SECOND, Map.of());
+        assertTrue(duo.match().isOver());
+
+        assertEquals(0, count(render(duo), RESULT_BAND, HudPalette.RESULT_BAND_EDGE), "쓰러지는 2초 동안은 띄우지 않는다");
+        for (int i = 0; i < 2 * MatchClock.TICKS_PER_SECOND; i++) {
+            duo.update(1.0 / MatchClock.TICKS_PER_SECOND, Map.of());
+        }
+        assertTrue(count(render(duo), RESULT_BAND, HudPalette.WIN_BOTTOM) > 100);
+    }
+
     /** 혼자 하는 판이라 시간이 다 될 때까지 갱신한다 */
     private static void playToEnd(GameWorld world) {
         for (int i = 0; i < MatchClock.DURATION_SECONDS * MatchClock.TICKS_PER_SECOND; i++) {

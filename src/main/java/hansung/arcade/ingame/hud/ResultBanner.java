@@ -1,6 +1,8 @@
 package hansung.arcade.ingame.hud;
 
 import hansung.arcade.ingame.GameWorld;
+import hansung.arcade.ingame.entity.Player;
+import hansung.arcade.ingame.entity.PlayerState;
 import hansung.arcade.ingame.match.MatchOutcome;
 import hansung.arcade.ingame.match.MatchResult;
 
@@ -10,7 +12,9 @@ import java.awt.FontMetrics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
-import java.util.EnumMap;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -22,6 +26,9 @@ import static hansung.arcade.ingame.hud.HudLayout.RESULT_TEXT_HEIGHT;
 /**
  * 경기가 끝나면 맵 한가운데에 내 결과(WIN, LOSE, DRAW)를 크게 띄운다. 맵 폭만 한 반투명 띠 위에,
  * 결과마다 다른 색의 글씨를 굵은 테두리와 그림자를 둘러 그린다.
+ *
+ * <p>한 키보드 2인 모드에서 둘의 결과가 다르면 이긴 쪽을 "1P WIN"처럼 띄운다. 둘이 같으면(비김, 같은 팀) 그 결과만 띄운다.
+ * 누군가 탈락 연출(쓰러져 솟았다 떨어지고 깜빡이는 2초) 중이면 띠가 그 모습을 가리지 않게 연출이 끝난 뒤에 띄운다.</p>
  *
  * <p>글씨는 {@link HudLayout#RESULT_DOT}배 작게 도트로 찍어 테두리·색을 입힌 뒤 그만큼 키운다.
  * 그래서 다른 HUD처럼 계단진 도트 가장자리가 되고, 색은 위에서 아래로 몇 단계로만 나뉜다.</p>
@@ -42,7 +49,7 @@ final class ResultBanner implements HudPart {
 
     private final Font font;
     private final BufferedImage band;
-    private final Map<MatchOutcome, Word> words = new EnumMap<>(MatchOutcome.class);
+    private final Map<Headline, Word> words = new HashMap<>();
 
     ResultBanner(HudSkin skin) {
         Font base = skin.itemBarLabel() instanceof FontTextArt art ? art.font() : new Font(Font.SANS_SERIF, Font.BOLD, 12);
@@ -55,14 +62,35 @@ final class ResultBanner implements HudPart {
         return outcome.name();
     }
 
+    /**
+     * 이 컴퓨터의 플레이어들(locals, 1P부터)에게 보여 줄 결과 글씨와 색. 혼자거나 모두 같은 결과면 그 결과이고,
+     * 한 명만 이겼으면 그 사람의 표시를 붙인 "1P WIN"·"2P WIN"이다.
+     */
+    static Headline headlineOf(MatchResult result, List<Player> locals) {
+        MatchOutcome first = result.outcomeOf(locals.get(0).id());
+        boolean same = locals.stream().allMatch(player -> result.outcomeOf(player.id()) == first);
+        if (!same) {
+            List<Integer> winners = new ArrayList<>();
+            for (int i = 0; i < locals.size(); i++) {
+                if (result.outcomeOf(locals.get(i).id()) == MatchOutcome.WIN) {
+                    winners.add(i);
+                }
+            }
+            if (winners.size() == 1) {
+                return new Headline(PlayerTagView.tagOf(winners.get(0)) + " " + textOf(MatchOutcome.WIN),
+                        MatchOutcome.WIN);
+            }
+        }
+        return new Headline(textOf(first), first);
+    }
+
     @Override
     public void paint(Graphics2D g, GameWorld world) {
         Optional<MatchResult> result = world.match().result();
-        if (result.isEmpty()) {
+        if (result.isEmpty() || world.players().stream().anyMatch(player -> player.state() == PlayerState.DYING)) {
             return;
         }
-        MatchOutcome mine = result.get().outcomeOf(world.localPlayer().id());
-        Word word = words.computeIfAbsent(mine, this::render);
+        Word word = words.computeIfAbsent(headlineOf(result.get(), world.localPlayers()), this::render);
         g.drawImage(band, RESULT_BAND.x(), RESULT_BAND.y(), null);
         int centerX = RESULT_BAND.x() + RESULT_BAND.width() / 2;
         int centerY = RESULT_BAND.y() + RESULT_BAND.height() / 2;
@@ -80,7 +108,8 @@ final class ResultBanner implements HudPart {
     }
 
     /** 결과 글씨 한 장. 글씨와 테두리를 담은 영역의 가운데를 함께 돌려준다 (그림자는 가운데를 잡을 때 빼고 본다). */
-    Word render(MatchOutcome outcome) {
+    Word render(Headline headline) {
+        MatchOutcome outcome = headline.style();
         Color top = switch (outcome) {
             case WIN -> HudPalette.WIN_TOP;
             case LOSE -> HudPalette.LOSE_TOP;
@@ -96,7 +125,7 @@ final class ResultBanner implements HudPart {
             case LOSE -> HudPalette.LOSE_OUTLINE;
             case DRAW -> HudPalette.DRAW_OUTLINE;
         };
-        boolean[][] glyph = glyphDots(textOf(outcome));
+        boolean[][] glyph = glyphDots(headline.text());
         int height = glyph.length;
         int width = glyph[0].length;
         boolean[][] outlined = dilate(glyph, OUTLINE);
@@ -209,6 +238,15 @@ final class ResultBanner implements HudPart {
         g.drawImage(dots, 0, 0, out.getWidth(), out.getHeight(), null);
         g.dispose();
         return out;
+    }
+
+    /**
+     * 결과 띠에 띄울 글씨.
+     *
+     * @param text  글씨 (WIN, 1P WIN 등)
+     * @param style 글씨 색을 고르는 결과
+     */
+    record Headline(String text, MatchOutcome style) {
     }
 
     /**
