@@ -2,6 +2,7 @@ package hansung.arcade.ingame;
 
 import hansung.arcade.ingame.entity.Direction;
 import hansung.arcade.ingame.entity.Player;
+import hansung.arcade.ingame.entity.PlayerProfile;
 import hansung.arcade.ingame.map.TileMap;
 
 import java.awt.Point;
@@ -16,10 +17,11 @@ public final class GameWorld {
     private final Player localPlayer;
     private double elapsedSeconds;
 
-    public GameWorld(TileMap map) {
+    /** @param localProfile 이 컴퓨터에서 조작하는 플레이어의 닉네임·캐릭터 */
+    public GameWorld(TileMap map, PlayerProfile localProfile) {
         this.map = map;
         Point spawn = map.spawnPoints().get(0);
-        this.localPlayer = new Player(1, spawn.x, spawn.y);
+        this.localPlayer = new Player(1, localProfile, spawn.x, spawn.y);
     }
 
     public void update(double dt, Direction localInput) {
@@ -43,3 +45,4 @@ public final class GameWorld {
         return elapsedSeconds;
     }
 }
+

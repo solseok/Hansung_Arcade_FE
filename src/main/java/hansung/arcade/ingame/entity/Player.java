@@ -2,6 +2,8 @@ package hansung.arcade.ingame.entity;
 
 import hansung.arcade.ingame.map.TileMap;
 
+import java.util.Objects;
+
 /**
  * 플레이어 캐릭터. 위치 (x, y)는 충돌 박스 중심의 픽셀 좌표다.
  */
@@ -16,6 +18,7 @@ public final class Player {
     private static final double EPSILON = 1e-6;
 
     private final int id;
+    private final PlayerProfile profile;
     private double x;
     private double y;
     private double speed = BASE_SPEED;
@@ -23,8 +26,14 @@ public final class Player {
     private boolean moving;
     private double walkTime;
 
+    /** 닉네임·캐릭터를 아직 모를 때(테스트 등). {@link PlayerProfile#placeholder} 정보를 쓴다. */
     public Player(int id, int spawnCol, int spawnRow) {
+        this(id, PlayerProfile.placeholder(id), spawnCol, spawnRow);
+    }
+
+    public Player(int id, PlayerProfile profile, int spawnCol, int spawnRow) {
         this.id = id;
+        this.profile = Objects.requireNonNull(profile);
         this.x = TileMap.centerX(spawnCol);
         this.y = TileMap.centerY(spawnRow);
     }
@@ -106,6 +115,10 @@ public final class Player {
 
     public int id() {
         return id;
+    }
+
+    public PlayerProfile profile() {
+        return profile;
     }
 
     public double x() {
