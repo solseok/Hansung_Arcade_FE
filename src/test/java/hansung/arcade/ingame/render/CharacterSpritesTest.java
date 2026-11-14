@@ -68,6 +68,17 @@ class CharacterSpritesTest {
     }
 
     @Test
+    void 고정_틱으로_걸으면_걷는_그림은_정확히_여섯_틱마다_넘어간다() {
+        // 게임 루프처럼 1/60초씩 더한 시간은 0.1초 경계에서 0.0999…가 된다
+        List<BufferedImage> cycle = List.of(walking(0.05), walking(0.15), walking(0.25), walking(0.35));
+        double walkTime = 0;
+        for (int tick = 1; tick <= 240; tick++) {
+            walkTime += 1.0 / 60;
+            assertSame(cycle.get(tick / 6 % 4), walking(walkTime), tick + "번째 틱");
+        }
+    }
+
+    @Test
     void 캐릭터와_방향마다_다른_그림을_쓴다() {
         assertNotSame(SPRITES.frame(Mascot.SANGSANGBUGI, Direction.LEFT, false, 0),
                 SPRITES.frame(Mascot.SANGSANGBUGI, Direction.RIGHT, false, 0));

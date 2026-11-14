@@ -22,6 +22,11 @@ public final class CharacterSprites {
     private static final String DIRECTORY = "/sprites/characters/";
     /** 걷는 그림 한 장을 보여 주는 시간(초) */
     private static final double WALK_FRAME_SECONDS = 0.1;
+    /**
+     * 걸은 시간은 1/60초씩 더한 값이라 장이 넘어갈 경계에서 0.0999…처럼 살짝 못 미친다.
+     * 그대로 자르면 장마다 보이는 틱 수가 5~7로 흔들리므로, 경계에 이만큼 여유를 준다.
+     */
+    private static final double FRAME_BOUNDARY_SLACK = 1e-6;
 
     private final Map<Mascot, Map<Direction, Pose>> poses;
 
@@ -56,7 +61,8 @@ public final class CharacterSprites {
             return pose.standing();
         }
         List<BufferedImage> walking = pose.walking();
-        return walking.get((int) (walkTime / WALK_FRAME_SECONDS) % walking.size());
+        int elapsedFrames = (int) Math.floor(walkTime / WALK_FRAME_SECONDS + FRAME_BOUNDARY_SLACK);
+        return walking.get(elapsedFrames % walking.size());
     }
 
     private static List<BufferedImage> frames(String fileName) {
