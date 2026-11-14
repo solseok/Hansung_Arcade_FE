@@ -129,9 +129,10 @@ class InGamePanelKeysTest {
         Component chat = panel.chatField();
 
         assertFalse(press(chat, KeyEvent.VK_W).isConsumed());
+        assertFalse(press(chat, KeyEvent.VK_SPACE).isConsumed());
         assertFalse(press(chat, KeyEvent.VK_SHIFT, KeyEvent.KEY_LOCATION_LEFT, KeyEvent.SHIFT_DOWN_MASK).isConsumed());
-        assertFalse(press(chat, KeyEvent.VK_SHIFT, KeyEvent.KEY_LOCATION_RIGHT, KeyEvent.SHIFT_DOWN_MASK).isConsumed());
         assertFalse(press(chat, KeyEvent.VK_SLASH).isConsumed());
+        assertFalse(press(chat, KeyEvent.VK_PERIOD).isConsumed());
         assertTrue(press(chat, KeyEvent.VK_DOWN).isConsumed());
 
         assertNull(panel.input().heldDirection(0));

@@ -51,8 +51,8 @@ public final class StartScreenStep implements BootStep {
         List<PlayerProfile> players = localProfiles(properties);
         MatchMode mode = matchMode(properties);
         if (players.size() > 1) {
-            log.info("한 키보드 2인 모드로 시작합니다. 1P({}): W/A/S/D 이동, 왼쪽 Shift 물풍선, 왼쪽 Ctrl 아이템 / "
-                    + "2P({}): 방향키 이동, 오른쪽 Shift 물풍선, / 아이템", players.get(0).nickname(), players.get(1).nickname());
+            log.info("한 키보드 2인 모드로 시작합니다. 1P({}): W/A/S/D 이동, Space 물풍선, 왼쪽 Shift 아이템 / "
+                    + "2P({}): 방향키 이동, / 물풍선, . 아이템", players.get(0).nickname(), players.get(1).nickname());
         }
 
         SwingThread.runAndWait(() -> {

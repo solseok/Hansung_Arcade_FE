@@ -17,6 +17,7 @@ import static java.awt.event.KeyEvent.VK_CONTROL;
 import static java.awt.event.KeyEvent.VK_D;
 import static java.awt.event.KeyEvent.VK_DOWN;
 import static java.awt.event.KeyEvent.VK_LEFT;
+import static java.awt.event.KeyEvent.VK_PERIOD;
 import static java.awt.event.KeyEvent.VK_RIGHT;
 import static java.awt.event.KeyEvent.VK_S;
 import static java.awt.event.KeyEvent.VK_SHIFT;
@@ -26,6 +27,7 @@ import static java.awt.event.KeyEvent.VK_UP;
 import static java.awt.event.KeyEvent.VK_W;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -57,7 +59,7 @@ class KeyBindingsTest {
     }
 
     @Test
-    void 두_명이_할_때_1P는_WASD로_움직이고_왼쪽_Shift로_물풍선_왼쪽_Ctrl로_아이템을_쓴다() {
+    void 두_명이_할_때_1P는_WASD로_움직이고_Space로_물풍선_왼쪽_Shift로_아이템을_쓴다() {
         KeyBindings keys = KeyBindings.PLAYER_1;
 
         assertEquals(Direction.UP, keys.directionOf(VK_W));
@@ -65,15 +67,14 @@ class KeyBindingsTest {
         assertEquals(Direction.DOWN, keys.directionOf(VK_S));
         assertEquals(Direction.RIGHT, keys.directionOf(VK_D));
         assertNull(keys.directionOf(VK_UP));
-        assertEquals(Action.BALLOON, keys.actionOf(VK_SHIFT, KEY_LOCATION_LEFT));
-        assertEquals(Action.ITEM, keys.actionOf(VK_CONTROL, KEY_LOCATION_LEFT));
-        // 오른쪽 Shift·Ctrl은 1P 키가 아니다
+        assertEquals(Action.BALLOON, keys.actionOf(VK_SPACE, KEY_LOCATION_STANDARD));
+        assertEquals(Action.ITEM, keys.actionOf(VK_SHIFT, KEY_LOCATION_LEFT));
+        // 오른쪽 Shift는 1P 키가 아니다
         assertNull(keys.actionOf(VK_SHIFT, KEY_LOCATION_RIGHT));
-        assertNull(keys.actionOf(VK_CONTROL, KEY_LOCATION_RIGHT));
     }
 
     @Test
-    void 두_명이_할_때_2P는_방향키로_움직이고_오른쪽_Shift로_물풍선_슬래시로_아이템을_쓴다() {
+    void 두_명이_할_때_2P는_방향키로_움직이고_슬래시로_물풍선_마침표로_아이템을_쓴다() {
         KeyBindings keys = KeyBindings.PLAYER_2;
 
         assertEquals(Direction.UP, keys.directionOf(VK_UP));
@@ -81,11 +82,22 @@ class KeyBindingsTest {
         assertEquals(Direction.LEFT, keys.directionOf(VK_LEFT));
         assertEquals(Direction.RIGHT, keys.directionOf(VK_RIGHT));
         assertNull(keys.directionOf(VK_W));
-        assertEquals(Action.BALLOON, keys.actionOf(VK_SHIFT, KEY_LOCATION_RIGHT));
-        assertEquals(Action.ITEM, keys.actionOf(VK_SLASH, KEY_LOCATION_STANDARD));
-        assertNull(keys.actionOf(VK_SHIFT, KEY_LOCATION_LEFT));
-        // 방향키 쪽에는 Ctrl을 쓰지 않는다 (macOS에서 Ctrl+←/→는 데스크톱 전환)
-        assertNull(keys.actionOf(VK_CONTROL, KEY_LOCATION_RIGHT));
+        assertEquals(Action.BALLOON, keys.actionOf(VK_SLASH, KEY_LOCATION_STANDARD));
+        assertEquals(Action.ITEM, keys.actionOf(VK_PERIOD, KEY_LOCATION_STANDARD));
+        assertNull(keys.actionOf(VK_SHIFT, KEY_LOCATION_RIGHT));
+    }
+
+    @Test
+    void 두_명이_할_때는_Ctrl을_쓰지_않고_Shift는_1P만_쓴다() {
+        // Ctrl은 누가 눌러도 Ctrl+방향키(macOS 데스크톱 전환)가 되고, 좌우 Shift를 나눠 쓰면 겹칠 때 이벤트가 빠진다
+        for (KeyBindings keys : KeyBindings.forLocalPlayers(2)) {
+            for (KeyBindings.Key key : List.of(keys.balloon(), keys.item())) {
+                assertNotEquals(VK_CONTROL, key.code());
+            }
+        }
+        assertEquals(List.of(VK_SPACE, VK_SHIFT),
+                List.of(KeyBindings.PLAYER_1.balloon().code(), KeyBindings.PLAYER_1.item().code()));
+        assertFalse(List.of(KeyBindings.PLAYER_2.balloon().code(), KeyBindings.PLAYER_2.item().code()).contains(VK_SHIFT));
     }
 
     @Test
@@ -109,7 +121,7 @@ class KeyBindingsTest {
         for (int arrow : new int[]{VK_UP, VK_DOWN, VK_LEFT, VK_RIGHT}) {
             assertTrue(KeyBindings.worksWhileTyping(arrow));
         }
-        for (int typed : new int[]{VK_W, VK_A, VK_SPACE, VK_SHIFT, VK_SLASH}) {
+        for (int typed : new int[]{VK_W, VK_A, VK_SPACE, VK_SHIFT, VK_SLASH, VK_PERIOD}) {
             assertFalse(KeyBindings.worksWhileTyping(typed));
         }
     }

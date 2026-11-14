@@ -73,9 +73,11 @@ final class PlayerControls {
     }
 
     /**
-     * 키 이벤트의 수정 키 상태(modifiersEx)에 Shift·Ctrl이 없는데 그 키에 묶인 행동이 눌린 채로 남아 있으면 뗀 것으로 친다.
-     * 좌우 Shift를 함께 누르다 하나를 떼면 그 뗌 이벤트가 오지 않는 플랫폼이 있어서(macOS, Windows), 그대로 두면
-     * 다음 누름을 자동 반복으로 여겨 받지 않는다. 둘 다 떼고 나면 그 뒤 이벤트에는 Shift가 없으므로 그때 바로잡는다.
+     * 키 이벤트의 수정 키 상태(modifiersEx)에 Shift가 없는데 Shift에 묶인 행동이 눌린 채로 남아 있으면 뗀 것으로 친다.
+     * 좌우 Shift를 함께 누르면 한쪽의 누름·뗌 이벤트가 오지 않는 플랫폼이 있다(macOS, Windows). 2인 모드에서는
+     * Shift를 1P(왼쪽)만 쓰지만, 1P가 왼쪽 Shift를 누른 채 누군가 오른쪽 Shift를 누르면 1P의 뗌이 빠질 수 있고,
+     * 그대로 두면 1P의 다음 누름을 자동 반복으로 여겨 받지 않는다. Shift를 모두 떼면 그 뒤 이벤트에는 Shift가 없으므로
+     * 그때 바로잡는다.
      *
      * @param pressedKeyCode 이 이벤트가 누른 키. 누른 그 키는 수정 키 상태와 상관없이 그대로 둔다. 누름이 아니면 {@link KeyEvent#VK_UNDEFINED}
      */
@@ -114,14 +116,8 @@ final class PlayerControls {
         };
     }
 
-    /** 수정 키의 눌림 표시. 수정 키가 아니면 0 */
+    /** 수정 키의 눌림 표시. 키 배치에 묶인 수정 키는 Shift뿐이라 Shift만 본다 (다른 수정 키를 묶으면 여기에 더한다) */
     private static int modifierMask(int keyCode) {
-        return switch (keyCode) {
-            case KeyEvent.VK_SHIFT -> InputEvent.SHIFT_DOWN_MASK;
-            case KeyEvent.VK_CONTROL -> InputEvent.CTRL_DOWN_MASK;
-            case KeyEvent.VK_ALT -> InputEvent.ALT_DOWN_MASK;
-            case KeyEvent.VK_META -> InputEvent.META_DOWN_MASK;
-            default -> 0;
-        };
+        return keyCode == KeyEvent.VK_SHIFT ? InputEvent.SHIFT_DOWN_MASK : 0;
     }
 }

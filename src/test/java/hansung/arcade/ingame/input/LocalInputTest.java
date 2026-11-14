@@ -17,6 +17,7 @@ import static java.awt.event.KeyEvent.KEY_LOCATION_STANDARD;
 import static java.awt.event.KeyEvent.VK_CONTROL;
 import static java.awt.event.KeyEvent.VK_D;
 import static java.awt.event.KeyEvent.VK_LEFT;
+import static java.awt.event.KeyEvent.VK_PERIOD;
 import static java.awt.event.KeyEvent.VK_SHIFT;
 import static java.awt.event.KeyEvent.VK_SLASH;
 import static java.awt.event.KeyEvent.VK_SPACE;
@@ -165,37 +166,40 @@ class LocalInputTest {
     }
 
     @Test
-    void 두_명이면_왼쪽_Shift는_1P_오른쪽_Shift는_2P의_물풍선이다() {
+    void 두_명이면_Space는_1P_슬래시는_2P의_물풍선이다() {
         PlayerCommand balloon = new PlayerCommand(null, true, false);
 
-        press(duo, VK_SHIFT, KEY_LOCATION_LEFT, SHIFT_DOWN_MASK);
+        press(duo, VK_SPACE);
         assertEquals(Map.of(P1, balloon, P2, PlayerCommand.IDLE), duo.takeCommands());
-        release(duo, VK_SHIFT, KEY_LOCATION_LEFT);
+        release(duo, VK_SPACE);
 
-        press(duo, VK_SHIFT, KEY_LOCATION_RIGHT, SHIFT_DOWN_MASK);
+        press(duo, VK_SLASH);
         assertEquals(Map.of(P1, PlayerCommand.IDLE, P2, balloon), duo.takeCommands());
     }
 
     @Test
-    void 두_명이면_왼쪽_Ctrl은_1P_슬래시는_2P의_아이템이다() {
-        press(duo, VK_CONTROL, KEY_LOCATION_LEFT, CTRL_DOWN_MASK);
-        press(duo, VK_SLASH, KEY_LOCATION_STANDARD, CTRL_DOWN_MASK);
+    void 두_명이면_왼쪽_Shift는_1P_마침표는_2P의_아이템이다() {
+        press(duo, VK_SHIFT, KEY_LOCATION_LEFT, SHIFT_DOWN_MASK);
+        press(duo, VK_PERIOD, KEY_LOCATION_STANDARD, SHIFT_DOWN_MASK);
 
         PlayerCommand item = new PlayerCommand(null, false, true);
         assertEquals(Map.of(P1, item, P2, item), duo.takeCommands());
     }
 
     @Test
-    void 두_명이면_혼자_할_때의_Space와_오른쪽_Ctrl은_아무_키도_아니다() {
-        assertFalse(press(duo, VK_SPACE));
+    void 두_명이면_오른쪽_Shift와_Ctrl은_아무_키도_아니다() {
+        assertFalse(press(duo, VK_SHIFT, KEY_LOCATION_RIGHT, SHIFT_DOWN_MASK));
+        assertFalse(press(duo, VK_CONTROL, KEY_LOCATION_LEFT, CTRL_DOWN_MASK));
         assertFalse(press(duo, VK_CONTROL, KEY_LOCATION_RIGHT, CTRL_DOWN_MASK));
+
+        assertEquals(Map.of(P1, PlayerCommand.IDLE, P2, PlayerCommand.IDLE), duo.takeCommands());
     }
 
     @Test
     void 한_사람이_물풍선_키를_누르고_있어도_다른_사람은_따로_누를_수_있다() {
-        press(duo, VK_SHIFT, KEY_LOCATION_LEFT, SHIFT_DOWN_MASK);
+        press(duo, VK_SPACE);
         command(duo, P1);
-        press(duo, VK_SHIFT, KEY_LOCATION_RIGHT, SHIFT_DOWN_MASK);
+        press(duo, VK_SLASH);
 
         Map<Integer, PlayerCommand> tick = duo.takeCommands();
         assertFalse(tick.get(P1).placeBalloon());
@@ -205,8 +209,10 @@ class LocalInputTest {
     @Test
     void 두_명일_때_채팅_입력칸에서는_2P의_방향키만_받는다() {
         assertFalse(duo.keyPressed(key(KeyEvent.KEY_PRESSED, VK_D, KEY_LOCATION_STANDARD, 0), true));
-        assertFalse(duo.keyPressed(key(KeyEvent.KEY_PRESSED, VK_SHIFT, KEY_LOCATION_RIGHT, SHIFT_DOWN_MASK), true));
+        assertFalse(duo.keyPressed(key(KeyEvent.KEY_PRESSED, VK_SPACE, KEY_LOCATION_STANDARD, 0), true));
+        assertFalse(duo.keyPressed(key(KeyEvent.KEY_PRESSED, VK_SHIFT, KEY_LOCATION_LEFT, SHIFT_DOWN_MASK), true));
         assertFalse(duo.keyPressed(key(KeyEvent.KEY_PRESSED, VK_SLASH, KEY_LOCATION_STANDARD, 0), true));
+        assertFalse(duo.keyPressed(key(KeyEvent.KEY_PRESSED, VK_PERIOD, KEY_LOCATION_STANDARD, 0), true));
         assertTrue(duo.keyPressed(key(KeyEvent.KEY_PRESSED, VK_UP, KEY_LOCATION_STANDARD, 0), true));
 
         Map<Integer, PlayerCommand> tick = duo.takeCommands();
@@ -226,6 +232,7 @@ class LocalInputTest {
     void 포커스를_잃으면_두_사람의_키를_모두_비운다() {
         press(duo, VK_W);
         press(duo, VK_UP);
+        press(duo, VK_SPACE);
         press(duo, VK_SLASH);
 
         duo.clear();
@@ -234,39 +241,29 @@ class LocalInputTest {
     }
 
     @Test
-    void 반대쪽_Shift를_아직_누르고_있으면_한쪽_Shift를_떼도_상대의_Shift는_누른_채로_둔다() {
+    void 오른쪽_Shift를_눌렀다_떼도_왼쪽_Shift를_누르고_있으면_1P의_Shift는_누른_채로_둔다() {
         press(duo, VK_SHIFT, KEY_LOCATION_LEFT, SHIFT_DOWN_MASK);
-        press(duo, VK_SHIFT, KEY_LOCATION_RIGHT, SHIFT_DOWN_MASK);
         duo.takeCommands();
+        press(duo, VK_SHIFT, KEY_LOCATION_RIGHT, SHIFT_DOWN_MASK);
 
-        // 2P가 오른쪽 Shift를 뗐다. 1P가 왼쪽 Shift를 누르고 있어서 Shift 표시가 남아 있다
+        // 오른쪽 Shift를 뗐다. 1P가 왼쪽 Shift를 누르고 있어서 Shift 표시가 남아 있다
         duo.keyReleased(key(KeyEvent.KEY_RELEASED, VK_SHIFT, KEY_LOCATION_RIGHT, SHIFT_DOWN_MASK));
         // 그래서 1P의 왼쪽 Shift 자동 반복은 여전히 새로 누른 것이 아니다
         press(duo, VK_SHIFT, KEY_LOCATION_LEFT, SHIFT_DOWN_MASK);
 
-        assertFalse(command(duo, P1).placeBalloon());
+        assertFalse(command(duo, P1).useItem());
     }
 
     @Test
-    void 두_Shift가_겹쳐_먼저_뗀_쪽의_뗌을_놓쳐도_마지막_Shift를_떼면_바로잡힌다() {
+    void 두_Shift가_겹쳐_1P의_뗌을_놓쳐도_Shift를_모두_떼면_바로잡힌다() {
         press(duo, VK_SHIFT, KEY_LOCATION_LEFT, SHIFT_DOWN_MASK);
-        press(duo, VK_SHIFT, KEY_LOCATION_RIGHT, SHIFT_DOWN_MASK);
         duo.takeCommands();
-        // 2P의 오른쪽 Shift 뗌은 오지 않고(Windows·macOS), 1P가 왼쪽 Shift를 떼면 Shift가 하나도 없다고 온다
-        duo.keyReleased(key(KeyEvent.KEY_RELEASED, VK_SHIFT, KEY_LOCATION_LEFT, 0));
-
+        // 1P가 왼쪽 Shift를 누른 채 누군가 오른쪽 Shift를 누르면, 왼쪽 Shift 뗌이 오지 않는다(Windows·macOS)
         press(duo, VK_SHIFT, KEY_LOCATION_RIGHT, SHIFT_DOWN_MASK);
-        assertEquals(Map.of(P1, PlayerCommand.IDLE, P2, new PlayerCommand(null, true, false)), duo.takeCommands());
-    }
+        // 오른쪽 Shift까지 떼면 Shift가 하나도 없다고 온다
+        duo.keyReleased(key(KeyEvent.KEY_RELEASED, VK_SHIFT, KEY_LOCATION_RIGHT, 0));
 
-    @Test
-    void 왼쪽_Ctrl을_뗀_이벤트를_놓쳐도_Ctrl이_떼진_뒤에는_다시_누를_수_있다() {
-        press(duo, VK_CONTROL, KEY_LOCATION_LEFT, CTRL_DOWN_MASK);
-        assertTrue(command(duo, P1).useItem());
-        // Ctrl 뗌은 오지 않았고, 다음 키 이벤트에는 Ctrl이 없다
-        press(duo, VK_W);
-
-        press(duo, VK_CONTROL, KEY_LOCATION_LEFT, CTRL_DOWN_MASK);
+        press(duo, VK_SHIFT, KEY_LOCATION_LEFT, SHIFT_DOWN_MASK);
         assertTrue(command(duo, P1).useItem());
     }
 
