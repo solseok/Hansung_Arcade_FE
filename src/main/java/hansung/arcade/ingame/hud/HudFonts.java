@@ -96,13 +96,13 @@ public final class HudFonts {
      * 글자 칸 높이가 cellHeight px인 돋움체. 돋움체는 작은 크기마다 도트 글자(비트맵)가 들어 있고
      * 글자 칸 높이가 글꼴 크기와 같아서(12px이면 위아래 12px), 크기를 칸 높이 그대로 준다.
      * 받침이 복잡한 일부 글자(갱, 냉 등)만 칸 위로 1px 올라간다.
-     * 돋움체가 없으면 고정폭 기본 글꼴을 글자 높이가 칸에 가깝게 맞춰 대신 쓴다.
+     * 돋움체가 없으면 고정폭 기본 글꼴을 글자가 칸을 넘지 않는 가장 큰 크기로 맞춰 대신 쓴다 ({@link OutlineText#fitCell}).
      */
     public Font dotumChe(int cellHeight) {
         if (dotumChe != null) {
             return dotumChe.deriveFont((float) cellHeight);
         }
-        return fitInkHeight(new Font(Font.MONOSPACED, Font.PLAIN, cellHeight), "가g", cellHeight);
+        return OutlineText.fitCell(new Font(Font.MONOSPACED, Font.PLAIN, cellHeight), cellHeight);
     }
 
     /** sample 글자의 실제 높이(픽셀)가 inkHeight에 가장 가까워지는 크기로 맞춘 글꼴 */

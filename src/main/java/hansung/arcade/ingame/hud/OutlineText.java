@@ -40,6 +40,8 @@ public final class OutlineText {
      * 괄호나 소문자의 획이 끊긴다. 그보다 낮춰 획이 이어지게 하되, 더 낮추면 글자가 뭉개진다.
      */
     private static final int OPAQUE = 0x50;
+    /** {@link #fitCell}이 찾아보는 가장 작은 글꼴 크기 */
+    private static final float MIN_FIT_SIZE = 6;
 
     private final Font font;
     private final int cellHeight;
@@ -61,10 +63,27 @@ public final class OutlineText {
         this.cellHeight = cellHeight;
         this.fill = Objects.requireNonNull(fill);
         this.outline = Objects.requireNonNull(outline);
-        Graphics2D g = dotGraphics(new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB));
-        this.metrics = g.getFontMetrics(font);
-        g.dispose();
-        this.baseline = baselineInCell();
+        this.metrics = metricsOf(font);
+        // 글자 칸 가운데에 글자가 오게 하는 기준선. 글자 높이가 칸 높이와 같으면 위아래로 딱 맞는다
+        Ink ink = sampleInk(font);
+        this.baseline = (cellHeight - ink.height()) / 2 + ink.aboveBaseline();
+    }
+
+    /**
+     * 글자가 높이 cellHeight인 칸을 넘지 않는 가장 큰 크기로 맞춘 글꼴.
+     * 칸 높이에 맞춰 만들어지지 않은 글꼴(돋움체가 없을 때 대신 쓰는 글꼴)은 이렇게 맞춰야 글자가 칸 밖으로 나가
+     * 위아래 줄의 테두리에 닿는 일이 없다. {@link #draw}가 찍는 픽셀 그대로 재므로 그린 결과와 어긋나지 않는다.
+     */
+    public static Font fitCell(Font font, int cellHeight) {
+        Font best = font.deriveFont(MIN_FIT_SIZE);
+        for (float size = MIN_FIT_SIZE; size <= 2f * cellHeight; size += 0.5f) {
+            Font candidate = font.deriveFont(size);
+            if (sampleInk(candidate).height() > cellHeight) {
+                break;
+            }
+            best = candidate;
+        }
+        return best;
     }
 
     public Font font() {
@@ -99,7 +118,7 @@ public final class OutlineText {
     }
 
     private BufferedImage render(String text) {
-        BufferedImage glyphs = glyphs(text, width(text) + 2 * MARGIN, cellHeight + 2 * MARGIN, MARGIN, MARGIN + baseline);
+        BufferedImage glyphs = glyphs(font, text, width(text) + 2 * MARGIN, cellHeight + 2 * MARGIN, MARGIN, MARGIN + baseline);
         BufferedImage out = new BufferedImage(glyphs.getWidth(), glyphs.getHeight(), BufferedImage.TYPE_INT_ARGB);
         int fillArgb = fill.getRGB();
         int outlineArgb = outline.getRGB();
@@ -132,17 +151,25 @@ public final class OutlineText {
                 && (glyphs.getRGB(x, y) >>> 24) != 0;
     }
 
-    /** 글자 칸 가운데에 글자가 오게 하는 기준선. 글자 높이가 칸 높이와 같으면 위아래로 딱 맞는다. */
-    private int baselineInCell() {
+    /** {@link #CELL_SAMPLE}을 font로 찍었을 때 글자 픽셀이 차지하는 줄 */
+    private static Ink sampleInk(Font font) {
+        FontMetrics metrics = metricsOf(font);
         int probeBaseline = MARGIN + metrics.getMaxAscent();
         int height = probeBaseline + metrics.getMaxDescent() + MARGIN;
-        Box ink = PixelImages.opaqueBounds(glyphs(CELL_SAMPLE, width(CELL_SAMPLE) + 2 * MARGIN, height, MARGIN, probeBaseline));
-        int above = probeBaseline - ink.y();
-        return (cellHeight - ink.height()) / 2 + above;
+        Box ink = PixelImages.opaqueBounds(glyphs(font, CELL_SAMPLE,
+                metrics.stringWidth(CELL_SAMPLE) + 2 * MARGIN, height, MARGIN, probeBaseline));
+        return new Ink(probeBaseline - ink.y(), ink.height());
+    }
+
+    private static FontMetrics metricsOf(Font font) {
+        Graphics2D g = dotGraphics(new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB));
+        FontMetrics metrics = g.getFontMetrics(font);
+        g.dispose();
+        return metrics;
     }
 
     /** text를 흑백으로 찍은 그림. 글자 픽셀은 불투명한 흰색, 나머지는 완전히 투명하다. */
-    private BufferedImage glyphs(String text, int width, int height, int x, int baselineY) {
+    private static BufferedImage glyphs(Font font, String text, int width, int height, int x, int baselineY) {
         BufferedImage image = new BufferedImage(Math.max(1, width), Math.max(1, height), BufferedImage.TYPE_INT_ARGB);
         Graphics2D g = dotGraphics(image);
         g.setFont(font);
@@ -155,6 +182,15 @@ public final class OutlineText {
             }
         }
         return image;
+    }
+
+    /**
+     * 글자 픽셀이 차지하는 줄.
+     *
+     * @param aboveBaseline 가장 위 픽셀 줄에서 기준선까지
+     * @param height        가장 위 픽셀 줄부터 가장 아래 픽셀 줄까지
+     */
+    private record Ink(int aboveBaseline, int height) {
     }
 
     private static Graphics2D dotGraphics(BufferedImage image) {

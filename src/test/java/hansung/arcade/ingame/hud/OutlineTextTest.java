@@ -72,8 +72,26 @@ class OutlineTextTest {
     @Test
     void 빈_글은_아무것도_그리지_않는다() {
         BufferedImage image = draw(text, "");
-        assertEquals(new Box(0, 0, image.getWidth(), image.getHeight()), PixelImages.opaqueBounds(image));
-        assertEquals(0, image.getRGB(ORIGIN, ORIGIN));
+        for (int y = 0; y < image.getHeight(); y++) {
+            for (int x = 0; x < image.getWidth(); x++) {
+                assertEquals(0, image.getRGB(x, y), "(%d, %d)".formatted(x, y));
+            }
+        }
+    }
+
+    @Test
+    void 칸에_맞춘_글꼴은_글자가_칸을_넘지_않는_가장_큰_크기다() {
+        Font base = new Font(Font.MONOSPACED, Font.PLAIN, 12);
+        Font fitted = OutlineText.fitCell(base, CELL);
+
+        // 위로 가장 높은 글자와 아래로 가장 내려가는 글자를 찍어도 칸 안이다
+        Box ink = fillBounds(draw(new OutlineText(fitted, CELL, Color.WHITE, Color.BLACK), "가뷁gjy|[]"));
+        assertTrue(ink.y() >= ORIGIN, "위쪽 끝 " + ink.y());
+        assertTrue(ink.bottom() <= ORIGIN + CELL, "아래쪽 끝 " + ink.bottom());
+        // 한 단계 더 크면 칸을 넘는다
+        Font larger = base.deriveFont(fitted.getSize2D() + 0.5f);
+        Box largerInk = fillBounds(draw(new OutlineText(larger, CELL, Color.WHITE, Color.BLACK), "가뷁gjy|[]"));
+        assertTrue(largerInk.height() > CELL, "한 단계 큰 글꼴의 글자 높이 " + largerInk.height());
     }
 
     @Test
