@@ -138,4 +138,12 @@ class MapLoaderTest {
         assertThrows(IllegalArgumentException.class,
                 () -> MapLoader.parse("test", List.of("..")));
     }
+
+    @Test
+    void 같은_스폰_번호가_두_번_나오면_실패한다() {
+        assertThrows(IllegalArgumentException.class,
+                () -> MapLoader.parse("test", List.of("1.1")));
+        assertThrows(IllegalArgumentException.class,
+                () -> MapLoader.parse("test", List.of("1.2", "..2")));
+    }
 }

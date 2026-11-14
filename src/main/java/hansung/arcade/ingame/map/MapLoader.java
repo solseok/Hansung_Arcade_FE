@@ -16,7 +16,7 @@ import java.util.List;
  *
  * <pre>
  * name=맵 이름        메타데이터 (key=value)
- * 1.BB#..             타일 한 줄. 글자는 {@link Tile} 참고, 숫자 1~8은 스폰 지점(바닥)
+ * 1.BB#..             타일 한 줄. 글자는 {@link Tile} 참고, 숫자 1~8은 스폰 지점(바닥)이고 번호마다 한 번만 쓴다
  * </pre>
  *
  * <p>맵 id는 resources/maps 아래 경로다. 앞쪽 폴더 이름이 테마가 된다 (camp/camp08 → camp).</p>
@@ -75,7 +75,13 @@ public final class MapLoader {
             for (int col = 0; col < columns; col++) {
                 char c = line.charAt(col);
                 if (c >= '1' && c <= '8') {
-                    spawns.add(new SpawnPoint(c - '0', new Point(col, row)));
+                    int order = c - '0';
+                    if (spawns.stream().anyMatch(spawn -> spawn.order() == order)) {
+                        throw new IllegalArgumentException(
+                                "맵 %s의 (%d, %d)에 스폰 지점 %d이(가) 또 있습니다. 스폰 번호는 한 번씩만 써야 합니다."
+                                        .formatted(name, col, row, order));
+                    }
+                    spawns.add(new SpawnPoint(order, new Point(col, row)));
                     tiles[row][col] = Tile.FLOOR;
                     continue;
                 }
