@@ -39,6 +39,8 @@ public final class InGamePanel extends JPanel {
     private static final double FIXED_STEP = 1.0 / 60;
     /** 창을 끌거나 멈췄다 돌아왔을 때 한꺼번에 몰아서 갱신하지 않도록 상한을 둔다. */
     private static final double MAX_FRAME_TIME = 0.25;
+    /** 맵 프레임 테두리 두께. 충돌 박스보다 넓은 캐릭터 그림은 좌우로 이만큼 맵 영역 밖까지 보인다. */
+    private static final int FRAME_EDGE = HudLayout.FRAME_INNER_EDGE + HudLayout.FRAME_OUTER_EDGE;
 
     private final GameWorld world;
     private final DirectionInput input = new DirectionInput();
@@ -148,21 +150,25 @@ public final class InGamePanel extends JPanel {
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
 
-        inMap(g, originX, originY, field.y(), () -> worldRenderer.drawGround(g, world));
+        inMap(g, originX, originY, field.y(), 0, () -> worldRenderer.drawGround(g, world));
         hud.paintFieldCorners(g);
-        // 위쪽은 창 끝까지 열어 두고, 좌우와 아래만 맵 영역으로 자른다
-        inMap(g, originX, originY, 0, () -> worldRenderer.drawObjects(g, world));
+        // 위쪽은 창 끝까지 열어 두고 아래는 맵 영역으로 자른다. 좌우는 프레임 두께만큼 열어서,
+        // 충돌 박스보다 넓은 캐릭터 그림이 맵 끝에서 잘리지 않고 프레임 위에 겹쳐 보이게 한다
+        inMap(g, originX, originY, 0, FRAME_EDGE, () -> worldRenderer.drawObjects(g, world));
 
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_OFF);
         g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_OFF);
     }
 
-    /** 원점을 맵 왼쪽 위로 옮기고, 맵 영역의 좌우·아래와 clipTop 위쪽을 잘라 draw를 부른 뒤 되돌린다. */
-    private static void inMap(Graphics2D g, int originX, int originY, int clipTop, Runnable draw) {
+    /**
+     * 원점을 맵 왼쪽 위로 옮기고, 맵 영역을 좌우로 sideMargin만큼 넓힌 범위의 좌우·아래와 clipTop 위쪽을 잘라
+     * draw를 부른 뒤 되돌린다.
+     */
+    private static void inMap(Graphics2D g, int originX, int originY, int clipTop, int sideMargin, Runnable draw) {
         Box field = HudLayout.FIELD;
         AffineTransform transform = g.getTransform();
         Shape clip = g.getClip();
-        g.clipRect(field.x(), clipTop, field.width(), field.bottom() - clipTop);
+        g.clipRect(field.x() - sideMargin, clipTop, field.width() + 2 * sideMargin, field.bottom() - clipTop);
         g.translate(originX, originY);
         draw.run();
         g.setTransform(transform);

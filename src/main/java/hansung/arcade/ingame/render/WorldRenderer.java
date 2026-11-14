@@ -40,7 +40,7 @@ public final class WorldRenderer {
      * 캐릭터 위치(충돌 박스 가운데)에서 발끝까지의 거리. 칸 가운데에 서면 발끝이 칸 바닥보다 6px 위에 와서,
      * 아래 칸 블록 그림이 칸 위로 솟은 부분에 발이 가려지지 않는다.
      */
-    static final int FEET_BELOW_CENTER = T / 2 - 6;
+    public static final int FEET_BELOW_CENTER = T / 2 - 6;
 
     private final Tileset tileset;
     private final CharacterSprites characters;
