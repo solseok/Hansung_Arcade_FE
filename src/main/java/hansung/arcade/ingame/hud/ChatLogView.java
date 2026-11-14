@@ -23,6 +23,10 @@ final class ChatLogView implements HudPart {
 
     private final OutlineText othersText;
     private final OutlineText myText;
+    /** {@link #lines}를 만든 채팅 목록. 목록이 바뀌었는지 가릴 때 쓴다 */
+    private List<ChatMessage> shown = List.of();
+    /** 지금 그리는 줄들. 먼저 온 줄이 앞이다 */
+    private List<Line> lines = List.of();
 
     ChatLogView(OutlineText othersText, OutlineText myText) {
         this.othersText = othersText;
@@ -40,16 +44,28 @@ final class ChatLogView implements HudPart {
         if (messages.isEmpty()) {
             return;
         }
-        int myId = world.localPlayer().id();
+        if (messages != shown) {
+            // ChatLog는 줄이 올라오거나 내려갈 때만 새 목록을 주므로, 그때만 줄 글을 다시 만든다
+            int myId = world.localPlayer().id();
+            lines = messages.stream().map(message -> Line.of(message, message.senderId() == myId)).toList();
+            shown = messages;
+        }
         Shape clip = g.getClip();
         g.clipRect(FIELD.x(), FIELD.y(), FIELD.width(), FIELD.height());
         int top = CHAT_LOG_BOTTOM - CHAT_TEXT_HEIGHT;
-        for (int i = messages.size() - 1; i >= 0; i--) {
-            ChatMessage message = messages.get(i);
-            boolean mine = message.senderId() == myId;
-            (mine ? myText : othersText).draw(g, line(message, mine), CHAT_BAR.x(), top);
+        for (int i = lines.size() - 1; i >= 0; i--) {
+            Line line = lines.get(i);
+            (line.mine() ? myText : othersText).draw(g, line.text(), CHAT_BAR.x(), top);
             top -= CHAT_LINE_PITCH;
         }
         g.setClip(clip);
+    }
+
+    /** 화면에 그리는 한 줄: 글과, 내가 친 줄인지 */
+    private record Line(String text, boolean mine) {
+
+        static Line of(ChatMessage message, boolean mine) {
+            return new Line(line(message, mine), mine);
+        }
     }
 }

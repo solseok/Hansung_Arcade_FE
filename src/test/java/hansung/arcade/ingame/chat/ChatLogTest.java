@@ -5,6 +5,8 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ChatLogTest {
@@ -44,6 +46,21 @@ class ChatLogTest {
 
         log.expire(3 + ChatLog.VISIBLE_SECONDS);
         assertTrue(log.messages().isEmpty());
+    }
+
+    @Test
+    void 줄이_바뀌기_전까지는_같은_목록을_돌려준다() {
+        ChatLog log = new ChatLog();
+        log.add(new ChatMessage(1, "부기", "안녕"), 0);
+        List<ChatMessage> first = log.messages();
+
+        // 사라진 줄이 없으면 그대로다
+        log.expire(1);
+        assertSame(first, log.messages());
+
+        log.add(new ChatMessage(1, "부기", "또"), 2);
+        assertNotSame(first, log.messages());
+        assertEquals(List.of("안녕"), first.stream().map(ChatMessage::text).toList());
     }
 
     private static List<String> texts(ChatLog log) {
