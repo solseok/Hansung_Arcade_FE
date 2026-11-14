@@ -1,5 +1,8 @@
 package hansung.arcade.core.game;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -19,6 +22,7 @@ import java.util.Properties;
  */
 public final class GameProperties {
 
+    private static final Logger log = LoggerFactory.getLogger(GameProperties.class);
     private static final String RESOURCE = "/application.properties";
     private static final String ARG_PREFIX = "--";
 
@@ -36,6 +40,8 @@ public final class GameProperties {
         Map<String, String> merged = new HashMap<>(defaults);
         for (String arg : args) {
             if (!arg.startsWith(ARG_PREFIX) || !arg.contains("=")) {
+                // 조용히 버리면 "--키 값"처럼 잘못 쓰고도 적용된 줄 알게 된다.
+                log.warn("실행 인자 '{}'은(는) --키=값 형식이 아니라서 무시합니다.", arg);
                 continue;
             }
             String pair = arg.substring(ARG_PREFIX.length());
@@ -64,7 +70,8 @@ public final class GameProperties {
     public String get(String key) {
         String value = values.get(key);
         if (value == null || value.isEmpty()) {
-            throw new IllegalStateException("설정값 " + key + "이(가) 없습니다. application.properties를 확인하세요.");
+            throw new IllegalStateException(
+                    "설정값 " + key + "이(가) 없습니다. application.properties와 실행 인자를 확인하세요.");
         }
         return value;
     }
