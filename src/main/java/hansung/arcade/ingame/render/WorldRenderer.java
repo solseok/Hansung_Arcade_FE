@@ -16,10 +16,8 @@ import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
-import java.util.EnumSet;
 import java.util.List;
 import java.util.Objects;
-import java.util.Set;
 
 /**
  * 맵은 테마 타일셋의 BMP 그림으로, 캐릭터는 고른 마스코트의 BMP 그림({@link CharacterSprites})을 고른 고정색으로 칠해 그린다.
@@ -43,8 +41,6 @@ public final class WorldRenderer {
     private static final Color MISSING_FILL = new Color(0x5C626B);
     private static final Color MISSING_TEXT = new Color(0xFFE066);
     private static final Font MISSING_FONT = new Font(Font.MONOSPACED, Font.BOLD, 16);
-
-    private static final Set<Tile> GROUND_LEVEL = EnumSet.of(Tile.ROAD, Tile.ROAD_LANE, Tile.CROSSWALK, Tile.SPIKE);
 
     private static final Color SHADOW = new Color(0, 0, 0, 55);
     /**
@@ -123,7 +119,10 @@ public final class WorldRenderer {
         }
     }
 
-    /** 바닥 그림과, 바닥에 붙어 있어 아무것도 가리지 않는 타일(길, 바닥 가시). 맵 칸 밖으로 나가지 않는다. */
+    /**
+     * 바닥 그림과, 바닥에 붙어 있어 아무것도 가리지 않는 타일(길, 바닥 가시). 맵 칸 밖으로 나가지 않는다.
+     * 블럭 밑에 깔린 바닥({@link TileMap#groundAt})도 그려 두어서, 블럭이 밀려 나가는 동안 드러나는 자리가 비지 않는다.
+     */
     public void drawGround(Graphics2D g, GameWorld world) {
         TileMap map = world.map();
         for (int row = 0; row < map.rows(); row++) {
@@ -135,9 +134,7 @@ public final class WorldRenderer {
                     g.setColor((col + row) % 2 == 0 ? FLOOR_LIGHT : FLOOR_DARK);
                     g.fillRect(col * T, row * T, T, T);
                 }
-                if (isGroundLevel(map.tileAt(col, row))) {
-                    drawTile(g, map, col, row);
-                }
+                drawTile(g, map, map.groundAt(col, row), col, row);
             }
         }
     }
@@ -145,14 +142,13 @@ public final class WorldRenderer {
     private void drawRow(Graphics2D g, TileMap map, int row, boolean overPlayers) {
         for (int col = 0; col < map.columns(); col++) {
             Tile tile = map.tileAt(col, row);
-            if (!isGroundLevel(tile) && isOverPlayers(tile) == overPlayers) {
-                drawTile(g, map, col, row);
+            if (!tile.isGround() && isOverPlayers(tile) == overPlayers) {
+                drawTile(g, map, tile, col, row);
             }
         }
     }
 
-    private void drawTile(Graphics2D g, TileMap map, int col, int row) {
-        Tile tile = map.tileAt(col, row);
+    private void drawTile(Graphics2D g, TileMap map, Tile tile, int col, int row) {
         if (tile == Tile.FLOOR || !map.isTileOrigin(col, row)) {
             return;
         }
@@ -174,10 +170,6 @@ public final class WorldRenderer {
         FontMetrics fm = g.getFontMetrics();
         String text = String.valueOf(tile.symbol());
         g.drawString(text, px + (width - fm.stringWidth(text)) / 2, py + (T - fm.getHeight()) / 2 + fm.getAscent());
-    }
-
-    private static boolean isGroundLevel(Tile tile) {
-        return GROUND_LEVEL.contains(tile);
     }
 
     private static boolean isOverPlayers(Tile tile) {

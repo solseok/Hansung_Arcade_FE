@@ -25,4 +25,14 @@ public enum Direction {
     public boolean isHorizontal() {
         return dx != 0;
     }
+
+    /** 반대 방향 */
+    public Direction opposite() {
+        return switch (this) {
+            case UP -> DOWN;
+            case DOWN -> UP;
+            case LEFT -> RIGHT;
+            case RIGHT -> LEFT;
+        };
+    }
 }
