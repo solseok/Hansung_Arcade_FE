@@ -10,6 +10,7 @@ import hansung.arcade.ingame.map.TileMap;
 import org.junit.jupiter.api.Test;
 
 import java.awt.Graphics2D;
+import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
 import java.util.List;
 
@@ -42,12 +43,24 @@ class CharacterSpritesTest {
     }
 
     @Test
-    void 발끝은_그림_아래쪽_여백_바로_위에_있다() {
+    void 서_있는_그림과_걷는_그림_모두_발끝_높이가_같다() {
         for (Mascot mascot : Mascot.values()) {
-            BufferedImage front = SPRITES.frame(mascot, Direction.DOWN, false, 0);
-            int feet = lowestOpaqueRow(front) + 1;
-            assertTrue(Math.abs(CharacterSprites.FEET_Y - feet) <= 2, mascot + " 발끝 " + feet);
+            for (Direction direction : Direction.values()) {
+                String who = mascot + " " + direction;
+                assertFeet(SPRITES.frame(mascot, direction, false, 0), who + " 서기");
+                for (int i = 0; i < 4; i++) {
+                    // 걷는 그림은 0.1초마다 넘어가므로 각 장의 한가운데 시간으로 고른다
+                    assertFeet(SPRITES.frame(mascot, direction, true, i * 0.1 + 0.05), who + " 걷기 " + (i + 1));
+                }
+            }
         }
+    }
+
+    /** 그림마다 발끝이 1px 높거나 낮을 수는 있다. 그보다 크면 방향을 바꾸거나 걸을 때 캐릭터가 위아래로 튄다. */
+    private static void assertFeet(BufferedImage image, String what) {
+        Rectangle ink = TileSprite.opaqueBounds(image);
+        int feet = ink.y + ink.height;
+        assertTrue(Math.abs(CharacterSprites.FEET_Y - feet) <= 1, what + " 발끝 " + feet);
     }
 
     @Test
@@ -136,16 +149,5 @@ class CharacterSpritesTest {
 
     private static BufferedImage walking(double walkTime) {
         return SPRITES.frame(Mascot.SANGSANGBUGI, Direction.DOWN, true, walkTime);
-    }
-
-    private static int lowestOpaqueRow(BufferedImage image) {
-        for (int y = image.getHeight() - 1; y >= 0; y--) {
-            for (int x = 0; x < image.getWidth(); x++) {
-                if ((image.getRGB(x, y) >>> 24) != 0) {
-                    return y;
-                }
-            }
-        }
-        return -1;
     }
 }
