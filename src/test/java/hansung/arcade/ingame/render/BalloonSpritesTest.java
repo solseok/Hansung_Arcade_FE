@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import java.awt.image.BufferedImage;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -109,6 +110,55 @@ class BalloonSpritesTest {
             }
             assertTrue(clearedPixels > 500, direction + " 끝 칸의 지운 바탕 " + clearedPixels);
         }
+    }
+
+    @Test
+    void 물줄기_그림은_분홍_보라빛_잡티만_메우고_모양과_나머지_색은_그대로다() {
+        int filled = 0;
+        for (int frame = 0; frame < 3; frame++) {
+            filled += assertOnlySpillChanged(water(Part.CENTER, null, frame), rawWater("Center", frame));
+            for (Direction direction : Direction.values()) {
+                String name = switch (direction) {
+                    case UP -> "Up";
+                    case DOWN -> "Down";
+                    case LEFT -> "Left";
+                    case RIGHT -> "Right";
+                };
+                filled += assertOnlySpillChanged(water(Part.MIDDLE, direction, frame), rawWater(name, frame));
+                BufferedImage end = BalloonSprites.sealInnerEdge(
+                        BlackBackground.clear(rawWater(name + "Last", frame)), direction);
+                filled += assertOnlySpillChanged(water(Part.END, direction, frame), end);
+            }
+        }
+        // 그림 파일에 실제로 잡티가 있어서 메운 것이 있어야 한다
+        assertTrue(filled > 200, "메운 픽셀 " + filled);
+    }
+
+    /** 마젠타 번짐을 메우기 전 물줄기 그림 */
+    private static BufferedImage rawWater(String name, int frame) {
+        return SpriteSheet.find(BalloonSprites.DIRECTORY + name + ".bmp").orElseThrow().frames(40).get(frame);
+    }
+
+    /** 번진 픽셀은 하나도 남지 않고, 알파와 번지지 않은 픽셀 색은 그대로인지. 메운 픽셀 수를 돌려준다 */
+    private static int assertOnlySpillChanged(BufferedImage actual, BufferedImage before) {
+        int filled = 0;
+        for (int y = 0; y < 40; y++) {
+            for (int x = 0; x < 40; x++) {
+                int was = before.getRGB(x, y);
+                int now = actual.getRGB(x, y);
+                assertEquals(was >>> 24, now >>> 24, "알파 (%d, %d)".formatted(x, y));
+                if ((now >>> 24) == 0) {
+                    continue;
+                }
+                assertFalse(MagentaSpill.isSpill(now), "분홍·보라빛 %06x (%d, %d)".formatted(now & 0xFFFFFF, x, y));
+                if (MagentaSpill.isSpill(was)) {
+                    filled++;
+                } else {
+                    assertEquals(was, now, "번지지 않은 픽셀 (%d, %d)".formatted(x, y));
+                }
+            }
+        }
+        return filled;
     }
 
     @Test
