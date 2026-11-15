@@ -1,5 +1,6 @@
 package hansung.arcade.ingame;
 
+import hansung.arcade.ingame.airplane.AirDrop;
 import hansung.arcade.ingame.balloon.BalloonField;
 import hansung.arcade.ingame.balloon.Explosion;
 import hansung.arcade.ingame.block.BoxPusher;
@@ -51,6 +52,7 @@ import java.util.random.RandomGenerator;
  *   <li>갇힌 채 5초가 지나면 탈락한다. 가둔 물줄기의 주인이 상대면 그 주인이 kill을 얻는다.</li>
  *   <li>보통 상태인 플레이어가 선 칸의 아이템을 먹는다 ({@link ItemEffects}). 갇히거나 탈락한 사람은 먹지 못한다.</li>
  *   <li>이 틱의 탈락·kill·save를 모두 반영한 뒤 경기 시계를 흘리고 승패를 가린다.</li>
+ *   <li>남은 시간이 출현 시각이 됐으면 비행기가 나오고, 날고 있는 비행기가 아이템을 떨어뜨린다 ({@link AirDrop}).</li>
  * </ol>
  *
  * <p>경기({@link Match})가 끝나면 이동 입력과 물풍선 놓기는 더 받지 않고, 물줄기도 보이기만 할 뿐 아무도 가두지 않는다.
@@ -67,6 +69,7 @@ public final class GameWorld {
     private final ItemActions itemActions;
     /** 플레이어 번호 → 아이템으로 얻은 능력과 아이템 칸 */
     private final Map<Integer, PlayerGear> gears = new HashMap<>();
+    private final AirDrop airDrop;
     /** 이 컴퓨터의 첫 플레이어(1P). 채팅은 이 플레이어가 친 것으로 올라간다 */
     private final Player localPlayer;
     /** 이 컴퓨터에서 조작하는 플레이어들. 1P, 2P 순서 */
@@ -103,9 +106,10 @@ public final class GameWorld {
     }
 
     /**
-     * 난수를 정해 둔 게임. 블럭에서 아이템이 나오는지·무엇인지를 이 난수로 정하므로, 테스트에서 결과를 고정할 때 쓴다.
+     * 난수를 정해 둔 게임. 블럭에서 아이템이 나오는지·무엇인지와 비행기가 떨어뜨릴 칸·아이템을 이 난수로 정하므로,
+     * 테스트에서 결과를 고정할 때 쓴다.
      *
-     * @param random 아이템 드롭에 쓸 난수
+     * @param random 아이템 드롭과 비행기에 쓸 난수
      */
     public GameWorld(TileMap map, List<PlayerProfile> localProfiles, MatchMode mode, RandomGenerator random) {
         List<Point> spawns = map.spawnPoints();
@@ -121,6 +125,7 @@ public final class GameWorld {
         this.itemDrops = new ItemDrops(random);
         this.boxPusher = new BoxPusher(map);
         this.itemActions = new ItemActions(map, balloonField);
+        this.airDrop = new AirDrop(map, random);
         List<Player> players = new ArrayList<>();
         for (int i = 0; i < localProfiles.size(); i++) {
             Point spawn = spawns.get(i);
@@ -181,6 +186,8 @@ public final class GameWorld {
         }
         // 이 틱의 탈락·kill·save를 모두 반영한 뒤에 시계를 흘리고 승패를 가린다
         match.update(dt);
+        // 시계를 흘린 뒤라야 이번 틱에 출현 시각이 됐는지 안다
+        airDrop.update(dt, this);
         chatLog.expire(elapsedSeconds);
         speechBubbles.expire(elapsedSeconds);
     }
@@ -349,6 +356,11 @@ public final class GameWorld {
             throw new IllegalArgumentException("이 게임의 플레이어가 아닙니다: " + player.id());
         }
         return gear;
+    }
+
+    /** 맵 위를 나는 비행기와 비행기에서 떨어지는 중인 아이템 */
+    public AirDrop airDrop() {
+        return airDrop;
     }
 
     /** 맵 바닥에 놓인 아이템. 비행기처럼 아이템을 떨어뜨리는 쪽은 여기에 {@link FieldItems#place 놓는다} */

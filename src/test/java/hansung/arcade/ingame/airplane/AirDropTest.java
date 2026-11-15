@@ -104,6 +104,25 @@ class AirDropTest {
     }
 
     @Test
+    void 게임을_진행하면_1분59초에_비행기가_나와_빈_칸에_아이템을_떨어뜨린다() {
+        // 난수 0.5로는 (7, 6)과 (8, 6)에 신발을 떨어뜨린다
+        GameWorld world = new GameWorld(map(), List.of(new PlayerProfile("p1", Mascot.KKUKKU)), MatchMode.SOLO,
+                ScriptedRandom.of(0.5));
+        for (int i = 0; i < 61 * 60; i++) {
+            world.update(TICK, Map.of());
+        }
+        assertEquals(1, world.airDrop().flights().size());
+
+        for (int i = 0; i < 4 * 60; i++) {
+            world.update(TICK, Map.of());
+        }
+
+        assertTrue(world.airDrop().flights().isEmpty());
+        assertEquals(List.of(new Drop(7, 6, ItemType.SHOE), new Drop(8, 6, ItemType.SHOE)), world.items().all().stream()
+                .map(item -> new Drop(item.col(), item.row(), item.type())).toList());
+    }
+
+    @Test
     void 남은_시간이_120초일_때는_아직_나오지_않는다() {
         GameWorld world = world(map(), 1);
         AirDrop airDrop = new AirDrop(world.map(), ScriptedRandom.of(0.5));
