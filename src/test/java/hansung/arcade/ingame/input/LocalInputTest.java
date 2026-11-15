@@ -302,6 +302,118 @@ class LocalInputTest {
         assertTrue(command(duo, P1).useItem());
     }
 
+    @Test
+    void macOS_JDK_21이_오른쪽_Option을_위치_STANDARD로_보내도_2P의_아이템이다() {
+        LocalInput mac = macDuo();
+
+        // JDK 21: KEY_PRESSED, VK_ALT, 위치 STANDARD, Option 표시 있음
+        assertTrue(pressRightOptionJdk21(mac, false));
+
+        PlayerCommand item = new PlayerCommand(null, false, true);
+        assertEquals(Map.of(P1, PlayerCommand.IDLE, P2, item), mac.takeCommands());
+    }
+
+    @Test
+    void macOS_JDK_21에서_오른쪽_Option_뗌이_누름으로_와도_다시_누르면_또_쓴다() {
+        LocalInput mac = macDuo();
+        pressRightOptionJdk21(mac, false);
+        assertTrue(command(mac, P2).useItem());
+
+        // JDK 21의 뗌: KEY_RELEASED가 아니라 Option 표시 없는 KEY_PRESSED(위치 STANDARD)가 온다
+        assertTrue(releaseRightOptionJdk21(mac, 0, false));
+        assertFalse(command(mac, P2).useItem());
+
+        pressRightOptionJdk21(mac, false);
+        assertTrue(command(mac, P2).useItem());
+    }
+
+    @Test
+    void macOS_JDK_21에서_1P가_Shift를_누른_채_2P가_오른쪽_Option을_떼도_뗌으로_받는다() {
+        LocalInput mac = macDuo();
+        int both = SHIFT_DOWN_MASK | ALT_DOWN_MASK;
+        press(mac, VK_SHIFT, KEY_LOCATION_LEFT, SHIFT_DOWN_MASK);
+        assertTrue(press(mac, VK_ALT, KEY_LOCATION_STANDARD, both));
+        mac.takeCommands();
+
+        // Option 뗌에는 1P의 Shift 표시만 남아 있다
+        assertTrue(releaseRightOptionJdk21(mac, SHIFT_DOWN_MASK, false));
+        press(mac, VK_ALT, KEY_LOCATION_STANDARD, both);
+        // 1P의 Shift는 아직 누르고 있어서 자동 반복은 새로 누른 것이 아니다
+        press(mac, VK_SHIFT, KEY_LOCATION_LEFT, both);
+
+        Map<Integer, PlayerCommand> tick = mac.takeCommands();
+        assertFalse(tick.get(P1).useItem());
+        assertTrue(tick.get(P2).useItem());
+    }
+
+    @Test
+    void macOS_JDK_21에서_채팅_입력칸의_오른쪽_Option_누름은_글자_입력에_맡기고_뗌은_받는다() {
+        LocalInput mac = macDuo();
+        // 입력칸을 열기 전부터 누르고 있었다
+        pressRightOptionJdk21(mac, false);
+        mac.takeCommands();
+
+        // 입력칸에서 떼고 다시 누른다. 누름은 Option 글자 입력에 쓰이도록 받지 않는다
+        assertTrue(releaseRightOptionJdk21(mac, 0, true));
+        assertFalse(pressRightOptionJdk21(mac, true));
+        assertTrue(releaseRightOptionJdk21(mac, 0, true));
+        assertFalse(command(mac, P2).useItem());
+
+        // 입력칸을 닫고 누르면 새로 누른 것이다
+        pressRightOptionJdk21(mac, false);
+        assertTrue(command(mac, P2).useItem());
+    }
+
+    @Test
+    void macOS_JDK_24의_오른쪽_Option도_2P의_아이템이다() {
+        LocalInput mac = macDuo();
+
+        assertTrue(press(mac, VK_ALT, KEY_LOCATION_RIGHT, ALT_DOWN_MASK));
+        assertTrue(command(mac, P2).useItem());
+        // JDK 24는 뗌을 KEY_RELEASED(위치 RIGHT)로 보낸다
+        assertTrue(release(mac, VK_ALT, KEY_LOCATION_RIGHT));
+        assertTrue(press(mac, VK_ALT, KEY_LOCATION_RIGHT, ALT_DOWN_MASK));
+        assertTrue(command(mac, P2).useItem());
+    }
+
+    @Test
+    void macOS에서_왼쪽_Option은_누르든_떼든_아무_키도_아니다() {
+        LocalInput mac = macDuo();
+
+        // 왼쪽 Option은 JDK 21에서도 위치 LEFT, 뗌 KEY_RELEASED로 온다
+        assertFalse(press(mac, VK_ALT, KEY_LOCATION_LEFT, ALT_DOWN_MASK));
+        assertFalse(release(mac, VK_ALT, KEY_LOCATION_LEFT));
+
+        assertEquals(Map.of(P1, PlayerCommand.IDLE, P2, PlayerCommand.IDLE), mac.takeCommands());
+    }
+
+    @Test
+    void macOS가_아니면_Alt의_위치와_누름을_바로잡지_않는다() {
+        LocalInput windows = new LocalInput(List.of(P1, P2), false);
+
+        assertFalse(press(windows, VK_ALT, KEY_LOCATION_STANDARD, ALT_DOWN_MASK));
+        assertTrue(press(windows, VK_ALT, KEY_LOCATION_RIGHT, ALT_DOWN_MASK));
+        assertTrue(command(windows, P2).useItem());
+        // Alt 표시 없는 Alt 누름도 뗌으로 바꾸지 않는다. 떼기 전 누름은 새로 누른 것이 아니다
+        press(windows, VK_ALT, KEY_LOCATION_RIGHT, ALT_DOWN_MASK);
+        assertFalse(command(windows, P2).useItem());
+    }
+
+    /** macOS 한 키보드 2인 (2P 아이템 키 오른쪽 Option) */
+    private static LocalInput macDuo() {
+        return new LocalInput(List.of(P1, P2), true);
+    }
+
+    /** macOS JDK 21이 보내는 오른쪽 Option 누름: KEY_PRESSED, VK_ALT, 위치 STANDARD, Option 표시 있음 */
+    private static boolean pressRightOptionJdk21(LocalInput input, boolean typing) {
+        return input.keyPressed(key(KeyEvent.KEY_PRESSED, VK_ALT, KEY_LOCATION_STANDARD, ALT_DOWN_MASK), typing);
+    }
+
+    /** macOS JDK 21이 보내는 오른쪽 Option 뗌: KEY_PRESSED, VK_ALT, 위치 STANDARD, Option 표시 없음 (otherModifiers는 함께 누른 다른 수정 키) */
+    private static boolean releaseRightOptionJdk21(LocalInput input, int otherModifiers, boolean typing) {
+        return input.keyPressed(key(KeyEvent.KEY_PRESSED, VK_ALT, KEY_LOCATION_STANDARD, otherModifiers), typing);
+    }
+
     static PlayerCommand command(LocalInput input, int playerId) {
         return input.takeCommands().get(playerId);
     }

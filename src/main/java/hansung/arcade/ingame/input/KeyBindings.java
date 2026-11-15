@@ -30,7 +30,8 @@ import static java.awt.event.KeyEvent.VK_W;
  * 플랫폼(macOS, Windows)이 있어서다. 2P의 아이템 키는 운영체제마다 다르다({@link #player2}).
  * macOS에서는 Ctrl+방향키가 데스크톱 전환이라 방향키를 쓰는 2P에게 Ctrl을 주지 않고 오른쪽 Option을 준다.
  * Windows 등에서는 오른쪽 Ctrl이고, 오른쪽 Ctrl이 없는 키보드를 위해 오른쪽 Alt(유럽식 배열의 AltGr 포함)도 받는다.
- * 왼쪽·오른쪽은 {@link KeyEvent#getKeyLocation()}으로 가린다.</p>
+ * 왼쪽·오른쪽은 {@link KeyEvent#getKeyLocation()}으로 가린다. macOS JDK 21이 오른쪽 Option을 위치 STANDARD로 보내는 것은
+ * {@link LocalInput}이 오른쪽으로 바로잡아 넘긴다.</p>
  *
  * @param up      위로 이동 ({@link KeyEvent#VK_UP} 같은 키 코드)
  * @param down    아래로 이동
@@ -93,9 +94,18 @@ public record KeyBindings(int up, int down, int left, int right, Key balloon, Li
      * @throws IllegalArgumentException 1명이나 2명이 아닐 때
      */
     public static List<KeyBindings> forLocalPlayers(int count) {
+        return forLocalPlayers(count, MAC);
+    }
+
+    /**
+     * 운영체제를 정해 고르는 {@link #forLocalPlayers(int)}.
+     *
+     * @param mac macOS인지. 2P 아이템 키가 달라진다
+     */
+    static List<KeyBindings> forLocalPlayers(int count, boolean mac) {
         return switch (count) {
             case 1 -> List.of(SOLO);
-            case 2 -> List.of(PLAYER_1, PLAYER_2);
+            case 2 -> List.of(PLAYER_1, player2(mac));
             default -> throw new IllegalArgumentException("한 키보드로는 1~2명만 할 수 있습니다: " + count);
         };
     }
