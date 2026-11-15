@@ -83,6 +83,47 @@ class LobbyFlowTest {
         });
     }
 
+    @Test
+    void 로그인검사와_방장시작_결과복귀시_방유지() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            MockLobbyService service = new MockLobbyService();
+            OutgameSession session = new OutgameSession(service);
+            assertThrows(IllegalArgumentException.class, () -> session.login(" ", "localhost", "9000"));
+            assertThrows(IllegalArgumentException.class, () -> session.login("전솔", "localhost", "65536"));
+            assertThrows(IllegalArgumentException.class, () -> session.login("전솔", "localhost", "abc"));
+            session.login("전솔", "localhost", "9000");
+            session.enter(service.join(1));
+            assertThrows(IllegalStateException.class, session::start);
+            assertThrows(IllegalStateException.class, () -> session.selectMap("camp/camp08"));
+            session.leave();
+            Room room = service.create("8인 테스트", 8);
+            AtomicReference<JComponent> displayed = new AtomicReference<>();
+            SceneManager scenes = new SceneManager(displayed::set);
+            WaitingRoomPanel waiting = new WaitingRoomPanel(session, scenes);
+            ResultPanel result = new ResultPanel(scenes);
+            GamePreviewScene game = new GamePreviewScene(scenes,
+                    hansung.arcade.ingame.hud.HudSkin.load(hansung.arcade.ingame.hud.HudFonts.load()),
+                    hansung.arcade.ingame.render.CharacterSprites.load());
+            scenes.register("waiting", waiting);
+            scenes.register("game", game);
+            scenes.register("result", result);
+            scenes.show("waiting", room);
+            session.selectMap("village/village10");
+            assertEquals("village/village10", session.start().mapId());
+            assertEquals("전솔", session.start().players().getFirst().nickname());
+            button(waiting, "게임 시작").doClick();
+            assertSame(game.view(), displayed.get());
+            button(game.view(), "목업 결과 확인").doClick();
+            assertSame(result, displayed.get());
+            button(result, "대기실로 돌아가기").doClick();
+            assertSame(waiting, displayed.get());
+            assertTrue(service.isHost());
+            assertEquals(room.number(), session.room().number());
+            assertEquals(1, service.rooms().stream().filter(item -> item.number() == room.number())
+                    .findFirst().orElseThrow().players());
+        });
+    }
+
     private static JButton button(Container parent, String text) {
         for (Component child : parent.getComponents()) {
             if (child instanceof JButton button && text.equals(button.getText())) {

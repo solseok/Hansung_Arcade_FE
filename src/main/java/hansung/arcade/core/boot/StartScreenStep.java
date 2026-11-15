@@ -10,6 +10,10 @@ import hansung.arcade.outgame.lobby.LobbyService;
 import hansung.arcade.outgame.lobby.MockLobbyService;
 import hansung.arcade.outgame.lobby.WaitingRoomPanel;
 import hansung.arcade.outgame.audio.Sound;
+import hansung.arcade.outgame.OutgameSession;
+import hansung.arcade.outgame.LoginPanel;
+import hansung.arcade.outgame.ResultPanel;
+import hansung.arcade.outgame.GamePreviewScene;
 import hansung.arcade.ingame.GameWorld;
 import hansung.arcade.ingame.InGamePanel;
 import hansung.arcade.ingame.entity.Mascot;
@@ -21,7 +25,7 @@ import hansung.arcade.ingame.render.Tileset;
 
 /**
  * 5단계: 첫 화면을 조립해 창에 띄운다.
- * 기본 화면은 목업 로비다. --app.start-screen=game으로 인게임을 직접 실행한다.
+ * 기본 화면은 목업 로그인이다. --app.start-screen=game으로 인게임을 직접 실행한다.
  * 인게임 직접 실행의 닉네임과 캐릭터는 player.nickname, player.character 설정을 쓴다.
  */
 public final class StartScreenStep implements BootStep {
@@ -41,21 +45,33 @@ public final class StartScreenStep implements BootStep {
         PlayerProfile me = localProfile(context.get(GameProperties.class));
 
         SwingThread.runAndWait(() -> {
-            String screen = context.get(GameProperties.class).get("app.start-screen", "lobby");
-            if (screen.equals("lobby")) {
+            String screen = context.get(GameProperties.class).get("app.start-screen", "login");
+            if (screen.equals("lobby") || screen.equals("login")) {
                 LobbyService service = new MockLobbyService();
                 SceneManager scenes = new SceneManager(window::show);
-                scenes.register("lobby", new LobbyPanel(service, scenes));
-                scenes.register("waiting", new WaitingRoomPanel(service, scenes));
+                OutgameSession session = new OutgameSession(service);
+                LobbyPanel lobby = new LobbyPanel(service, scenes);
+                scenes.register("login", new LoginPanel(session, scenes, lobby::setNickname));
+                scenes.register("lobby", lobby);
+                scenes.register("waiting", new WaitingRoomPanel(session, scenes));
+                scenes.register("game", new GamePreviewScene(scenes, skin, characters));
+                scenes.register("result", new ResultPanel(scenes));
                 scenes.onShow(name -> {
-                    Sound.playBgm(name.equals("lobby") ? "Camp" : "Patrit");
+                    Sound.playBgm(switch (name) {
+                        case "login", "lobby" -> "Camp";
+                        case "waiting" -> "Patrit";
+                        default -> "Village";
+                    });
+                    if (name.equals("result")) {
+                        Sound.play("Ntc_GameEnd");
+                    }
                     if (name.equals("waiting")) {
                         Sound.play("Ntc_GameReady");
                     }
                 });
                 context.register(LobbyService.class, service);
                 context.register(SceneManager.class, scenes);
-                scenes.show("lobby", null);
+                scenes.show(screen, null);
                 return;
             }
             if (!screen.equals("game")) {

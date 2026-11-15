@@ -16,10 +16,29 @@ import java.util.HashMap;
 import java.util.Map;
 
 /** 기존 게임 타일을 사용하는 로비 미리보기와 버튼 스타일. EDT에서 사용한다. */
-final class LobbyArtwork {
+public final class LobbyArtwork {
     private static final Map<String, BufferedImage> MAPS = new HashMap<>();
 
     private LobbyArtwork() { }
+
+    private static BufferedImage buttonArt(String text) {
+        String file = switch (text) {
+            case "방만들기" -> "create-room";
+            case "바로시작" -> "quick-join";
+            default -> null;
+        };
+        if (file == null) {
+            return null;
+        }
+        try (var input = LobbyArtwork.class.getResourceAsStream("/ui/" + file + ".png")) {
+            if (input == null) {
+                throw new IllegalStateException("버튼 이미지가 없습니다: " + file);
+            }
+            return javax.imageio.ImageIO.read(input);
+        } catch (java.io.IOException exception) {
+            throw new java.io.UncheckedIOException(exception);
+        }
+    }
 
     static BufferedImage map(String name) {
         return MAPS.computeIfAbsent(name, key -> {
@@ -53,11 +72,25 @@ final class LobbyArtwork {
         });
     }
 
-    static JButton button(String text, boolean gold) {
+    public static JButton button(String text, boolean gold) {
+        BufferedImage art = buttonArt(text);
         JButton button = new JButton(text) {
             @Override
             protected void paintComponent(Graphics graphics) {
                 Graphics2D g = (Graphics2D) graphics.create();
+                if (art != null) {
+                    g.drawImage(art, 0, 0, getWidth(), getHeight(), null);
+                    if (getModel().isPressed() || !isEnabled()) {
+                        g.setColor(new Color(0, 0, 0, 60));
+                        g.fillRect(0, 0, getWidth(), getHeight());
+                    }
+                    if (isFocusOwner()) {
+                        g.setColor(Color.WHITE);
+                        g.drawRect(3, 3, getWidth() - 7, getHeight() - 7);
+                    }
+                    g.dispose();
+                    return;
+                }
                 g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
                 Color top = gold ? new Color(0xFFF5AB) : new Color(0x9FE8FF);
                 Color bottom = gold ? new Color(0xE99B16) : new Color(0x2575CE);

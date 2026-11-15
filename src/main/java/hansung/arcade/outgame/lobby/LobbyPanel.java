@@ -44,6 +44,7 @@ public final class LobbyPanel extends JPanel implements Scene {
     private final JButton previous = LobbyArtwork.button("이전쪽", false);
     private final JButton next = LobbyArtwork.button("다음쪽", false);
     private int page;
+    private final JLabel nickname = new JLabel("오프라인 목업");
 
     public LobbyPanel(LobbyService service, SceneManager scenes) {
         super(new BorderLayout(12, 12));
@@ -57,16 +58,18 @@ public final class LobbyPanel extends JPanel implements Scene {
         JButton create = LobbyArtwork.button("방만들기", true);
         JButton quick = LobbyArtwork.button("바로시작", true);
         for (JButton button : new JButton[]{create, quick}) {
-            button.setPreferredSize(new Dimension(190, 62));
+            button.setPreferredSize(new Dimension(155, 62));
             button.setFont(button.getFont().deriveFont(Font.BOLD, 25));
             button.setBackground(HsuColor.LIGHT_YELLOW.toAwt());
             actions.add(button);
         }
         create.addActionListener(event -> createRoom());
         quick.addActionListener(event -> enterRoom(service::quickJoin));
+        nickname.setForeground(new Color(0x003C70));
+        actions.add(nickname);
         add(actions, BorderLayout.NORTH);
         JPanel content = new JPanel(new BorderLayout(8, 8));
-        content.setBackground(new Color(12, 48, 70, 175));
+        content.setBackground(new Color(0x0099D4));
         content.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createLineBorder(new Color(154, 227, 255), 2),
                 BorderFactory.createEmptyBorder(8, 10, 8, 10)));
@@ -127,6 +130,10 @@ public final class LobbyPanel extends JPanel implements Scene {
         add(footer, BorderLayout.SOUTH);
     }
 
+    public void setNickname(String value) {
+        nickname.setText(value + " 님");
+    }
+
     private void createRoom() {
         JTextField title = new JTextField();
         JComboBox<Integer> capacity = new JComboBox<>(new Integer[]{2, 3, 4, 5, 6, 7, 8});
@@ -176,14 +183,14 @@ public final class LobbyPanel extends JPanel implements Scene {
         JPanel panel = new JPanel(new BorderLayout());
         panel.setBackground(HsuColor.SKY_BLUE.toAwt());
         panel.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(new Color(0x77E4FF), 3),
+                BorderFactory.createLineBorder(new Color(0x63EDFF), 3),
                 BorderFactory.createEmptyBorder(5, 7, 5, 7)));
         return panel;
     }
 
     private JPanel roomCard(Room room) {
         JPanel panel = emptyCard();
-        panel.setBackground(HsuColor.LIGHT_BLUE.toAwt());
+        panel.setBackground(new Color(0x03CEE9));
         JLabel thumbnail = new JLabel(new ImageIcon(LobbyArtwork.map(room.map())
                 .getScaledInstance(60, 60, java.awt.Image.SCALE_SMOOTH)));
         thumbnail.setBorder(BorderFactory.createLineBorder(new Color(0x155A76), 2));
@@ -193,7 +200,9 @@ public final class LobbyPanel extends JPanel implements Scene {
         info.setBorder(BorderFactory.createEmptyBorder(0, 8, 0, 0));
         JLabel title = new JLabel(String.format("%03d  %s", room.number(), room.title()));
         title.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 14));
-        title.setForeground(new Color(0x103A72));
+        title.setForeground(Color.WHITE);
+        title.setOpaque(true);
+        title.setBackground(new Color(0x008FCB));
         title.setToolTipText(room.title());
         info.add(title, BorderLayout.NORTH);
         JLabel map = new JLabel(room.map());
@@ -225,8 +234,7 @@ public final class LobbyPanel extends JPanel implements Scene {
         super.paintComponent(graphics);
         Graphics2D g = (Graphics2D) graphics.create();
         g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
-        g.drawImage(LobbyArtwork.map("빌리지 10"), 0, 0, getWidth(), getHeight(), null);
-        g.setColor(new Color(0, 24, 45, 70));
+        g.setColor(new Color(0x00BCEB));
         g.fillRect(0, 0, getWidth(), getHeight());
         g.setColor(new Color(12, 45, 115, 225));
         g.fillRect(0, getHeight() - 45, getWidth(), 45);
