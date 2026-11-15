@@ -237,7 +237,6 @@ public final class HudLayout {
         return new Box(left, FIELD.bottom() - 17 - CHAT_TEXT_HEIGHT, right - left, CHAT_TEXT_HEIGHT);
     }
 
-    /** index번째(0부터) 플레이어 슬롯 */
     /** 2인 모드의 index번째(0이 1P) 아이템 칸 */
     public static Box duoItemView(int index) {
         int left = ITEM_INNER.x() + (ITEM_INNER.width() - 2 * DUO_ITEM_VIEW_WIDTH - DUO_ITEM_VIEW_GAP) / 2;
@@ -263,6 +262,7 @@ public final class HudLayout {
                 ITEM_COUNT_HEIGHT);
     }
 
+    /** index번째(0부터) 플레이어 슬롯 */
     public static Box playerSlot(int index) {
         int top = TIMER.bottom() + TIMER_SLOT_GAP + index * (PLAYER_SLOT_HEIGHT + PLAYER_SLOT_GAP);
         return new Box(PLAYER_LIST.x() + PLAYER_SLOT_LEFT, top, PLAYER_SLOT_WIDTH, PLAYER_SLOT_HEIGHT);
