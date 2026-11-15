@@ -15,6 +15,12 @@ class TileMapTest {
         return MapLoader.parse("fixture/tilemap", List.of(rows));
     }
 
+    /** 한 줄짜리 층 형식 맵. 스폰 1은 (0, 0)이다 */
+    private static TileMap layered(String floor, String block) {
+        return MapLoader.parse("fixture/tilemap", List.of("[floor]", floor, "[block]", block,
+                "[spawn]", "1" + ".".repeat(floor.length() - 1)));
+    }
+
     @Test
     void 일반_블럭은_한_번_맞으면_부서져_바닥이_된다() {
         TileMap map = map("1B.");
@@ -51,7 +57,7 @@ class TileMapTest {
     }
 
     @Test
-    void 블럭이_없는_칸의_바닥은_그_칸_타일이고_블럭과_덤불_밑은_일반_바닥이다() {
+    void 줄임_형식에서_블럭이_없는_칸의_바닥은_그_칸_타일이고_블럭과_덤불_밑은_일반_바닥이다() {
         TileMap map = map("1_|=!BT");
 
         assertEquals(Tile.ROAD, map.groundAt(1, 0));
@@ -96,5 +102,50 @@ class TileMapTest {
         assertThrows(IllegalArgumentException.class, () -> map.moveBlock(2, 0, 1, 0));
         assertThrows(IllegalArgumentException.class, () -> map.moveBlock(2, 0, 2, -1));
         assertEquals(Tile.PUSH_BOX, map.tileAt(2, 0));
+    }
+
+    @Test
+    void 블럭이_부서지면_바닥_층에_적힌_바닥이_드러난다() {
+        TileMap map = layered("._|=", ".PBc");
+
+        assertTrue(map.hitBlock(1, 0));
+        assertEquals(Tile.ROAD, map.tileAt(1, 0));
+        assertTrue(map.hitBlock(2, 0));
+        assertEquals(Tile.ROAD_LANE, map.tileAt(2, 0));
+        assertFalse(map.hitBlock(3, 0));
+        assertEquals(Tile.HARD_BLOCK_2, map.tileAt(3, 0));
+        assertEquals(Tile.CROSSWALK, map.groundAt(3, 0));
+    }
+
+    @Test
+    void 상자를_밀면_떠난_칸은_그_칸의_바닥이_드러나고_상자_밑은_도착한_칸의_바닥이다() {
+        TileMap map = layered("._|=", ".P..");
+
+        map.moveBlock(1, 0, 2, 0);
+
+        assertEquals(Tile.ROAD, map.tileAt(1, 0));
+        assertFalse(map.isSolid(1, 0));
+        assertEquals(Tile.PUSH_BOX, map.tileAt(2, 0));
+        assertEquals(Tile.ROAD_LANE, map.groundAt(2, 0));
+
+        map.moveBlock(2, 0, 3, 0);
+
+        assertEquals(Tile.ROAD_LANE, map.tileAt(2, 0));
+        assertEquals(Tile.PUSH_BOX, map.tileAt(3, 0));
+        assertEquals(Tile.CROSSWALK, map.groundAt(3, 0));
+        assertTrue(map.hitBlock(3, 0));
+        assertEquals(Tile.CROSSWALK, map.tileAt(3, 0));
+    }
+
+    @Test
+    void 상자는_덤불이나_다른_블럭이_놓인_칸으로_옮길_수_없다() {
+        TileMap map = layered("._._", ".PTB");
+
+        assertThrows(IllegalArgumentException.class, () -> map.moveBlock(1, 0, 2, 0));
+        map.moveBlock(1, 0, 0, 0);
+        assertThrows(IllegalArgumentException.class, () -> map.moveBlock(0, 0, 0, 1));
+        assertEquals(Tile.PUSH_BOX, map.tileAt(0, 0));
+        assertEquals(Tile.ROAD, map.tileAt(1, 0));
+        assertEquals(Tile.BUSH, map.tileAt(2, 0));
     }
 }

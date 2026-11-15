@@ -142,14 +142,15 @@ public final class Tileset {
         };
     }
 
-    /** 맵에 쓰였는데 이 테마에 그림이 없는 타일들. 렌더러는 이 타일을 임시 표시로 그린다. */
+    /** 맵에 쓰였는데 이 테마에 그림이 없는 타일들. 블럭 밑에 깔린 바닥도 본다. 렌더러는 이 타일을 임시 표시로 그린다. */
     public Set<Tile> missingArt(TileMap map) {
         Set<Tile> missing = EnumSet.noneOf(Tile.class);
         for (int row = 0; row < map.rows(); row++) {
             for (int col = 0; col < map.columns(); col++) {
-                Tile tile = map.tileAt(col, row);
-                if (tile != Tile.FLOOR && sprite(tile, col, row) == null) {
-                    missing.add(tile);
+                for (Tile tile : List.of(map.groundAt(col, row), map.tileAt(col, row))) {
+                    if (tile != Tile.FLOOR && sprite(tile, col, row) == null) {
+                        missing.add(tile);
+                    }
                 }
             }
         }
