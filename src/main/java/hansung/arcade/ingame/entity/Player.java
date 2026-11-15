@@ -166,6 +166,15 @@ public final class Player {
         return false;
     }
 
+    /**
+     * 걷지 않고 (x, y) 픽셀 자리로 옮긴다 (스프링 신발 점프처럼 막힌 칸 위를 지나갈 때).
+     * 막힌 칸인지는 보지 않으므로 부르는 쪽이 내려설 수 있는 칸인지 확인한다.
+     */
+    public void placeAt(double x, double y) {
+        this.x = x;
+        this.y = y;
+    }
+
     /** 충돌 박스가 (col, row) 칸에 조금이라도 걸쳐 있는지. 칸 경계에 딱 맞닿은 것은 걸친 것으로 보지 않는다 */
     public boolean overlapsTile(int col, int row) {
         int left = TileMap.colAt(x - HALF_HITBOX);

@@ -6,20 +6,24 @@ import hansung.arcade.ingame.block.BoxPusher;
 import hansung.arcade.ingame.chat.ChatLog;
 import hansung.arcade.ingame.chat.ChatMessage;
 import hansung.arcade.ingame.chat.SpeechBubbles;
+import hansung.arcade.ingame.entity.Direction;
 import hansung.arcade.ingame.entity.Obstacles;
 import hansung.arcade.ingame.entity.Player;
 import hansung.arcade.ingame.entity.PlayerProfile;
 import hansung.arcade.ingame.entity.PlayerState;
 import hansung.arcade.ingame.input.PlayerCommand;
 import hansung.arcade.ingame.item.FieldItems;
+import hansung.arcade.ingame.item.ItemActions;
 import hansung.arcade.ingame.item.ItemDrops;
 import hansung.arcade.ingame.item.ItemEffects;
+import hansung.arcade.ingame.item.PlayerGear;
 import hansung.arcade.ingame.map.TileMap;
 import hansung.arcade.ingame.match.Match;
 import hansung.arcade.ingame.match.MatchMode;
 
 import java.awt.Point;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -32,14 +36,17 @@ import java.util.random.RandomGenerator;
  *
  * <p>물풍선 싸움 규칙은 {@link #update} 한 틱 안에서 이 순서로 처리한다.</p>
  * <ol>
+ *   <li>스프링 신발로 뛰는 중인 플레이어가 공중을 지나간다. 공중에서는 이동 입력을 받지 않는다 ({@link PlayerGear}).</li>
  *   <li>플레이어가 움직인다. 놓인 물풍선은 막힌 칸이다 (놓는 순간 그 칸에 있던 사람은 빠져나갈 수 있다).
- *       상자에 막힌 채 계속 밀면 상자가 한 칸 밀린다 ({@link BoxPusher}).</li>
- *   <li>때가 된 물풍선이 터지고, 다 보인 물줄기가 사라진다 ({@link BalloonField}).</li>
- *   <li>물풍선 키를 막 누른 플레이어가 선 칸에 물풍선을 놓는다.</li>
+ *       상자에 막힌 채 계속 밀면 상자가 한 칸 밀린다 ({@link BoxPusher}). 신발이 있으면 막힌 앞 칸의 물풍선을 민다.</li>
+ *   <li>밀린 물풍선이 미끄러지고 던진 물풍선이 날아가며, 때가 된 물풍선이 터지고, 다 보인 물줄기가 사라진다 ({@link BalloonField}).</li>
+ *   <li>물풍선 키를 막 누른 플레이어가 선 칸에 물풍선을 놓는다. 장갑이 있으면 선 칸이나 앞 칸의 물풍선을 던진다.
+ *       아이템 키를 막 누른 플레이어는 아이템 칸의 액티브 아이템을 쓴다 ({@link ItemActions}).</li>
  *   <li>이번 틱에 터진 물줄기가 막혀 멈춘 블럭을 맞힌다. 한 틱에 여럿이 같은 블럭을 맞혀도 한 번만 맞는다.
  *       다 부서진 블럭 자리에는 {@link ItemDrops} 확률로 아이템이 나온다.</li>
  *   <li>물줄기가 덮은 칸의 아이템은 사라진다. 블럭 자리는 물줄기가 들어가지 않은 칸이라 방금 나온 아이템은 남는다.</li>
- *   <li>물줄기가 덮은 칸에 선(충돌 박스 가운데가 있는) 플레이어는 누구의 물줄기든 물풍선에 갇힌다.</li>
+ *   <li>물줄기가 덮은 칸에 선(충돌 박스 가운데가 있는) 플레이어는 누구의 물줄기든 물풍선에 갇힌다.
+ *       보호막을 쓰는 중이거나 공중에 있으면 맞지 않고, 탱크에 타고 있으면 갇히는 대신 탱크가 부서진다.</li>
  *   <li>갇힌 사람에게 다른 플레이어가 닿으면, 같은 편이면 구하고(save) 상대면 터뜨린다(kill, 탈락).</li>
  *   <li>갇힌 채 5초가 지나면 탈락한다. 가둔 물줄기의 주인이 상대면 그 주인이 kill을 얻는다.</li>
  *   <li>보통 상태인 플레이어가 선 칸의 아이템을 먹는다 ({@link ItemEffects}). 갇히거나 탈락한 사람은 먹지 못한다.</li>
@@ -57,6 +64,9 @@ public final class GameWorld {
     private final FieldItems items = new FieldItems();
     private final ItemDrops itemDrops;
     private final BoxPusher boxPusher;
+    private final ItemActions itemActions;
+    /** 플레이어 번호 → 아이템으로 얻은 능력과 아이템 칸 */
+    private final Map<Integer, PlayerGear> gears = new HashMap<>();
     /** 이 컴퓨터의 첫 플레이어(1P). 채팅은 이 플레이어가 친 것으로 올라간다 */
     private final Player localPlayer;
     /** 이 컴퓨터에서 조작하는 플레이어들. 1P, 2P 순서 */
@@ -110,10 +120,12 @@ public final class GameWorld {
         this.balloonField = new BalloonField(map);
         this.itemDrops = new ItemDrops(random);
         this.boxPusher = new BoxPusher(map);
+        this.itemActions = new ItemActions(map, balloonField);
         List<Player> players = new ArrayList<>();
         for (int i = 0; i < localProfiles.size(); i++) {
             Point spawn = spawns.get(i);
             players.add(new Player(i + 1, localProfiles.get(i), spawn.x, spawn.y));
+            gears.put(i + 1, new PlayerGear());
         }
         this.localPlayers = List.copyOf(players);
         this.localPlayer = localPlayers.get(0);
@@ -131,17 +143,29 @@ public final class GameWorld {
         boolean playing = !match.isOver();
         List<Player> players = players();
         for (Player player : players) {
-            // 경기가 끝나면 누르고 있어도 멈춰 선다
+            PlayerGear gear = gear(player);
+            if (gear.advance(dt, player)) {
+                // 물풍선이 놓인 칸에 내려앉았으면 갇히지 않고 걸어 나갈 수 있다
+                balloonField.letLeave(player);
+            }
+            // 경기가 끝나면 누르고 있어도 멈춰 서고, 점프해 공중에 있는 동안에도 걷지 않는다
             PlayerCommand command = playing ? commands.getOrDefault(player.id(), PlayerCommand.IDLE) : PlayerCommand.IDLE;
-            player.update(command.move(), dt, obstaclesFor(player));
-            boxPusher.push(player, command.move(), dt, this::holdsSomething);
+            Direction move = gear.isAirborne() ? null : command.move();
+            player.update(move, dt, obstaclesFor(player));
+            boxPusher.push(player, move, dt, this::holdsSomething);
+            if (playing) {
+                itemActions.kick(player, gear, move);
+            }
         }
         balloonField.update(dt, players);
         if (playing) {
             for (Player player : players) {
-                // 아이템 키(useItem)는 아직 아무 효과가 없다
-                if (commands.getOrDefault(player.id(), PlayerCommand.IDLE).placeBalloon()) {
-                    balloonField.place(player, players);
+                PlayerCommand command = commands.getOrDefault(player.id(), PlayerCommand.IDLE);
+                if (command.placeBalloon()) {
+                    itemActions.pressBalloonKey(player, gear(player), players);
+                }
+                if (command.useItem()) {
+                    itemActions.useItem(player, gear(player));
                 }
             }
         }
@@ -183,27 +207,41 @@ public final class GameWorld {
         }
     }
 
-    /** 보통 상태인 플레이어가 선(충돌 박스 가운데가 있는) 칸의 아이템을 먹는다 */
+    /** 보통 상태인 플레이어가 선(충돌 박스 가운데가 있는) 칸의 아이템을 먹는다. 점프해 공중에 있으면 먹지 않는다 */
     private void pickUpItems() {
         for (Player player : players()) {
-            if (player.state() == PlayerState.NORMAL) {
-                items.take(player.col(), player.row()).ifPresent(item -> ItemEffects.apply(player, item));
+            PlayerGear gear = gear(player);
+            if (player.state() == PlayerState.NORMAL && !gear.isAirborne()) {
+                items.take(player.col(), player.row()).ifPresent(item -> ItemEffects.apply(player, gear, item));
             }
         }
     }
 
-    /** 밀린 블럭이 들어갈 수 없게 무언가 있는 칸인지: 물풍선, 아이템, 몸이 조금이라도 걸친 플레이어(사라진 사람 빼고) */
+    /**
+     * 밀린 블럭이 들어갈 수 없게 무언가 있는 칸인지: 물풍선, 아이템, 몸이 조금이라도 걸친 플레이어(사라진 사람 빼고),
+     * 점프해 내려앉을 칸
+     */
     private boolean holdsSomething(int col, int row) {
         return balloonField.balloonAt(col, row).isPresent() || items.at(col, row).isPresent()
-                || players().stream().anyMatch(p -> p.state() != PlayerState.GONE && p.overlapsTile(col, row));
+                || players().stream().anyMatch(p -> p.state() != PlayerState.GONE && p.overlapsTile(col, row))
+                || gears.values().stream().anyMatch(gear -> gear.isLandingOn(col, row));
     }
 
-    /** 물줄기가 덮은 칸에 선 사람을 가둔다. 자기나 같은 편의 물줄기여도 갇힌다 */
+    /**
+     * 물줄기가 덮은 칸에 선 사람을 가둔다. 자기나 같은 편의 물줄기여도 갇힌다.
+     * 보호막을 쓰는 중이거나, 탱크가 막 부서졌거나, 점프해 공중에 있으면 맞지 않는다. 탱크에 타고 있으면 탱크가 대신 부서진다.
+     */
     private void trapSoakedPlayers() {
         for (Player player : players()) {
-            if (player.state() == PlayerState.NORMAL) {
-                balloonField.wetOwnerAt(player.col(), player.row()).ifPresent(player::trap);
+            PlayerGear gear = gear(player);
+            if (player.state() != PlayerState.NORMAL || gear.ignoresWater()) {
+                continue;
             }
+            balloonField.wetOwnerAt(player.col(), player.row()).ifPresent(owner -> {
+                if (!gear.breakTank()) {
+                    player.trap(owner);
+                }
+            });
         }
     }
 
@@ -217,7 +255,8 @@ public final class GameWorld {
                 continue;
             }
             for (Player other : players()) {
-                if (other == trapped || other.state() != PlayerState.NORMAL || !other.touches(trapped)) {
+                if (other == trapped || other.state() != PlayerState.NORMAL || gear(other).isAirborne()
+                        || !other.touches(trapped)) {
                     continue;
                 }
                 if (match.isAlly(other, trapped)) {
@@ -301,6 +340,15 @@ public final class GameWorld {
     /** 몸으로 미는 블럭과, 밀려 미끄러지는 중인 블럭 */
     public BoxPusher boxPusher() {
         return boxPusher;
+    }
+
+    /** player가 아이템으로 얻은 능력과 액티브 아이템 칸 */
+    public PlayerGear gear(Player player) {
+        PlayerGear gear = gears.get(player.id());
+        if (gear == null) {
+            throw new IllegalArgumentException("이 게임의 플레이어가 아닙니다: " + player.id());
+        }
+        return gear;
     }
 
     /** 맵 바닥에 놓인 아이템. 비행기처럼 아이템을 떨어뜨리는 쪽은 여기에 {@link FieldItems#place 놓는다} */
