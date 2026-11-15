@@ -4,6 +4,12 @@ import hansung.arcade.core.game.GameContext;
 import hansung.arcade.core.game.GameProperties;
 import hansung.arcade.core.game.GameWindow;
 import hansung.arcade.core.ui.SwingThread;
+import hansung.arcade.core.game.SceneManager;
+import hansung.arcade.outgame.lobby.LobbyPanel;
+import hansung.arcade.outgame.lobby.LobbyService;
+import hansung.arcade.outgame.lobby.MockLobbyService;
+import hansung.arcade.outgame.lobby.WaitingRoomPanel;
+import hansung.arcade.outgame.audio.Sound;
 import hansung.arcade.ingame.GameWorld;
 import hansung.arcade.ingame.InGamePanel;
 import hansung.arcade.ingame.entity.Mascot;
@@ -15,9 +21,8 @@ import hansung.arcade.ingame.render.Tileset;
 
 /**
  * 5단계: 첫 화면을 조립해 창에 띄운다.
- * 아웃게임과 연결되기 전까지는 인게임 화면을 바로 띄운다. 연결 후에는 로비 화면으로 바꾼다.
- * 그때까지 내 닉네임과 캐릭터는 설정값 player.nickname, player.character 로 정한다.
- * 캐릭터 선택 화면이 없으므로 설정이 없으면 기본 캐릭터({@link Mascot#DEFAULT})를 쓴다.
+ * 기본 화면은 목업 로비다. --app.start-screen=game으로 인게임을 직접 실행한다.
+ * 인게임 직접 실행의 닉네임과 캐릭터는 player.nickname, player.character 설정을 쓴다.
  */
 public final class StartScreenStep implements BootStep {
 
@@ -36,6 +41,26 @@ public final class StartScreenStep implements BootStep {
         PlayerProfile me = localProfile(context.get(GameProperties.class));
 
         SwingThread.runAndWait(() -> {
+            String screen = context.get(GameProperties.class).get("app.start-screen", "lobby");
+            if (screen.equals("lobby")) {
+                LobbyService service = new MockLobbyService();
+                SceneManager scenes = new SceneManager(window::show);
+                scenes.register("lobby", new LobbyPanel(service, scenes));
+                scenes.register("waiting", new WaitingRoomPanel(service, scenes));
+                scenes.onShow(name -> {
+                    Sound.playBgm(name.equals("lobby") ? "Camp" : "Patrit");
+                    if (name.equals("waiting")) {
+                        Sound.play("Ntc_GameReady");
+                    }
+                });
+                context.register(LobbyService.class, service);
+                context.register(SceneManager.class, scenes);
+                scenes.show("lobby", null);
+                return;
+            }
+            if (!screen.equals("game")) {
+                throw new IllegalArgumentException("지원하지 않는 시작 화면: " + screen);
+            }
             InGamePanel inGamePanel = new InGamePanel(new GameWorld(map, me), tileset, skin, characters);
             window.show(inGamePanel);
             inGamePanel.start();

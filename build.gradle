@@ -17,6 +17,7 @@ repositories {
 }
 
 dependencies {
+    implementation 'javazoom:jlayer:1.0.1'
     // 로깅: 코드에서는 SLF4J API로 로그를 남기고, 실제 출력은 Logback이 맡는다 (설정: resources/logback.xml)
     // Logback은 HSU 색상 컨버터(core.log)가 직접 쓰므로 implementation
     implementation 'org.slf4j:slf4j-api:2.0.18'
