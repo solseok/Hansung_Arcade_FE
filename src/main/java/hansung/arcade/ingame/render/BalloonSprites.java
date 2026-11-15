@@ -21,6 +21,7 @@ import java.util.Map;
  *   <li>UpLast/DownLast/LeftLast/RightLast.bmp: 그 방향 물줄기 끝 칸. 8장 중 앞 3장만 쓰고,
  *       검정 바탕과 둘레 잡티는 {@link BlackBackground}로 지운다.</li>
  * </ul>
+ * <p>물줄기 그림에는 모두 마젠타 바탕이 번진 분홍·보라빛 픽셀이 박혀 있어서 {@link MagentaSpill}로 둘레 물 색으로 메운다.</p>
  */
 public final class BalloonSprites {
 
@@ -56,14 +57,20 @@ public final class BalloonSprites {
         Map<Direction, List<BufferedImage>> end = new EnumMap<>(Direction.class);
         for (Direction direction : Direction.values()) {
             String name = fileName(direction);
-            middle.put(direction, sheet(name + ".bmp", T).subList(0, WATER_FRAMES));
-            end.put(direction, sheet(name + "Last.bmp", T).subList(0, WATER_FRAMES).stream()
+            middle.put(direction, waterSheet(name + ".bmp").stream()
+                    .map(MagentaSpill::clean)
+                    .toList());
+            // 검정 바탕을 먼저 지워야 바탕에 닿은 분홍 잡티가 바탕과 함께 지워진다. 남은 것만 물 색으로 메운다
+            end.put(direction, waterSheet(name + "Last.bmp").stream()
                     .map(BlackBackground::clear)
                     .map(frame -> sealInnerEdge(frame, direction))
+                    .map(MagentaSpill::clean)
                     .toList());
         }
-        return new BalloonSprites(sheet("Balloon.png", BALLOON_SIZE), sheet("Center.bmp", T).subList(0, WATER_FRAMES),
-                middle, end);
+        List<BufferedImage> center = waterSheet("Center.bmp").stream()
+                .map(MagentaSpill::clean)
+                .toList();
+        return new BalloonSprites(sheet("Balloon.png", BALLOON_SIZE), center, middle, end);
     }
 
     /** 놓인 지 age초 된 물풍선 그림 */
@@ -110,6 +117,11 @@ public final class BalloonSprites {
             }
         }
         return frame;
+    }
+
+    /** 물줄기 그림 파일의 앞 {@link #WATER_FRAMES}장 */
+    private static List<BufferedImage> waterSheet(String fileName) {
+        return sheet(fileName, T).subList(0, WATER_FRAMES);
     }
 
     private static List<BufferedImage> sheet(String fileName, int frameWidth) {
