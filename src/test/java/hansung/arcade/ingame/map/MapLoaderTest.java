@@ -350,4 +350,32 @@ class MapLoaderTest {
         assertTrue(map.isTileOrigin(1, 0));
         assertFalse(map.isTileOrigin(2, 0));
     }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"camp/camp08", "patrit/patrit14", "village/village10"})
+    void 리소스_맵은_바닥_블럭_스폰_세_층으로_적는다(String id) throws java.io.IOException {
+        try (var in = MapLoader.class.getResourceAsStream("/maps/" + id + ".txt")) {
+            List<String> lines = new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8).lines()
+                    .map(String::strip).toList();
+
+            assertTrue(lines.containsAll(List.of("[floor]", "[block]", "[spawn]")), id);
+        }
+    }
+
+    @Test
+    void 빌리지_맵의_도로_위_상자_밑은_도로_차선_횡단보도다() {
+        TileMap map = MapLoader.loadResource("village/village10");
+
+        assertEquals(Tile.PUSH_BOX, map.tileAt(8, 0));
+        assertEquals(Tile.ROAD, map.groundAt(8, 0));
+        assertEquals(Tile.PUSH_BOX, map.tileAt(7, 5));
+        assertEquals(Tile.ROAD_LANE, map.groundAt(7, 5));
+        assertEquals(Tile.PUSH_BOX, map.tileAt(7, 2));
+        assertEquals(Tile.CROSSWALK, map.groundAt(7, 2));
+        assertEquals(Tile.PUSH_BOX, map.tileAt(8, 10));
+        assertEquals(Tile.CROSSWALK, map.groundAt(8, 10));
+        // 레고 바닥 구역의 상자 밑은 일반 바닥이다
+        assertEquals(Tile.PUSH_BOX, map.tileAt(2, 1));
+        assertEquals(Tile.FLOOR, map.groundAt(2, 1));
+    }
 }
