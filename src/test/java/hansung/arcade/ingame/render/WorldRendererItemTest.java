@@ -58,6 +58,23 @@ class WorldRendererItemTest {
     }
 
     @Test
+    void 그림을_올려_그리는_높이는_뛴_높이에_탱크_좌석_높이를_더한다() {
+        Player player = player();
+        assertEquals(0, WorldRenderer.figureLiftOf(player, new PlayerGear()));
+
+        PlayerGear jumping = using(player, ItemType.SPRING_SHOE);
+        advance(jumping, player, 12);
+        assertEquals(WorldRenderer.JUMP_HEIGHT, WorldRenderer.figureLiftOf(player, jumping));
+
+        PlayerGear riding = new PlayerGear();
+        ItemEffects.apply(player, riding, ItemType.TANK);
+        assertEquals(WorldRenderer.TANK_SEAT, WorldRenderer.figureLiftOf(player, riding));
+        // 갇힌 그림은 탱크 없이 땅에 그린다
+        player.trap(2);
+        assertEquals(0, WorldRenderer.figureLiftOf(player, riding));
+    }
+
+    @Test
     void 보호막은_끝나기_직전에만_깜빡인다() {
         Player player = player();
         PlayerGear gear = using(player, ItemType.SHIELD);

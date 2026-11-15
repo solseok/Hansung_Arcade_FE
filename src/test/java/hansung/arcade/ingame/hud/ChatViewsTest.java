@@ -1,6 +1,7 @@
 package hansung.arcade.ingame.hud;
 
 import hansung.arcade.ingame.chat.ChatMessage;
+import hansung.arcade.ingame.render.WorldRenderer;
 import org.junit.jupiter.api.Test;
 
 import java.awt.Color;
@@ -132,7 +133,7 @@ class ChatViewsTest {
 
     @Test
     void 말풍선은_캐릭터_머리_위_가운데에_놓인다() {
-        Box place = SpeechBubbleView.place(60, 30, 300, 300);
+        Box place = SpeechBubbleView.place(60, 30, 300, 300, 0);
 
         assertEquals(300 - 30, place.x());
         assertEquals(300 - BUBBLE_ABOVE_PLAYER, place.bottom());
@@ -141,14 +142,25 @@ class ChatViewsTest {
     @Test
     void 말풍선은_맵_영역_밖으로_나가지_않는다() {
         // 왼쪽 위 구석의 캐릭터
-        Box topLeft = SpeechBubbleView.place(100, 30, FIELD.x() + 20, FIELD.y() + 20);
+        Box topLeft = SpeechBubbleView.place(100, 30, FIELD.x() + 20, FIELD.y() + 20, 0);
         assertEquals(FIELD.x(), topLeft.x());
         assertEquals(FIELD.y(), topLeft.y());
 
         // 오른쪽 끝의 캐릭터
-        Box right = SpeechBubbleView.place(100, 30, FIELD.right() - 20, 300);
+        Box right = SpeechBubbleView.place(100, 30, FIELD.right() - 20, 300, 0);
         assertEquals(FIELD.right(), right.right());
         assertEquals(300 - BUBBLE_ABOVE_PLAYER, right.bottom());
+    }
+
+    @Test
+    void 뛰거나_탱크에_타서_솟은_캐릭터의_말풍선은_그만큼_올라가되_맵_영역_위로는_나가지_않는다() {
+        int lift = WorldRenderer.JUMP_HEIGHT + WorldRenderer.TANK_SEAT;
+        assertEquals(300 - lift - BUBBLE_ABOVE_PLAYER, SpeechBubbleView.place(60, 30, 300, 300, lift).bottom());
+
+        // 셋째 줄: 서 있으면 맵 영역 안에 들지만 솟으면 맵 영역 위 끝에서 멈춘다
+        int thirdRow = FIELD.y() + 100;
+        assertEquals(thirdRow - BUBBLE_ABOVE_PLAYER, SpeechBubbleView.place(60, 30, 300, thirdRow, 0).bottom());
+        assertEquals(FIELD.y(), SpeechBubbleView.place(60, 30, 300, thirdRow, lift).y());
     }
 
     /** area 안의 흰 픽셀을 모두 담는 영역 */

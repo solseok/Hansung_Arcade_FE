@@ -4,8 +4,11 @@ import hansung.arcade.ingame.GameWorld;
 import hansung.arcade.ingame.entity.Mascot;
 import hansung.arcade.ingame.entity.Player;
 import hansung.arcade.ingame.entity.PlayerProfile;
+import hansung.arcade.ingame.item.ItemEffects;
+import hansung.arcade.ingame.item.ItemType;
 import hansung.arcade.ingame.map.MapLoader;
 import hansung.arcade.ingame.map.TileMap;
+import hansung.arcade.ingame.render.WorldRenderer;
 import org.junit.jupiter.api.Test;
 
 import java.awt.Color;
@@ -14,6 +17,7 @@ import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 import java.util.List;
 
+import static hansung.arcade.ingame.hud.HudLayout.CHAT_OUTLINE;
 import static hansung.arcade.ingame.hud.HudLayout.CHAT_TEXT_HEIGHT;
 import static hansung.arcade.ingame.hud.HudLayout.FIELD;
 import static hansung.arcade.ingame.hud.HudLayout.MAP_LABEL;
@@ -96,20 +100,57 @@ class PlayerTagViewTest {
     void 머리_위_자리가_창_밖이거나_맵_이름표에_닿으면_발_아래에_둔다() {
         int width = 14;
         // 맵 가운데쯤: 머리 위, 가로 가운데
-        Box middle = PlayerTagView.place(width, CHAT_TEXT_HEIGHT, 300, 300);
+        Box middle = PlayerTagView.place(width, CHAT_TEXT_HEIGHT, 300, 300, 0);
         assertEquals(new Box(300 - width / 2, 300 - PLAYER_TAG_ABOVE_PLAYER - CHAT_TEXT_HEIGHT, width, CHAT_TEXT_HEIGHT),
                 middle);
 
         // 맨 윗줄: 머리 위는 창 밖이다
         int topRow = FIELD.y() + 20;
-        assertEquals(topRow + PLAYER_TAG_BELOW_PLAYER, PlayerTagView.place(width, CHAT_TEXT_HEIGHT, 300, topRow).y());
+        assertEquals(topRow + PLAYER_TAG_BELOW_PLAYER, PlayerTagView.place(width, CHAT_TEXT_HEIGHT, 300, topRow, 0).y());
 
         // 창 안이어도 맵 이름표 밑이면 내리고, 이름표 옆이면 그대로 둔다
         int nearTop = MAP_LABEL.bottom() + PLAYER_TAG_ABOVE_PLAYER + 2;
         assertEquals(nearTop + PLAYER_TAG_BELOW_PLAYER,
-                PlayerTagView.place(width, CHAT_TEXT_HEIGHT, MAP_LABEL.x() + 30, nearTop).y());
+                PlayerTagView.place(width, CHAT_TEXT_HEIGHT, MAP_LABEL.x() + 30, nearTop, 0).y());
         assertEquals(nearTop - PLAYER_TAG_ABOVE_PLAYER - CHAT_TEXT_HEIGHT,
-                PlayerTagView.place(width, CHAT_TEXT_HEIGHT, MAP_LABEL.right() + 40, nearTop).y());
+                PlayerTagView.place(width, CHAT_TEXT_HEIGHT, MAP_LABEL.right() + 40, nearTop, 0).y());
+    }
+
+    @Test
+    void 뛰거나_탱크에_타서_솟으면_표시도_그만큼_올리되_창_위_끝에서_멈춘다() {
+        int width = 14;
+        int lift = WorldRenderer.JUMP_HEIGHT + WorldRenderer.TANK_SEAT;
+        assertEquals(300 - lift - PLAYER_TAG_ABOVE_PLAYER - CHAT_TEXT_HEIGHT,
+                PlayerTagView.place(width, CHAT_TEXT_HEIGHT, 300, 300, lift).y());
+
+        // 둘째 줄: 서 있으면 머리 위에 자리가 있다. 솟으면 테두리가 창 위 끝에 닿는 자리에서 멈춘다
+        int secondRow = FIELD.y() + 60;
+        assertEquals(secondRow - PLAYER_TAG_ABOVE_PLAYER - CHAT_TEXT_HEIGHT,
+                PlayerTagView.place(width, CHAT_TEXT_HEIGHT, 300, secondRow, 0).y());
+        assertEquals(CHAT_OUTLINE, PlayerTagView.place(width, CHAT_TEXT_HEIGHT, 300, secondRow, lift).y());
+        // 맵 이름표 밑이어도 서 있을 때 이름표에 닿지 않으면 머리 위다. 솟는 동안은 솟은 머리처럼 이름표 뒤로 지나간다
+        assertEquals(CHAT_OUTLINE, PlayerTagView.place(width, CHAT_TEXT_HEIGHT, MAP_LABEL.x() + 30, secondRow, lift).y());
+
+        // 맨 윗줄의 발 아래 표시는 땅의 그림자 밑에 그대로 둔다. 솟는 동안 머리 위로 건너뛰지도 않는다
+        int topRow = FIELD.y() + 20;
+        for (int up = 0; up <= lift; up++) {
+            assertEquals(topRow + PLAYER_TAG_BELOW_PLAYER,
+                    PlayerTagView.place(width, CHAT_TEXT_HEIGHT, 300, topRow, up).y());
+        }
+    }
+
+    @Test
+    void 탱크에_탄_플레이어의_표시는_좌석_높이만큼_올라간다() {
+        GameWorld world = new GameWorld(MAP, List.of(ONE, TWO));
+        Player first = world.localPlayers().get(0);
+        ItemEffects.apply(first, world.gear(first), ItemType.TANK);
+        BufferedImage screen = paint(world);
+
+        Box firstTag = tagBox(world, first, "1P");
+        assertEquals(screenY(world, first) - PLAYER_TAG_ABOVE_PLAYER - WorldRenderer.TANK_SEAT, firstTag.bottom());
+        int inFirst = assertTagAt(screen, "1P", firstTag);
+        int inSecond = assertTagAt(screen, "2P", tagBox(world, world.localPlayers().get(1), "2P"));
+        assertEquals(inFirst + inSecond, countDrawn(screen, new Box(0, 0, screen.getWidth(), screen.getHeight())));
     }
 
     private BufferedImage paint(GameWorld world) {
@@ -146,7 +187,8 @@ class PlayerTagViewTest {
 
     private Box tagBox(GameWorld world, Player player, String tag) {
         int x = HudLayout.mapOriginX(world.map()) + (int) Math.round(player.x());
-        return PlayerTagView.place(text.width(tag), text.cellHeight(), x, screenY(world, player));
+        return PlayerTagView.place(text.width(tag), text.cellHeight(), x, screenY(world, player),
+                WorldRenderer.figureLiftOf(player, world.gear(player)));
     }
 
     private static int screenY(GameWorld world, Player player) {

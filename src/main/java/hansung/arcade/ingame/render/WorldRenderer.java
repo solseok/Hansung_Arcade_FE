@@ -324,10 +324,10 @@ public final class WorldRenderer {
         g.setColor(SHADOW);
         g.fillOval(x - shadow / 2, feet - 6, shadow, 9);
 
-        boolean riding = gear.hasTank() && isUpright(player);
+        boolean riding = isRiding(player, gear);
         if (!isBlinkedOut(gear, seconds)) {
             BufferedImage frame = frameOf(player);
-            int lift = liftOf(player) + jump + (riding ? TANK_SEAT : 0);
+            int lift = figureLiftOf(player, gear);
             g.drawImage(frame, x - CharacterSprites.FRAME_SIZE / 2, feet - CharacterSprites.FEET_Y - lift, null);
         }
         if (riding) {
@@ -354,9 +354,18 @@ public final class WorldRenderer {
         g.setStroke(stroke);
     }
 
-    /** 탱크에 타 있는 모습으로 그릴 상태인지. 갇히거나 쓰러진 그림은 탱크 없이 그린다 */
-    private static boolean isUpright(Player player) {
-        return player.state() == PlayerState.NORMAL;
+    /** 탱크에 타 있는 모습으로 그리는지. 갇히거나 쓰러진 그림은 탱크 없이 그린다 */
+    private static boolean isRiding(Player player, PlayerGear gear) {
+        return gear.hasTank() && player.state() == PlayerState.NORMAL;
+    }
+
+    /**
+     * 캐릭터 그림을 땅에서 올려 그리는 높이(px). 탈락 연출로 솟은 높이({@link #liftOf}), 스프링 신발로 뛴 높이
+     * ({@link #jumpLiftOf}), 탱크에 탔으면 좌석 높이({@link #TANK_SEAT})를 더한다.
+     * 머리 위 1P·2P 표시와 말풍선도 이만큼 올려 캐릭터 머리를 따라가게 한다.
+     */
+    public static int figureLiftOf(Player player, PlayerGear gear) {
+        return liftOf(player) + jumpLiftOf(gear) + (isRiding(player, gear) ? TANK_SEAT : 0);
     }
 
     /** 스프링 신발로 뛰어 솟은 높이(px). 포물선을 그리고, 공중이 아니면 0이다 */

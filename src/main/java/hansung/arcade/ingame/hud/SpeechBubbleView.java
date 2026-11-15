@@ -3,6 +3,7 @@ package hansung.arcade.ingame.hud;
 import hansung.arcade.ingame.GameWorld;
 import hansung.arcade.ingame.entity.Player;
 import hansung.arcade.ingame.render.Concealment;
+import hansung.arcade.ingame.render.WorldRenderer;
 
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
@@ -25,6 +26,7 @@ import static hansung.arcade.ingame.hud.HudLayout.FIELD;
 /**
  * 채팅을 친 플레이어 머리 위에 뜨는 말풍선. 둥근 사각형(검은색 20% 바탕, 흰 1px 테두리) 안에 친 말을 적고,
  * 캐릭터를 따라다닌다. 말이 {@link HudLayout#BUBBLE_MAX_WIDTH}보다 길면 줄을 바꾼다.
+ * 스프링 신발로 뛰거나 탱크에 타서 그림이 솟으면({@link WorldRenderer#figureLiftOf}) 말풍선도 그만큼 올라간다.
  *
  * <p>말풍선은 캐릭터 가로 가운데에 맞추되 맵 영역 밖으로 나가지 않게 안쪽으로 민다.
  * 그래서 맨 윗줄이나 가장자리에 있는 캐릭터는 말풍선이 머리와 겹치거나 한쪽으로 치우칠 수 있다.</p>
@@ -59,15 +61,19 @@ final class SpeechBubbleView implements HudPart {
             }
             BufferedImage bubble = cache.computeIfAbsent(said, this::render);
             Box place = place(bubble.getWidth(), bubble.getHeight(),
-                    originX + (int) Math.round(player.x()), originY + (int) Math.round(player.y()));
+                    originX + (int) Math.round(player.x()), originY + (int) Math.round(player.y()),
+                    WorldRenderer.figureLiftOf(player, world.gear(player)));
             g.drawImage(bubble, place.x(), place.y(), null);
         }
     }
 
-    /** 화면 좌표 (playerX, playerY)에 있는 캐릭터의 머리 위, 폭 width · 높이 height 말풍선이 놓일 자리 */
-    static Box place(int width, int height, int playerX, int playerY) {
+    /**
+     * 화면 좌표 (playerX, playerY)에 있고 그림이 땅에서 lift px 솟은 캐릭터의 머리 위,
+     * 폭 width · 높이 height 말풍선이 놓일 자리. 맵 영역 밖으로는 나가지 않는다.
+     */
+    static Box place(int width, int height, int playerX, int playerY, int lift) {
         int x = Math.max(FIELD.x(), Math.min(FIELD.right() - width, playerX - width / 2));
-        int y = Math.max(FIELD.y(), Math.min(FIELD.bottom() - height, playerY - BUBBLE_ABOVE_PLAYER - height));
+        int y = Math.max(FIELD.y(), Math.min(FIELD.bottom() - height, playerY - lift - BUBBLE_ABOVE_PLAYER - height));
         return new Box(x, y, width, height);
     }
 
