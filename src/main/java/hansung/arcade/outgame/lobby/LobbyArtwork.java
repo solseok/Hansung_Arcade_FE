@@ -78,6 +78,7 @@ final class LobbyArtwork {
                 super.paintComponent(graphics);
             }
         };
+        button.setMargin(new java.awt.Insets(2, 8, 2, 8));
         button.setContentAreaFilled(false);
         button.setBorderPainted(false);
         button.setFocusPainted(false);
