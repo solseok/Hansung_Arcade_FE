@@ -282,4 +282,21 @@ class BalloonFieldMoveTest {
         assertTrue(thrown.isResting());
         assertEquals(8, thrown.col());
     }
+
+    @Test
+    void 두_물풍선을_같은_칸으로_던져도_한_칸에_하나씩만_내려앉는다() {
+        BalloonField field = new BalloonField(MapLoader.parse("fixture/throw", List.of("1..............")));
+        WaterBalloon first = placeAt(field, 1, 1);
+        WaterBalloon second = placeAt(field, 2, 13);
+
+        field.throwBalloon(first, Direction.RIGHT);
+        // 13열에서 왼쪽으로 6칸째도 7열이지만, 먼저 던진 물풍선이 내려앉을 칸이라 그다음 빈 칸인 6열
+        field.throwBalloon(second, Direction.LEFT);
+        ticks(field, List.of(), 30);
+
+        assertEquals(7, first.col());
+        assertEquals(6, second.col());
+        assertTrue(first.isResting());
+        assertTrue(second.isResting());
+    }
 }

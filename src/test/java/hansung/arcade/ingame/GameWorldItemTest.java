@@ -259,4 +259,19 @@ class GameWorldItemTest {
         assertEquals(4, me.col());
         assertEquals(PlayerState.NORMAL, me.state());
     }
+
+    @Test
+    void 빨간_악마로_민_물풍선이_가시_난_면에_닿으면_바로_터진다() {
+        GameWorld world = solo(".1....<");
+        pickUp(world, ItemType.RED_DEVIL);
+        tick(world, BALLOON);
+        walk(world, Direction.LEFT, 15);
+
+        walk(world, Direction.RIGHT, 3);
+        ticks(world, 40);
+
+        assertTrue(world.balloonField().balloons().isEmpty());
+        // 터진 물풍선은 가시 블럭 바로 앞 칸에서 터졌고, 물줄기에 맞은 가시 블럭은 부서졌다
+        assertTrue(world.map().tileAt(6, 0).isGround());
+    }
 }
