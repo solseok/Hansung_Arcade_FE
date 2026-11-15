@@ -11,13 +11,13 @@ public final class MockLobbyService implements LobbyService {
     private boolean host;
 
     public MockLobbyService() {
-        add(new Room(1, "함께 한 판 해요", 1, 4, "캠프 08", Room.Status.WAITING));
-        add(new Room(2, "빌리지에서 만나요", 2, 4, "빌리지 10", Room.Status.WAITING));
-        add(new Room(3, "마지막 자리까지 완료", 4, 4, "패트릿 14", Room.Status.WAITING));
-        add(new Room(4, "신나는 캠프", 3, 4, "캠프 08", Room.Status.PLAYING));
-        add(new Room(5, "친구들과 대결", 4, 4, "빌리지 10", Room.Status.PLAYING));
+        add(new Room(1, "함께 한 판 해요", 1, 8, "캠프 08", Room.Status.WAITING));
+        add(new Room(2, "빌리지에서 만나요", 2, 8, "빌리지 10", Room.Status.WAITING));
+        add(new Room(3, "마지막 자리까지 완료", 8, 8, "패트릿 14", Room.Status.WAITING));
+        add(new Room(4, "신나는 캠프", 6, 8, "캠프 08", Room.Status.PLAYING));
+        add(new Room(5, "친구들과 대결", 8, 8, "빌리지 10", Room.Status.PLAYING));
         for (int number = 6; number <= 22; number++) {
-            add(new Room(number, "즐거운 한 판 " + number, 1, 4, "캠프 08",
+            add(new Room(number, "즐거운 한 판 " + number, 1, 8, "캠프 08",
                     number % 3 == 0 ? Room.Status.PLAYING : Room.Status.WAITING));
         }
     }
