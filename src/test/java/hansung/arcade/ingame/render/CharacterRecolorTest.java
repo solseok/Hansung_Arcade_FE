@@ -16,6 +16,7 @@ import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -117,6 +118,52 @@ class CharacterRecolorTest {
         }
     }
 
+    /** 물풍선 물빛. 갇힌 그림은 bubble_1 → 2 → 3으로 갈수록 고정색이 이 색에 녹아 흐려진다 */
+    private static final Oklch WATER = Oklch.fromRgb(0x38A6EE);
+
+    @Test
+    void 물풍선에_갇힌_그림을_다시_칠해도_bubble_2가_bubble_1보다_흐리다() {
+        for (Mascot mascot : Mascot.values()) {
+            for (CharacterColor color : CharacterColor.values()) {
+                // 하늘·파랑은 물빛과 색상각이 가까워(45도 안) 두 단계 모두 물빛과 구별이 잘 안 된다.
+                // 물빛 쪽으로 섞으면 채도가 물빛 채도만큼 오를 수 있어 이 비교에서 뺀다
+                if (hueDistance(color.oklch().h(), WATER.h()) <= 45) {
+                    continue;
+                }
+                double[] first = fading(mascot, "bubble_1", color);
+                double[] second = fading(mascot, "bubble_2", color);
+                // 꾸꾸의 bubble_2는 고정색이 다 물빛이 되어 다시 칠하지 않는다. 원래 그림처럼 흐리다
+                if (second[2] == 0) {
+                    continue;
+                }
+                String what = "%s %s bubble_1 %.3f/%.3f, bubble_2 %.3f/%.3f".formatted(mascot, color,
+                        first[0], first[1], second[0], second[1]);
+                assertTrue(second[0] < 0.8 * first[0], "채도 " + what);
+                assertTrue(second[1] < 0.8 * first[1], "물빛과의 대비 " + what);
+            }
+        }
+    }
+
+    @Test
+    void 옅어진_물풍선_속_고정색은_다시_칠한_색과_원래_색의_가운데다() {
+        // 상상부기 옅어진 물풍선 속 후드
+        FixedColorRegion region = FixedColorRegion.of(Mascot.SANGSANGBUGI);
+        int faded = 0x569AD3;
+        assertTrue(region.isFaded(faded));
+        Oklch original = Oklch.fromRgb(faded);
+        Oklch red = CharacterColor.RED.oklch();
+        Oklch full = CharacterRecolor.shift(original, region.anchor(), red).inGamut();
+        Oklch half = Oklch.fromRgb(CharacterRecolor.recolorRgb(Mascot.SANGSANGBUGI, CharacterColor.RED, faded));
+
+        assertEquals((original.l() + full.l()) / 2, half.l(), 0.005);
+        // 원래 물빛보다 붉고, 다 칠한 색보다 채도가 낮다
+        assertTrue(hueDistance(half.h(), red.h()) < hueDistance(original.h(), red.h()));
+        assertTrue(half.c() < full.c());
+        // bubble_1의 물풍선 속 후드는 섞지 않고 다 칠한다
+        assertFalse(region.isFaded(0x4373B3));
+        assertTrue(region.contains(0x4373B3));
+    }
+
     @Test
     void 고정색_부분의_밝기_순서는_다시_칠해도_그대로다() {
         for (Mascot mascot : Mascot.values()) {
@@ -206,6 +253,44 @@ class CharacterRecolorTest {
             }
         }
         return colors;
+    }
+
+    /**
+     * mascot의 pose 그림에서 원래 고정색인 픽셀을 color로 다시 칠했을 때의 평균 채도, 물빛과의 평균 OKLab 거리, 픽셀 수
+     */
+    private static double[] fading(Mascot mascot, String pose, CharacterColor color) {
+        FixedColorRegion region = FixedColorRegion.of(mascot);
+        double chroma = 0;
+        double contrast = 0;
+        int count = 0;
+        String path = CharacterSprites.DIRECTORY + mascot.id() + "_" + pose + ".bmp";
+        for (BufferedImage frame : SpriteSheet.find(path).orElseThrow().frames(CharacterSprites.FRAME_SIZE)) {
+            for (int y = 0; y < frame.getHeight(); y++) {
+                for (int x = 0; x < frame.getWidth(); x++) {
+                    int argb = frame.getRGB(x, y);
+                    if ((argb >>> 24) == 0 || !region.contains(argb & 0xFFFFFF)) {
+                        continue;
+                    }
+                    Oklch recolored = Oklch.fromRgb(CharacterRecolor.recolorRgb(mascot, color, argb));
+                    chroma += recolored.c();
+                    contrast += labDistance(recolored, WATER);
+                    count++;
+                }
+            }
+        }
+        return count == 0 ? new double[]{0, 0, 0} : new double[]{chroma / count, contrast / count, count};
+    }
+
+    private static double labDistance(Oklch p, Oklch q) {
+        double da = p.c() * Math.cos(Math.toRadians(p.h())) - q.c() * Math.cos(Math.toRadians(q.h()));
+        double db = p.c() * Math.sin(Math.toRadians(p.h())) - q.c() * Math.sin(Math.toRadians(q.h()));
+        return Math.sqrt((p.l() - q.l()) * (p.l() - q.l()) + da * da + db * db);
+    }
+
+    /** 두 색상각 사이의 각도(0~180) */
+    private static double hueDistance(double h1, double h2) {
+        double d = Math.abs(h1 - h2) % 360;
+        return Math.min(d, 360 - d);
     }
 
     private static int changedPixels(BufferedImage before, BufferedImage after) {
