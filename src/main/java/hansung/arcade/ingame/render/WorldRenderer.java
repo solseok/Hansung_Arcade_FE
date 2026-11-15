@@ -47,7 +47,7 @@ import java.util.Optional;
  *
  * <p>아이템으로 생긴 것({@link PlayerGear}): 탱크에 타면 캐릭터를 {@link #TANK_SEAT}px 올리고 탱크 그림을 캐릭터 아랫몸 앞에
  * {@link #TANK_SIZE}px로 그려 탱크에 들어앉은 모습으로 보인다.
- * 보호막을 쓰는 중이면 캐릭터를 반투명한 물방울 막으로 감싸고, 끝나기 {@link #SHIELD_WARNING_SECONDS}초 전부터 깜빡인다.
+ * 보호막을 쓰는 중이면 캐릭터를 머리 꼭대기까지 반투명한 물방울 막(세로로 긴 타원)으로 감싸고, 끝나기 {@link #SHIELD_WARNING_SECONDS}초 전부터 깜빡인다.
  * 탱크가 막 부서진 뒤 맞지 않는 동안은 캐릭터가 깜빡인다. 스프링 신발로 뛰면 그림자는 땅에 두고 캐릭터만 포물선으로
  * {@link #JUMP_HEIGHT}px 솟는다. 밀려 미끄러지는 물풍선은 칸 사이에, 던진 물풍선은 모든 줄을 그린 뒤 맨 위에
  * 땅의 그림자와 함께 떠 있는 높이만큼 올려 그린다. 날아가는 물풍선도 땅 위 자리가 숨은 덤불이면 그리지 않는다.</p>
@@ -88,10 +88,15 @@ public final class WorldRenderer {
     public static final int TANK_SIZE = 46;
     /** 탱크 그림 아래 끝이 발끝보다 낮은 거리(px) */
     static final int TANK_BELOW_FEET = 5;
-    /** 보호막 물방울의 반지름(px). 캐릭터 몸을 다 감싼다 */
-    static final int SHIELD_RADIUS = 27;
+    /**
+     * 보호막 물방울(세로로 긴 타원)의 가로 반지름(px). 캐릭터 그림에서 가장 넓은 꼬꼬·상찌 옆모습(가운데에서 24px)과
+     * 상찌 머리 위 눈까지 감싼다. 맵 왼쪽·오른쪽 끝 칸에서는 맵 프레임 밖으로 나가는 4px가 잘린다
+     */
+    static final int SHIELD_RADIUS_X = 31;
+    /** 보호막 물방울의 세로 반지름(px). 발끝 4px 아래부터, 가장 높이 솟은 꼬꼬 볏(발끝 위 64px)보다 6px 위까지 감싼다 */
+    static final int SHIELD_RADIUS_Y = 37;
     /** 보호막 물방울 가운데가 발끝보다 높은 거리(px) */
-    static final int SHIELD_CENTER_ABOVE_FEET = 26;
+    static final int SHIELD_CENTER_ABOVE_FEET = 33;
     /** 보호막이 이만큼 남으면 깜빡여 곧 끝난다고 알린다(초) */
     public static final double SHIELD_WARNING_SECONDS = 0.6;
     private static final Color SHIELD_FILL = new Color(120, 200, 255, 85);
@@ -334,15 +339,16 @@ public final class WorldRenderer {
 
     /** 반투명한 물방울 막. 테두리와 왼쪽 위 반짝임을 그려 막처럼 보이게 한다 */
     private static void drawShield(Graphics2D g, int centerX, int centerY) {
-        int r = SHIELD_RADIUS;
+        int rx = SHIELD_RADIUS_X;
+        int ry = SHIELD_RADIUS_Y;
         g.setColor(SHIELD_FILL);
-        g.fillOval(centerX - r, centerY - r, 2 * r, 2 * r);
+        g.fillOval(centerX - rx, centerY - ry, 2 * rx, 2 * ry);
         Stroke stroke = g.getStroke();
         g.setStroke(SHIELD_STROKE);
         g.setColor(SHIELD_EDGE);
-        g.drawOval(centerX - r, centerY - r, 2 * r, 2 * r);
+        g.drawOval(centerX - rx, centerY - ry, 2 * rx, 2 * ry);
         g.setColor(SHIELD_SHINE);
-        g.drawArc(centerX - r + 6, centerY - r + 6, 2 * r - 12, 2 * r - 12, 110, 50);
+        g.drawArc(centerX - rx + 6, centerY - ry + 6, 2 * rx - 12, 2 * ry - 12, 110, 50);
         g.setStroke(stroke);
     }
 

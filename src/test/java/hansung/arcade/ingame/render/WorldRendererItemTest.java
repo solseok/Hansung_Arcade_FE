@@ -2,6 +2,7 @@ package hansung.arcade.ingame.render;
 
 import hansung.arcade.ingame.balloon.BalloonField;
 import hansung.arcade.ingame.entity.Direction;
+import hansung.arcade.ingame.entity.Mascot;
 import hansung.arcade.ingame.entity.Player;
 import hansung.arcade.ingame.item.ItemActions;
 import hansung.arcade.ingame.item.ItemEffects;
@@ -11,6 +12,7 @@ import hansung.arcade.ingame.map.MapLoader;
 import hansung.arcade.ingame.map.TileMap;
 import org.junit.jupiter.api.Test;
 
+import java.awt.image.BufferedImage;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -65,6 +67,34 @@ class WorldRendererItemTest {
         // 0.5초 남았다. 0.1초씩 보였다 숨었다 한다
         assertTrue(WorldRenderer.isShieldVisible(gear, 0.05));
         assertFalse(WorldRenderer.isShieldVisible(gear, 0.15));
+    }
+
+    @Test
+    void 보호막은_다섯_캐릭터의_서_있는_그림과_걷는_그림을_머리_꼭대기까지_감싼다() {
+        double rx = WorldRenderer.SHIELD_RADIUS_X;
+        double ry = WorldRenderer.SHIELD_RADIUS_Y;
+        for (Mascot mascot : Mascot.values()) {
+            for (String pose : List.of("front", "back", "left", "right",
+                    "walk_front", "walk_back", "walk_left", "walk_right")) {
+                String path = CharacterSprites.DIRECTORY + mascot.id() + "_" + pose + ".bmp";
+                for (BufferedImage frame : SpriteSheet.find(path).orElseThrow().frames(CharacterSprites.FRAME_SIZE)) {
+                    for (int y = 0; y < frame.getHeight(); y++) {
+                        for (int x = 0; x < frame.getWidth(); x++) {
+                            if ((frame.getRGB(x, y) >>> 24) == 0) {
+                                continue;
+                            }
+                            // 픽셀 네 귀퉁이가 모두 막 테두리 안이어야 한다. 가로는 그림 가운데, 세로는 막 가운데 기준
+                            for (int[] corner : new int[][]{{x, y}, {x + 1, y}, {x, y + 1}, {x + 1, y + 1}}) {
+                                double dx = corner[0] - CharacterSprites.FRAME_SIZE / 2.0;
+                                double dy = corner[1] - (CharacterSprites.FEET_Y - WorldRenderer.SHIELD_CENTER_ABOVE_FEET);
+                                assertTrue((dx / rx) * (dx / rx) + (dy / ry) * (dy / ry) <= 1,
+                                        "%s %s (%d, %d)".formatted(mascot, pose, x, y));
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     @Test
