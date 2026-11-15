@@ -87,8 +87,21 @@ class KeyBindingsTest {
             assertNull(keys.directionOf(VK_W));
             assertEquals(Action.BALLOON, keys.actionOf(VK_SLASH, KEY_LOCATION_STANDARD));
             assertNull(keys.actionOf(VK_SHIFT, KEY_LOCATION_RIGHT));
-            assertNull(keys.actionOf(VK_PERIOD, KEY_LOCATION_STANDARD));
         }
+    }
+
+    @Test
+    void 두_명이_할_때_2P는_운영체제와_상관없이_마침표로도_아이템을_쓴다() {
+        // 한국어 Windows 키보드는 오른쪽 Alt·Ctrl이 한/영·한자 키로 들어와 2P의 수정 키가 없다
+        for (boolean mac : new boolean[]{true, false}) {
+            KeyBindings keys = KeyBindings.player2(mac);
+
+            assertEquals(Action.ITEM, keys.actionOf(VK_PERIOD, KEY_LOCATION_STANDARD));
+            assertEquals(KeyBindings.Key.any(VK_PERIOD), keys.actionKey(VK_PERIOD, KEY_LOCATION_STANDARD));
+        }
+        // 화면에 이름을 보여 줄 대표 키는 그대로 수정 키다
+        assertEquals(KeyBindings.Key.right(VK_ALT), KeyBindings.player2(true).item().get(0));
+        assertEquals(KeyBindings.Key.right(VK_CONTROL), KeyBindings.player2(false).item().get(0));
     }
 
     @Test
@@ -158,6 +171,18 @@ class KeyBindingsTest {
         assertEquals("Alt-R", KeyBindings.Key.right(VK_ALT).shortName(false));
         assertEquals("Shift", KeyBindings.SOLO.itemKeyName());
         assertEquals("L-Shift", KeyBindings.PLAYER_1.itemKeyName());
+    }
+
+    @Test
+    void 마침표는_언어_설정과_상관없이_점으로_적고_2P_안내_글에_덧붙인다() {
+        assertEquals(".", KeyBindings.Key.any(VK_PERIOD).shortName(false));
+        assertEquals("마침표(.)", KeyBindings.Key.any(VK_PERIOD).koreanName(true));
+        assertEquals("마침표(.)", KeyBindings.Key.any(VK_PERIOD).koreanName(false));
+        // 2인 모드 시작 로그에 쓰는 안내 글
+        assertEquals(KeyBindings.MAC ? "오른쪽 Option 또는 마침표(.)" : "오른쪽 Ctrl 또는 오른쪽 Alt 또는 AltGr 또는 마침표(.)",
+                KeyBindings.PLAYER_2.itemKeyGuide());
+        // 아이템 칸에는 대표 수정 키 이름만 적는다
+        assertEquals(KeyBindings.MAC ? "Opt-R" : "Ctrl-R", KeyBindings.PLAYER_2.itemKeyName());
     }
 
     @Test

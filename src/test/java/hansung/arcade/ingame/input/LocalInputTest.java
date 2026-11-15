@@ -189,11 +189,10 @@ class LocalInputTest {
     }
 
     @Test
-    void 두_명이면_오른쪽_Shift와_왼쪽_Ctrl_왼쪽_Alt와_마침표는_아무_키도_아니다() {
+    void 두_명이면_오른쪽_Shift와_왼쪽_Ctrl_왼쪽_Alt는_아무_키도_아니다() {
         assertFalse(press(duo, VK_SHIFT, KEY_LOCATION_RIGHT, SHIFT_DOWN_MASK));
         assertFalse(press(duo, VK_CONTROL, KEY_LOCATION_LEFT, CTRL_DOWN_MASK));
         assertFalse(press(duo, VK_ALT, KEY_LOCATION_LEFT, ALT_DOWN_MASK));
-        assertFalse(press(duo, VK_PERIOD));
 
         assertEquals(Map.of(P1, PlayerCommand.IDLE, P2, PlayerCommand.IDLE), duo.takeCommands());
     }
@@ -217,6 +216,77 @@ class LocalInputTest {
 
         pressSecondItem(duo, 0);
         assertTrue(command(duo, P2).useItem());
+    }
+
+    @Test
+    void 두_명이면_운영체제와_상관없이_마침표도_2P의_아이템이다() {
+        PlayerCommand item = new PlayerCommand(null, false, true);
+        for (boolean mac : new boolean[]{true, false}) {
+            LocalInput input = new LocalInput(List.of(P1, P2), mac);
+
+            assertTrue(press(input, VK_PERIOD));
+
+            assertEquals(Map.of(P1, PlayerCommand.IDLE, P2, item), input.takeCommands());
+        }
+    }
+
+    @Test
+    void 마침표는_다른_키_이벤트에_수정_키_표시가_없어도_뗄_때까지_누른_채로_둔다() {
+        for (boolean mac : new boolean[]{true, false}) {
+            LocalInput input = new LocalInput(List.of(P1, P2), mac);
+            press(input, VK_PERIOD);
+            command(input, P2);
+
+            // 마침표는 수정 키가 아니어서 수정 키 표시가 없는 이벤트로 뗀 것으로 치지 않는다
+            press(input, VK_UP);
+            release(input, VK_UP);
+            // 자동 반복
+            press(input, VK_PERIOD);
+            assertFalse(command(input, P2).useItem());
+
+            release(input, VK_PERIOD);
+            press(input, VK_PERIOD);
+            assertTrue(command(input, P2).useItem());
+        }
+    }
+
+    @Test
+    void 마침표가_함께_묶여도_2P_수정_키의_뗌을_놓치면_그_수정_키가_떼진_뒤에_바로잡는다() {
+        for (boolean mac : new boolean[]{true, false}) {
+            LocalInput input = new LocalInput(List.of(P1, P2), mac);
+            KeyBindings.Key modifier = KeyBindings.player2(mac).item().get(0);
+            int mask = mac ? ALT_DOWN_MASK : CTRL_DOWN_MASK;
+            press(input, modifier.code(), modifier.location(), mask);
+            assertTrue(command(input, P2).useItem());
+
+            // 뗌 이벤트가 오지 않았다. 다음 키 이벤트에 그 수정 키가 눌려 있지 않다고 나온다
+            press(input, VK_UP);
+            release(input, VK_UP);
+
+            press(input, modifier.code(), modifier.location(), mask);
+            assertTrue(command(input, P2).useItem());
+        }
+    }
+
+    @Test
+    void 두_명일_때_2P가_수정_키를_누른_채_마침표를_누르면_또_쓴다() {
+        LocalInput input = macDuo();
+        press(input, VK_ALT, KEY_LOCATION_RIGHT, ALT_DOWN_MASK);
+        assertTrue(command(input, P2).useItem());
+
+        press(input, VK_PERIOD, KEY_LOCATION_STANDARD, ALT_DOWN_MASK);
+        assertTrue(command(input, P2).useItem());
+    }
+
+    @Test
+    void 채팅_입력칸이_열려_있으면_마침표는_2P_아이템이_아니라_글자로_간다() {
+        for (boolean mac : new boolean[]{true, false}) {
+            LocalInput input = new LocalInput(List.of(P1, P2), mac);
+
+            assertFalse(input.keyPressed(key(KeyEvent.KEY_PRESSED, VK_PERIOD, KEY_LOCATION_STANDARD, 0), true));
+
+            assertEquals(PlayerCommand.IDLE, command(input, P2));
+        }
     }
 
     /** 이 컴퓨터의 2P 대표 아이템 키(macOS 오른쪽 Option, 그 밖 오른쪽 Ctrl)를 누른다. 그 키의 수정 키 표시를 더해 보낸다 */
@@ -243,7 +313,7 @@ class LocalInputTest {
         assertFalse(duo.keyPressed(key(KeyEvent.KEY_PRESSED, VK_SPACE, KEY_LOCATION_STANDARD, 0), true));
         assertFalse(duo.keyPressed(key(KeyEvent.KEY_PRESSED, VK_SHIFT, KEY_LOCATION_LEFT, SHIFT_DOWN_MASK), true));
         assertFalse(duo.keyPressed(key(KeyEvent.KEY_PRESSED, VK_SLASH, KEY_LOCATION_STANDARD, 0), true));
-        // 2P의 아이템 키(오른쪽 Ctrl·Option·Alt·AltGr)는 글을 치는 동안 받지 않아 Option·AltGr 글자 입력을 막지 않는다
+        // 2P의 아이템 키(오른쪽 Ctrl·Option·Alt·AltGr·마침표)는 글을 치는 동안 받지 않아 Option·AltGr 글자 입력을 막지 않는다
         for (KeyBindings.Key key : KeyBindings.PLAYER_2.item()) {
             int location = key.location() == KeyBindings.Key.ANY_LOCATION ? KEY_LOCATION_RIGHT : key.location();
             assertFalse(duo.keyPressed(key(KeyEvent.KEY_PRESSED, key.code(), location, ALT_DOWN_MASK), true));
