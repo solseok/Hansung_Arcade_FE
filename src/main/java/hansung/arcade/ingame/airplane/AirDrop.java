@@ -2,7 +2,7 @@ package hansung.arcade.ingame.airplane;
 
 import hansung.arcade.ingame.GameWorld;
 import hansung.arcade.ingame.entity.Direction;
-import hansung.arcade.ingame.entity.PlayerState;
+import hansung.arcade.ingame.item.CellOccupancy.Occupant;
 import hansung.arcade.ingame.item.ItemType;
 import hansung.arcade.ingame.map.TileMap;
 import hansung.arcade.ingame.match.Match;
@@ -11,9 +11,11 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.random.RandomGenerator;
 
 /**
@@ -24,8 +26,9 @@ import java.util.random.RandomGenerator;
  *       경기가 이미 끝났으면 나오지 않는다. 방향은 번갈아 바뀐다: 첫 비행기는 왼쪽에서 오른쪽으로, 다음은 반대로.</li>
  *   <li>나올 때 맵의 모든 칸 가운데 서로 다른 칸 {@link #MAX_DROPS}개를 무작위로 고르고, 칸마다 {@link #CARGO}
  *       (물풍선 · 신발 · 물약 병) 중 하나를 무작위로 정한다.</li>
- *   <li>비행기가 고른 칸의 열을 지나는 순간 그 칸을 본다. 블럭(지나갈 수 없는 칸)·캐릭터·물풍선·이미 놓인 아이템이 있으면
- *       떨어뜨리지 않는다. 그래서 한 번에 0~2개가 떨어진다. 덤불은 지나갈 수 있는 칸이라 떨어뜨리고, 떨어진 아이템은 덤불에 숨는다.
+ *   <li>비행기가 고른 칸의 열을 지나는 순간 그 칸을 본다. 블럭(지나갈 수 없는 칸)·캐릭터(몸이 조금이라도 걸친)·
+ *       물풍선(미끄러져 막 들어오거나 던져져 내려앉을 칸 포함)·이미 놓인 아이템이 있으면 떨어뜨리지 않는다.
+ *       그래서 한 번에 0~2개가 떨어진다. 덤불은 지나갈 수 있는 칸이라 떨어뜨리고, 떨어진 아이템은 덤불에 숨는다.
  *       아이템이 있는 칸에 떨어뜨리면 그 아이템을 바꿔 버리므로 떨어뜨리지 않는다.</li>
  *   <li>떨어뜨린 아이템은 짧게 떨어지는 연출({@link FallingItem}) 뒤 칸에 놓인다. 그 사이 밀린 블럭이 들어와 칸이 막혔거나
  *       다른 아이템이 놓였으면 놓지 않는다. 캐릭터·물풍선은 지나가는 순간에만 보므로, 떨어지는 사이 들어온 캐릭터는
@@ -44,6 +47,9 @@ public final class AirDrop {
     public static final List<ItemType> CARGO = List.of(ItemType.BUBBLE, ItemType.SHOE, ItemType.FLUID);
     /** 한 번 나올 때 떨어뜨리는 최대 개수 */
     public static final int MAX_DROPS = 2;
+    /** 칸에 있으면 떨어뜨리지 않는 것: 물풍선(곧 들어오거나 내려앉을 칸 포함)·아이템·몸이 걸친 캐릭터 */
+    private static final Set<Occupant> DROP_BLOCKERS =
+            Collections.unmodifiableSet(EnumSet.of(Occupant.BALLOON, Occupant.ITEM, Occupant.BODY));
 
     private static final Logger log = LoggerFactory.getLogger(AirDrop.class);
 
@@ -143,7 +149,7 @@ public final class AirDrop {
      * 그 사이 다른 아이템이 놓였으면(밀려 온 블럭이 부서져 나온 아이템 등) 그 아이템을 바꾸지 않도록 놓지 않는다.
      */
     private void land(Drop drop, GameWorld world) {
-        if (map.isSolid(drop.col(), drop.row()) || world.items().at(drop.col(), drop.row()).isPresent()) {
+        if (map.isSolid(drop.col(), drop.row()) || world.occupancy().has(drop.col(), drop.row(), Occupant.ITEM)) {
             log.debug("막혔거나 아이템이 있는 칸에 떨어져 사라짐: {}", drop);
             return;
         }
@@ -151,19 +157,12 @@ public final class AirDrop {
     }
 
     /**
-     * (col, row) 칸에 아이템을 떨어뜨릴 수 있는지. 블럭(지나갈 수 없는 칸)·물풍선·이미 놓인 아이템·캐릭터(충돌 박스 가운데가
-     * 그 칸에 있는, 맵에서 사라지지 않은 플레이어)가 있으면 떨어뜨리지 않는다. 덤불 칸은 떨어뜨린다.
+     * (col, row) 칸에 아이템을 떨어뜨릴 수 있는지. 블럭(지나갈 수 없는 칸)이거나 {@link #DROP_BLOCKERS}가 있으면 떨어뜨리지 않는다.
+     * 덤불 칸은 떨어뜨린다.
      */
     static boolean canDropAt(GameWorld world, int col, int row) {
         TileMap map = world.map();
-        if (!map.isInside(col, row) || map.isSolid(col, row)) {
-            return false;
-        }
-        if (world.balloonField().balloonAt(col, row).isPresent() || world.items().at(col, row).isPresent()) {
-            return false;
-        }
-        return world.players().stream()
-                .noneMatch(p -> p.state() != PlayerState.GONE && p.col() == col && p.row() == row);
+        return map.isInside(col, row) && !map.isSolid(col, row) && !world.occupancy().hasAny(col, row, DROP_BLOCKERS);
     }
 
     /** 지금 맵 위를 날고 있는 비행기들. 나온 순서 */

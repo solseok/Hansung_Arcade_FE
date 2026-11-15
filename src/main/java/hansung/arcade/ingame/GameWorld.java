@@ -13,6 +13,8 @@ import hansung.arcade.ingame.entity.Player;
 import hansung.arcade.ingame.entity.PlayerProfile;
 import hansung.arcade.ingame.entity.PlayerState;
 import hansung.arcade.ingame.input.PlayerCommand;
+import hansung.arcade.ingame.item.CellOccupancy;
+import hansung.arcade.ingame.item.CellOccupancy.Occupant;
 import hansung.arcade.ingame.item.FieldItems;
 import hansung.arcade.ingame.item.ItemActions;
 import hansung.arcade.ingame.item.ItemDrops;
@@ -24,6 +26,8 @@ import hansung.arcade.ingame.match.MatchMode;
 
 import java.awt.Point;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -58,9 +62,17 @@ import java.util.random.RandomGenerator;
  */
 public final class GameWorld {
 
+    /**
+     * 밀린 블럭이 들어갈 수 없게 하는 것: 물풍선(미끄러져 들어오거나 던져져 내려앉을 칸 포함), 아이템,
+     * 몸이 조금이라도 걸친 플레이어(사라진 사람 빼고), 점프해 내려앉을 칸, 물줄기. 물줄기가 남은 칸에 들어간 블럭은 바로 부서질 수 있는데,
+     * 거기서 나온 아이템은 그 물줄기에 바로 사라지므로 밀지 않는다.
+     */
+    private static final Set<Occupant> BOX_BLOCKERS = Collections.unmodifiableSet(EnumSet.allOf(Occupant.class));
+
     private final TileMap map;
     private final BalloonField balloonField;
     private final FieldItems items = new FieldItems();
+    private final CellOccupancy occupancy;
     private final ItemDrops itemDrops;
     private final BoxPusher boxPusher;
     private final ItemActions itemActions;
@@ -132,6 +144,7 @@ public final class GameWorld {
         }
         this.localPlayers = List.copyOf(players);
         this.localPlayer = localPlayers.get(0);
+        this.occupancy = new CellOccupancy(balloonField, items, localPlayers, this::gear);
         // 플레이어를 모두 만든 뒤에 경기를 연다 (경기 중에 플레이어를 더하지 않는다)
         this.match = new Match(mode, players());
         this.battleRules = new BattleRules(localPlayers, match, this::gear, balloonField::wetOwnersAt);
@@ -156,7 +169,7 @@ public final class GameWorld {
             PlayerCommand command = playing ? commands.getOrDefault(player.id(), PlayerCommand.IDLE) : PlayerCommand.IDLE;
             Direction move = gear.isAirborne() ? null : command.move();
             player.update(move, dt, obstaclesFor(player));
-            boxPusher.push(player, move, dt, this::holdsSomething);
+            boxPusher.push(player, move, dt, (col, row) -> occupancy.hasAny(col, row, BOX_BLOCKERS));
             if (playing) {
                 itemActions.kick(player, gear, move);
             }
@@ -219,18 +232,6 @@ public final class GameWorld {
                 items.take(player.col(), player.row()).ifPresent(item -> ItemEffects.apply(player, gear, item));
             }
         }
-    }
-
-    /**
-     * 밀린 블럭이 들어갈 수 없게 무언가 있는 칸인지: 물풍선(미끄러져 들어오거나 던져져 내려앉을 칸 포함), 아이템,
-     * 몸이 조금이라도 걸친 플레이어(사라진 사람 빼고), 점프해 내려앉을 칸, 물줄기가 남은 칸.
-     * 물줄기가 남은 칸에 들어간 블럭은 바로 부서질 수 있는데, 거기서 나온 아이템은 그 물줄기에 바로 사라지므로 밀지 않는다.
-     */
-    private boolean holdsSomething(int col, int row) {
-        return balloonField.holds(col, row) || items.at(col, row).isPresent()
-                || players().stream().anyMatch(p -> p.state() != PlayerState.GONE && p.overlapsTile(col, row))
-                || gears.values().stream().anyMatch(gear -> gear.isLandingOn(col, row))
-                || balloonField.isWet(col, row);
     }
 
     /**
@@ -304,6 +305,11 @@ public final class GameWorld {
     /** 맵 바닥에 놓인 아이템. 비행기처럼 아이템을 떨어뜨리는 쪽은 여기에 {@link FieldItems#place 놓는다} */
     public FieldItems items() {
         return items;
+    }
+
+    /** 맵 칸에 물풍선·아이템·캐릭터·물줄기 등 무엇이 있는지 */
+    public CellOccupancy occupancy() {
+        return occupancy;
     }
 
     /** 이 컴퓨터의 첫 플레이어(1P). 한 키보드 2인 모드에서도 채팅은 1P가 친 것으로 올라간다. */

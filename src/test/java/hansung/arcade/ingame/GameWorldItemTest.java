@@ -244,6 +244,28 @@ class GameWorldItemTest {
     }
 
     @Test
+    void 스프링_신발은_던진_물풍선이_내려앉을_칸으로는_쓰지_않고_남는다() {
+        GameWorld world = new GameWorld(MapLoader.parse("fixture/items", List.of(".1.......2")),
+                List.of(new PlayerProfile("부기", Mascot.SANGSANGBUGI), new PlayerProfile("냥이", Mascot.HANSUNGNYANGI)));
+        Player me = world.localPlayer();
+        Player other = world.localPlayers().get(1);
+        PlayerGear gear = world.gear(me);
+        pickUp(world, ItemType.SPRING_SHOE);
+        walk(world, Direction.RIGHT, 3);
+        assertEquals(1, me.col());
+        // 2P가 제자리 (9, 0)에 놓은 물풍선을 왼쪽으로 던져, 1P가 뛰어 내려앉을 (3, 0)에 내려앉게 한다
+        WaterBalloon balloon = world.balloonField().place(other, world.players()).orElseThrow();
+        assertTrue(world.balloonField().throwBalloon(balloon, Direction.LEFT));
+        assertEquals(3, balloon.col());
+
+        tick(world, USE_ITEM);
+
+        assertTrue(balloon.isFlying());
+        assertFalse(gear.isAirborne());
+        assertEquals(1, gear.activeCount());
+    }
+
+    @Test
     void 점프해_공중에_있는_동안에는_물줄기에_맞지_않는다() {
         GameWorld world = solo("..1..");
         Player me = world.localPlayer();

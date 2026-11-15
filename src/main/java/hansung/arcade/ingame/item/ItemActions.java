@@ -74,7 +74,8 @@ public final class ItemActions {
      *   <li>바늘: 물풍선에 갇혀 있을 때만. 바로 빠져나오기 시작한다 ({@link Player#escape()}).</li>
      *   <li>보호막: 보통 상태일 때. {@link PlayerGear#SHIELD_SECONDS}초 동안 물줄기에 맞지 않는다. 쓰는 중에는 또 쓰지 않는다.</li>
      *   <li>스프링 신발: 보통 상태일 때. 바라보는 쪽으로 {@link #JUMP_TILES}칸 앞 칸에 뛰어 내려앉는다.
-     *       바로 앞 칸에 무엇이 있든 넘고, 내려앉을 칸이 맵 밖·통과할 수 없는 블럭·물풍선이면 쓰지 않는다.</li>
+     *       바로 앞 칸에 무엇이 있든 넘고, 내려앉을 칸이 맵 밖·통과할 수 없는 블럭이거나 물풍선이 차지한 칸
+     *       ({@link BalloonField#holds}: 미끄러져 막 들어오거나 던져져 내려앉을 칸 포함)이면 쓰지 않는다.</li>
      * </ul>
      *
      * @return 아이템을 썼는지
@@ -111,7 +112,7 @@ public final class ItemActions {
         Direction facing = player.facing();
         int col = player.col() + facing.dx() * JUMP_TILES;
         int row = player.row() + facing.dy() * JUMP_TILES;
-        if (map.isSolid(col, row) || balloonField.balloonAt(col, row).isPresent()) {
+        if (map.isSolid(col, row) || balloonField.holds(col, row)) {
             return false;
         }
         gear.startJump(player, col, row);

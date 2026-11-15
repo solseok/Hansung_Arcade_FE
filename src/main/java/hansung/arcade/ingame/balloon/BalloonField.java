@@ -168,17 +168,27 @@ public final class BalloonField {
         return new Point(col, row);
     }
 
-    /** 물풍선이 내려앉을 수 있는 칸인지: 맵 안의 통과할 수 있는 칸이고, 다른 물풍선이 없고 다른 물풍선이 내려앉으려는 칸도 아니다 */
+    /**
+     * 물풍선이 내려앉거나 미끄러져 멈출 수 있는 칸인지: 맵 안의 통과할 수 있는 칸이고, self 말고 다른 물풍선이 있거나
+     * 내려앉으려는 칸이 아니다. 캐릭터는 보지 않는다(캐릭터가 있는 칸에도 내려앉고, 그 사람은 칸을 벗어날 때까지 지나갈 수 있다).
+     * {@link #holds}와 달리 다른 물풍선이 미끄러져 막 들어가려는 칸은 막지 않는다. 그 물풍선의 칸은 아직 지금 칸이라서,
+     * 앞서 미끄러지는 물풍선을 뒤따르는 물풍선은 앞의 것이 비켜 줄 칸까지 따라간다.
+     */
     private boolean canLand(int col, int row, WaterBalloon self) {
-        if (map.isSolid(col, row)) {
-            return false;
-        }
+        return !map.isSolid(col, row) && !hasBalloon(col, row, self);
+    }
+
+    /**
+     * (col, row) 칸에 except 말고 다른 물풍선이 있거나 내려앉을 예정인지: 놓였거나 미끄러지는 물풍선(가운데가 가장 가까운 칸)의 칸,
+     * 던진 물풍선이 내려앉을 칸. 물풍선이 칸을 차지했는지 보는 기준({@link #holds})의 바탕이다.
+     */
+    private boolean hasBalloon(int col, int row, WaterBalloon except) {
         for (WaterBalloon other : balloons) {
-            if (other != self && other.col() == col && other.row() == row) {
-                return false;
+            if (other != except && other.col() == col && other.row() == row) {
+                return true;
             }
         }
-        return true;
+        return false;
     }
 
     private void fly(WaterBalloon balloon, Direction direction, Point landing) {
@@ -348,13 +358,14 @@ public final class BalloonField {
 
     /**
      * (col, row) 칸을 물풍선이 차지했거나 곧 차지할지: 놓인 물풍선·미끄러지는 물풍선이 있는 칸, 미끄러지는 물풍선이
-     * 막 들어가려는 칸(칸 가운데를 지나 그쪽으로 가는 중), 던진 물풍선이 내려앉을 칸. 이런 칸에는 물풍선을 놓거나 상자를 밀어 넣지 않는다.
+     * 막 들어가려는 칸(칸 가운데를 지나 그쪽으로 가는 중), 던진 물풍선이 내려앉을 칸. 이런 칸에는 물풍선을 놓거나 상자를 밀어 넣거나
+     * 점프해 내려앉지 않고, 비행기도 아이템을 떨어뜨리지 않는다.
      */
     public boolean holds(int col, int row) {
+        if (hasBalloon(col, row, null)) {
+            return true;
+        }
         for (WaterBalloon balloon : balloons) {
-            if (balloon.col() == col && balloon.row() == row) {
-                return true;
-            }
             Direction direction = balloon.slideDirection();
             if (direction != null && balloon.slideOffset() > EPSILON
                     && balloon.col() + direction.dx() == col && balloon.row() + direction.dy() == row) {

@@ -1,6 +1,7 @@
 package hansung.arcade.ingame.airplane;
 
 import hansung.arcade.ingame.GameWorld;
+import hansung.arcade.ingame.balloon.WaterBalloon;
 import hansung.arcade.ingame.entity.Direction;
 import hansung.arcade.ingame.entity.Mascot;
 import hansung.arcade.ingame.entity.Player;
@@ -270,6 +271,32 @@ class AirDropTest {
         assertEquals(11, me.row());
         assertFalse(AirDrop.canDropAt(world, 0, 12), "물풍선");
         assertTrue(world.balloonField().balloonAt(0, 12).isPresent());
+    }
+
+    @Test
+    void 던진_물풍선이_내려앉을_칸에는_떨어뜨리지_않는다() {
+        GameWorld world = world(map(), 2);
+        Player second = world.players().get(1);
+        // 2P가 제자리 (14, 12)에 놓은 물풍선을 왼쪽으로 던지면 6칸 앞 (8, 12)에 내려앉는다
+        WaterBalloon balloon = world.balloonField().place(second, world.players()).orElseThrow();
+        assertTrue(world.balloonField().throwBalloon(balloon, Direction.LEFT));
+        assertTrue(balloon.isFlying());
+
+        assertFalse(AirDrop.canDropAt(world, 8, 12));
+        assertTrue(AirDrop.canDropAt(world, 11, 12), "날아가는 길에는 떨어뜨린다");
+    }
+
+    @Test
+    void 캐릭터는_몸_가운데_칸뿐_아니라_몸이_걸친_칸에도_떨어뜨리지_않는다() {
+        GameWorld world = world(map(), 1);
+        Player me = world.localPlayer();
+        // 몸 가운데는 (3, 5)에 있고 오른쪽으로 (4, 5)에도 걸친다
+        me.placeAt(TileMap.centerX(3) + 10, TileMap.centerY(5));
+
+        assertFalse(AirDrop.canDropAt(world, 3, 5));
+        assertFalse(AirDrop.canDropAt(world, 4, 5));
+        assertTrue(AirDrop.canDropAt(world, 2, 5));
+        assertTrue(AirDrop.canDropAt(world, 5, 5));
     }
 
     @Test
