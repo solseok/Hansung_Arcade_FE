@@ -1,0 +1,180 @@
+package hansung.arcade.ingame;
+
+import hansung.arcade.ingame.entity.Mascot;
+import hansung.arcade.ingame.entity.Player;
+import hansung.arcade.ingame.entity.PlayerProfile;
+import hansung.arcade.ingame.entity.PlayerState;
+import hansung.arcade.ingame.item.ItemEffects;
+import hansung.arcade.ingame.item.ItemType;
+import hansung.arcade.ingame.item.PlayerGear;
+import hansung.arcade.ingame.map.TileMap;
+import hansung.arcade.ingame.match.Match;
+import hansung.arcade.ingame.match.MatchMode;
+import org.junit.jupiter.api.Test;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.OptionalInt;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+/**
+ * 물줄기 싸움 판정을 게임 상태 없이 한 번씩 불러 본다. 물줄기는 칸마다 주인을 정해 두고,
+ * 플레이어는 맵 없이 픽셀 자리에 바로 세운다(칸 하나가 40px).
+ */
+class BattleRulesTest {
+
+    private static final double TICK = 1.0 / 60;
+
+    private final List<Player> players = new ArrayList<>();
+    private final Map<Integer, PlayerGear> gears = new HashMap<>();
+    /** "col,row" → 그 칸을 덮은 물줄기의 주인 */
+    private final Map<String, Integer> water = new HashMap<>();
+
+    /** team 편의 플레이어를 (col, row) 칸 가운데에 세운다. 번호는 넣은 차례대로 1부터 */
+    private Player join(int team, int col, int row) {
+        int id = players.size() + 1;
+        Player player = new Player(id, new PlayerProfile("P" + id, Mascot.SANGSANGBUGI, team), col, row);
+        players.add(player);
+        gears.put(id, new PlayerGear());
+        return player;
+    }
+
+    private void wet(int col, int row, int owner) {
+        water.put(col + "," + row, owner);
+    }
+
+    private OptionalInt ownerAt(int col, int row) {
+        Integer owner = water.get(col + "," + row);
+        return owner == null ? OptionalInt.empty() : OptionalInt.of(owner);
+    }
+
+    private BattleRules rules(Match match) {
+        return new BattleRules(players, match, player -> gears.get(player.id()), this::ownerAt);
+    }
+
+    /** 플레이어들의 상태 시간을 seconds초 흘린다 (움직이지는 않는다) */
+    private void elapse(double seconds) {
+        for (Player player : players) {
+            player.update(null, seconds, (col, row) -> false);
+        }
+    }
+
+    @Test
+    void 물줄기가_덮은_칸에_선_사람은_갇히고_가둔_물줄기의_주인을_기억한다() {
+        Player first = join(1, 0, 0);
+        Player second = join(2, 3, 0);
+        wet(0, 0, second.id());
+        Match match = new Match(MatchMode.SOLO, players);
+
+        rules(match).settle();
+
+        assertEquals(PlayerState.TRAPPED, first.state());
+        assertEquals(second.id(), first.trapperId().orElseThrow());
+        assertEquals(PlayerState.NORMAL, second.state());
+    }
+
+    @Test
+    void 탱크에_타고_있으면_갇히는_대신_탱크가_부서진다() {
+        Player first = join(1, 0, 0);
+        join(2, 3, 0);
+        ItemEffects.apply(first, gears.get(first.id()), ItemType.TANK);
+        wet(0, 0, 2);
+        BattleRules rules = rules(new Match(MatchMode.SOLO, players));
+
+        rules.settle();
+        assertEquals(PlayerState.NORMAL, first.state());
+        assertFalse(gears.get(first.id()).hasTank());
+
+        // 부서진 직후에는 같은 물줄기에 다시 맞지 않는다
+        rules.settle();
+        assertEquals(PlayerState.NORMAL, first.state());
+    }
+
+    @Test
+    void 갇힌_사람에게_상대가_닿으면_터지고_닿은_사람이_kill을_얻는다() {
+        Player first = join(1, 0, 0);
+        Player second = join(2, 3, 0);
+        Match match = new Match(MatchMode.SOLO, players);
+        first.trap(first.id());
+        elapse(TICK);
+        second.placeAt(first.x() + TileMap.TILE_SIZE / 2.0 - 1, first.y());
+
+        rules(match).settle();
+
+        assertEquals(PlayerState.DYING, first.state());
+        assertEquals(1, match.kills(second.id()));
+    }
+
+    @Test
+    void 팀전에서_갇힌_사람에게_같은_편이_닿으면_구하고_save를_얻는다() {
+        Player first = join(1, 0, 0);
+        Player second = join(1, 3, 0);
+        join(2, 5, 5);
+        Match match = new Match(MatchMode.TEAM, players);
+        first.trap(first.id());
+        elapse(TICK);
+        second.placeAt(first.x(), first.y() + TileMap.TILE_SIZE / 2.0 - 1);
+
+        rules(match).settle();
+
+        assertEquals(PlayerState.ESCAPING, first.state());
+        assertEquals(1, match.saves(second.id()));
+        assertEquals(0, match.kills(second.id()));
+    }
+
+    @Test
+    void 반_칸_넘게_떨어져_있으면_닿지_않는다() {
+        Player first = join(1, 0, 0);
+        Player second = join(2, 3, 0);
+        Match match = new Match(MatchMode.SOLO, players);
+        first.trap(first.id());
+        elapse(TICK);
+        second.placeAt(first.x() + TileMap.TILE_SIZE / 2.0, first.y());
+
+        rules(match).settle();
+
+        assertEquals(PlayerState.TRAPPED, first.state());
+    }
+
+    @Test
+    void 갇힌_채_5초가_지나면_탈락하고_가둔_주인이_상대면_kill을_얻는다() {
+        Player first = join(1, 0, 0);
+        Player second = join(2, 3, 0);
+        Player third = join(3, 6, 0);
+        Match match = new Match(MatchMode.SOLO, players);
+        first.trap(second.id());
+        third.trap(third.id());
+
+        elapse(Player.TRAP_SECONDS - TICK);
+        rules(match).settle();
+        assertEquals(PlayerState.TRAPPED, first.state());
+
+        elapse(TICK);
+        rules(match).settle();
+        assertEquals(PlayerState.DYING, first.state());
+        assertEquals(PlayerState.DYING, third.state());
+        assertEquals(1, match.kills(second.id()));
+        assertEquals(0, match.kills(third.id()), "자기 물줄기에 갇혀 탈락하면 아무도 kill을 얻지 않는다");
+    }
+
+    @Test
+    void 팀전에서_같은_편_물줄기에_갇혀_탈락하면_아무도_kill을_얻지_않는다() {
+        Player first = join(1, 0, 0);
+        Player second = join(1, 3, 0);
+        join(2, 6, 0);
+        Match match = new Match(MatchMode.TEAM, players);
+        first.trap(second.id());
+
+        elapse(Player.TRAP_SECONDS);
+        rules(match).settle();
+
+        assertFalse(first.isAlive());
+        assertEquals(0, match.kills(second.id()));
+        assertTrue(second.isAlive());
+    }
+}

@@ -28,7 +28,6 @@ import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.random.RandomGenerator;
 
@@ -46,10 +45,8 @@ import java.util.random.RandomGenerator;
  *   <li>이번 틱에 터진 물줄기가 막혀 멈춘 블럭을 맞힌다. 한 틱에 여럿이 같은 블럭을 맞혀도 한 번만 맞는다.
  *       다 부서진 블럭 자리에는 {@link ItemDrops} 확률로 아이템이 나온다.</li>
  *   <li>물줄기가 덮은 칸의 아이템은 사라진다. 블럭 자리는 물줄기가 들어가지 않은 칸이라 방금 나온 아이템은 남는다.</li>
- *   <li>물줄기가 덮은 칸에 선(충돌 박스 가운데가 있는) 플레이어는 누구의 물줄기든 물풍선에 갇힌다.
- *       보호막을 쓰는 중이거나 공중에 있으면 맞지 않고, 탱크에 타고 있으면 갇히는 대신 탱크가 부서진다.</li>
- *   <li>갇힌 사람에게 다른 플레이어가 닿으면, 같은 편이면 구하고(save) 상대면 터뜨린다(kill, 탈락).</li>
- *   <li>갇힌 채 5초가 지나면 탈락한다. 가둔 물줄기의 주인이 상대면 그 주인이 kill을 얻는다.</li>
+ *   <li>물줄기 싸움을 가린다 ({@link BattleRules}). 물줄기가 덮은 칸에 선 플레이어를 가두고, 갇힌 사람에게 닿은 플레이어가
+ *       같은 편이면 구하고(save) 상대면 터뜨리며(kill, 탈락), 갇힌 채 5초가 지난 사람을 탈락시킨다.</li>
  *   <li>보통 상태인 플레이어가 선 칸의 아이템을 먹는다 ({@link ItemEffects}). 갇히거나 탈락한 사람은 먹지 못한다.</li>
  *   <li>이 틱의 탈락·kill·save를 모두 반영한 뒤 경기 시계를 흘리고 승패를 가린다.</li>
  *   <li>남은 시간이 출현 시각이 됐으면 비행기가 나오고, 날고 있는 비행기가 아이템을 떨어뜨린다 ({@link AirDrop}).</li>
@@ -77,6 +74,7 @@ public final class GameWorld {
     private final ChatLog chatLog = new ChatLog();
     private final SpeechBubbles speechBubbles = new SpeechBubbles();
     private final Match match;
+    private final BattleRules battleRules;
     private double elapsedSeconds;
 
     /** 개인전으로 시작한다. */
@@ -136,6 +134,7 @@ public final class GameWorld {
         this.localPlayer = localPlayers.get(0);
         // 플레이어를 모두 만든 뒤에 경기를 연다 (경기 중에 플레이어를 더하지 않는다)
         this.match = new Match(mode, players());
+        this.battleRules = new BattleRules(localPlayers, match, this::gear, balloonField::wetOwnerAt);
     }
 
     /**
@@ -179,9 +178,7 @@ public final class GameWorld {
         items.removeWhere(balloonField::isWet);
         boxPusher.advance(dt);
         if (playing) {
-            trapSoakedPlayers();
-            settleTouches();
-            eliminateTimedOut();
+            battleRules.settle();
             pickUpItems();
         }
         // 이 틱의 탈락·kill·save를 모두 반영한 뒤에 시계를 흘리고 승패를 가린다
@@ -232,67 +229,6 @@ public final class GameWorld {
         return balloonField.holds(col, row) || items.at(col, row).isPresent()
                 || players().stream().anyMatch(p -> p.state() != PlayerState.GONE && p.overlapsTile(col, row))
                 || gears.values().stream().anyMatch(gear -> gear.isLandingOn(col, row));
-    }
-
-    /**
-     * 물줄기가 덮은 칸에 선 사람을 가둔다. 자기나 같은 편의 물줄기여도 갇힌다.
-     * 보호막을 쓰는 중이거나, 탱크가 막 부서졌거나, 점프해 공중에 있으면 맞지 않는다. 탱크에 타고 있으면 탱크가 대신 부서진다.
-     */
-    private void trapSoakedPlayers() {
-        for (Player player : players()) {
-            PlayerGear gear = gear(player);
-            if (player.state() != PlayerState.NORMAL || gear.ignoresWater()) {
-                continue;
-            }
-            balloonField.wetOwnerAt(player.col(), player.row()).ifPresent(owner -> {
-                if (!gear.breakTank()) {
-                    player.trap(owner);
-                }
-            });
-        }
-    }
-
-    /**
-     * 갇힌 사람에게 보통 상태의 플레이어가 닿으면 같은 편은 구하고 상대는 터뜨린다.
-     * 같은 틱에 여럿이 닿으면 번호가 작은 사람이 먼저 닿은 것으로 친다.
-     */
-    private void settleTouches() {
-        for (Player trapped : players()) {
-            if (trapped.state() != PlayerState.TRAPPED) {
-                continue;
-            }
-            for (Player other : players()) {
-                if (other == trapped || other.state() != PlayerState.NORMAL || gear(other).isAirborne()
-                        || !other.touches(trapped)) {
-                    continue;
-                }
-                if (match.isAlly(other, trapped)) {
-                    trapped.escape();
-                    match.recordSave(other.id());
-                } else {
-                    trapped.eliminate();
-                    match.recordKill(other.id());
-                }
-                break;
-            }
-        }
-    }
-
-    /** 갇힌 채 시간이 다 된 사람을 탈락시킨다. 가둔 물줄기의 주인이 상대면 그 주인에게 kill을 준다 */
-    private void eliminateTimedOut() {
-        for (Player trapped : players()) {
-            if (!trapped.isTrapTimeUp()) {
-                continue;
-            }
-            trapped.eliminate();
-            trapped.trapperId().ifPresent(ownerId -> playerById(ownerId)
-                    .filter(owner -> !match.isAlly(owner, trapped))
-                    .ifPresent(owner -> match.recordKill(owner.id())));
-        }
-    }
-
-    private Optional<Player> playerById(int id) {
-        return players().stream().filter(player -> player.id() == id).findFirst();
     }
 
     /**
