@@ -164,28 +164,6 @@ public final class InGamePanel extends JPanel {
         loopTimer.setCoalesce(true);
     }
 
-    /** 비행기 그림을 기본 위치에서 새로 읽는다. 미리 읽어 둔 그림이 없는 테스트에서 쓴다. */
-    public InGamePanel(GameWorld world, Tileset tileset, HudSkin skin, CharacterSprites characters,
-                       BalloonSprites balloons, ItemSprites items) {
-        this(world, tileset, skin, characters, balloons, items, AirplaneSprites.load());
-    }
-
-    /** 아이템·비행기 그림을 기본 위치에서 새로 읽는다. 미리 읽어 둔 그림이 없는 테스트에서 쓴다. */
-    public InGamePanel(GameWorld world, Tileset tileset, HudSkin skin, CharacterSprites characters,
-                       BalloonSprites balloons) {
-        this(world, tileset, skin, characters, balloons, ItemSprites.load());
-    }
-
-    /** 물풍선·아이템 그림을 기본 위치에서 새로 읽는다. 미리 읽어 둔 그림이 없는 테스트에서 쓴다. */
-    public InGamePanel(GameWorld world, Tileset tileset, HudSkin skin, CharacterSprites characters) {
-        this(world, tileset, skin, characters, BalloonSprites.load());
-    }
-
-    /** 캐릭터·물풍선·아이템 그림을 기본 위치에서 새로 읽는다. 미리 읽어 둔 그림이 없는 테스트에서 쓴다. */
-    public InGamePanel(GameWorld world, Tileset tileset, HudSkin skin) {
-        this(world, tileset, skin, CharacterSprites.load());
-    }
-
     public void start() {
         lastTickNanos = System.nanoTime();
         accumulator = 0;

@@ -179,7 +179,7 @@ class InGamePanelKeysTest {
     }
 
     private static InGamePanel panel(GameWorld world) {
-        InGamePanel panel = new InGamePanel(world, Tileset.forTheme("fixture"), skin);
+        InGamePanel panel = TestPanels.panel(world, Tileset.forTheme("fixture"), skin);
         panel.setSize(HudLayout.WIDTH, HudLayout.HEIGHT);
         return panel;
     }

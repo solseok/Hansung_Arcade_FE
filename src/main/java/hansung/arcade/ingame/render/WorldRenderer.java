@@ -113,16 +113,6 @@ public final class WorldRenderer {
         this.items = Objects.requireNonNull(items);
     }
 
-    /** 아이템 그림을 기본 위치에서 새로 읽는다. 미리 읽어 둔 그림이 없는 테스트에서 쓴다. */
-    public WorldRenderer(Tileset tileset, CharacterSprites characters, BalloonSprites balloons) {
-        this(tileset, characters, balloons, ItemSprites.load());
-    }
-
-    /** 물풍선·아이템 그림을 기본 위치에서 새로 읽는다. 미리 읽어 둔 그림이 없는 테스트에서 쓴다. */
-    public WorldRenderer(Tileset tileset, CharacterSprites characters) {
-        this(tileset, characters, BalloonSprites.load());
-    }
-
     /** 이 컴퓨터에서 조작하는 플레이어들이 보는 화면으로 그린다. {@link #drawObjects(Graphics2D, GameWorld, Concealment)} 참고 */
     public void drawObjects(Graphics2D g, GameWorld world) {
         drawObjects(g, world, Concealment.of(world));

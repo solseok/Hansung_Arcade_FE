@@ -61,7 +61,7 @@ class InGamePanelCharacterTest {
         // 맵 끝에 막혀 멈췄으므로 그쪽을 보고 서 있는 그림이 나온다
         assertFalse(player.isMoving());
 
-        InGamePanel panel = new InGamePanel(world, Tileset.forTheme("fixture"),
+        InGamePanel panel = TestPanels.panel(world, Tileset.forTheme("fixture"),
                 HudSkin.load(HudFonts.load()), SPRITES);
         panel.setSize(HudLayout.WIDTH, HudLayout.HEIGHT);
         BufferedImage screen = new BufferedImage(HudLayout.WIDTH, HudLayout.HEIGHT, BufferedImage.TYPE_INT_RGB);

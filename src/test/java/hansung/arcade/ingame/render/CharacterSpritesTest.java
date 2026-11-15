@@ -225,7 +225,7 @@ class CharacterSpritesTest {
         Player player = world.localPlayer();
         BufferedImage canvas = new BufferedImage(map.pixelWidth(), map.pixelHeight(), BufferedImage.TYPE_INT_ARGB);
         Graphics2D g = canvas.createGraphics();
-        new WorldRenderer(Tileset.forTheme("fixture"), SPRITES).drawObjects(g, world);
+        TestRenderers.worldRenderer(Tileset.forTheme("fixture"), SPRITES).drawObjects(g, world);
         g.dispose();
 
         int left = (int) Math.round(player.x()) - CharacterSprites.FRAME_SIZE / 2;

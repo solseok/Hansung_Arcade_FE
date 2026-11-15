@@ -396,7 +396,7 @@ class InGamePanelTest {
     }
 
     private static InGamePanel panel(GameWorld world) {
-        InGamePanel panel = new InGamePanel(world, Tileset.forTheme("fixture"), skin);
+        InGamePanel panel = TestPanels.panel(world, Tileset.forTheme("fixture"), skin);
         panel.setSize(HudLayout.WIDTH, HudLayout.HEIGHT);
         // 언제 그려도 입력칸의 커서가 켜진 그림이 나오게 깜빡임 시계를 멈춘다
         panel.chatField().setBlinkClock(() -> 0L);

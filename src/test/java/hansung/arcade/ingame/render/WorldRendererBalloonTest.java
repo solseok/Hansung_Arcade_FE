@@ -27,9 +27,9 @@ class WorldRendererBalloonTest {
 
     private static final int T = TileMap.TILE_SIZE;
     private static final double TICK = 1.0 / 60;
-    private static final CharacterSprites CHARACTERS = CharacterSprites.load();
-    private static final BalloonSprites BALLOONS = BalloonSprites.load();
-    private static final WorldRenderer RENDERER = new WorldRenderer(Tileset.forTheme("fixture"), CHARACTERS, BALLOONS);
+    private static final CharacterSprites CHARACTERS = TestRenderers.characters();
+    private static final BalloonSprites BALLOONS = TestRenderers.balloons();
+    private static final WorldRenderer RENDERER = TestRenderers.worldRenderer(Tileset.forTheme("fixture"));
 
     /** 1P가 (1, 0)에 물풍선을 놓고 두 칸 아래로 비켜선 게임 */
     private static GameWorld placedBalloon() {
