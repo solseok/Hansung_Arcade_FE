@@ -1,6 +1,7 @@
 package hansung.arcade.ingame;
 
 import hansung.arcade.ingame.airplane.AirDrop;
+import hansung.arcade.ingame.airplane.DropZone;
 import hansung.arcade.ingame.balloon.BalloonField;
 import hansung.arcade.ingame.balloon.Explosion;
 import hansung.arcade.ingame.block.BoxPusher;
@@ -19,9 +20,11 @@ import hansung.arcade.ingame.item.FieldItems;
 import hansung.arcade.ingame.item.ItemActions;
 import hansung.arcade.ingame.item.ItemDrops;
 import hansung.arcade.ingame.item.ItemEffects;
+import hansung.arcade.ingame.item.ItemType;
 import hansung.arcade.ingame.item.PlayerGear;
 import hansung.arcade.ingame.map.TileMap;
 import hansung.arcade.ingame.match.Match;
+import hansung.arcade.ingame.match.MatchClock;
 import hansung.arcade.ingame.match.MatchMode;
 
 import java.awt.Point;
@@ -79,6 +82,7 @@ public final class GameWorld {
     /** 플레이어 번호 → 아이템으로 얻은 능력과 아이템 칸 */
     private final Map<Integer, PlayerGear> gears = new HashMap<>();
     private final AirDrop airDrop;
+    private final DropZone dropZone = new WorldDropZone();
     /** 이 컴퓨터의 첫 플레이어(1P). 채팅은 이 플레이어가 친 것으로 올라간다 */
     private final Player localPlayer;
     /** 이 컴퓨터에서 조작하는 플레이어들. 1P, 2P 순서 */
@@ -197,7 +201,7 @@ public final class GameWorld {
         // 이 틱의 탈락·kill·save를 모두 반영한 뒤에 시계를 흘리고 승패를 가린다
         match.update(dt);
         // 시계를 흘린 뒤라야 이번 틱에 출현 시각이 됐는지 안다
-        airDrop.update(dt, this);
+        airDrop.update(dt, dropZone);
         chatLog.expire(elapsedSeconds);
         speechBubbles.expire(elapsedSeconds);
     }
@@ -307,11 +311,6 @@ public final class GameWorld {
         return items;
     }
 
-    /** 맵 칸에 물풍선·아이템·캐릭터·물줄기 등 무엇이 있는지 */
-    public CellOccupancy occupancy() {
-        return occupancy;
-    }
-
     /** 이 컴퓨터의 첫 플레이어(1P). 한 키보드 2인 모드에서도 채팅은 1P가 친 것으로 올라간다. */
     public Player localPlayer() {
         return localPlayer;
@@ -330,5 +329,29 @@ public final class GameWorld {
     /** 게임을 시작한 뒤 흐른 시간(초). 경기가 끝나도 계속 흐른다. 경기의 남은 시간은 {@link Match#clock()}을 본다 */
     public double elapsedSeconds() {
         return elapsedSeconds;
+    }
+
+    /** 비행기에게 넘기는 창구. 이 게임의 경기 시계·끝났는지, 칸 점유, 바닥 아이템만 이어 준다 */
+    private final class WorldDropZone implements DropZone {
+
+        @Override
+        public MatchClock clock() {
+            return match.clock();
+        }
+
+        @Override
+        public boolean isMatchOver() {
+            return match.isOver();
+        }
+
+        @Override
+        public boolean holdsAny(int col, int row, Set<Occupant> occupants) {
+            return occupancy.hasAny(col, row, occupants);
+        }
+
+        @Override
+        public void placeItem(int col, int row, ItemType item) {
+            items.place(col, row, item);
+        }
     }
 }

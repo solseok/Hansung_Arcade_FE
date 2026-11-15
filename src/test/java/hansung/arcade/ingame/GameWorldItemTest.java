@@ -1,5 +1,6 @@
 package hansung.arcade.ingame;
 
+import hansung.arcade.ingame.airplane.Drop;
 import hansung.arcade.ingame.balloon.WaterBalloon;
 import hansung.arcade.ingame.entity.Direction;
 import hansung.arcade.ingame.entity.Mascot;
@@ -9,10 +10,13 @@ import hansung.arcade.ingame.entity.PlayerState;
 import hansung.arcade.ingame.input.PlayerCommand;
 import hansung.arcade.ingame.item.ItemType;
 import hansung.arcade.ingame.item.PlayerGear;
+import hansung.arcade.ingame.item.ScriptedRandom;
 import hansung.arcade.ingame.map.MapLoader;
 import hansung.arcade.ingame.map.TileMap;
+import hansung.arcade.ingame.match.MatchMode;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -295,6 +299,26 @@ class GameWorldItemTest {
         assertTrue(world.balloonField().balloons().isEmpty());
         // 터진 물풍선은 가시 블럭 바로 앞 칸에서 터졌고, 물줄기에 맞은 가시 블럭은 부서졌다
         assertTrue(world.map().tileAt(6, 0).isGround());
+    }
+
+    @Test
+    void 게임을_진행하면_1분59초에_비행기가_나와_빈_칸에_아이템을_떨어뜨린다() {
+        // 15 x 13 빈 맵의 맨 아랫줄 왼쪽 끝에 1P가 선다. 난수 0.5로는 (7, 6)과 (8, 6)에 신발을 떨어뜨린다
+        List<String> rows = new ArrayList<>();
+        for (int row = 0; row < 12; row++) {
+            rows.add(".".repeat(15));
+        }
+        rows.add("1" + ".".repeat(14));
+        GameWorld world = new GameWorld(MapLoader.parse("fixture/airdrop", rows),
+                List.of(new PlayerProfile("부기", Mascot.KKUKKU)), MatchMode.SOLO, ScriptedRandom.of(0.5));
+        ticks(world, 61 * 60);
+        assertEquals(1, world.airDrop().flights().size());
+
+        ticks(world, 4 * 60);
+
+        assertTrue(world.airDrop().flights().isEmpty());
+        assertEquals(List.of(new Drop(7, 6, ItemType.SHOE), new Drop(8, 6, ItemType.SHOE)), world.items().all().stream()
+                .map(item -> new Drop(item.col(), item.row(), item.type())).toList());
     }
 
     @Test

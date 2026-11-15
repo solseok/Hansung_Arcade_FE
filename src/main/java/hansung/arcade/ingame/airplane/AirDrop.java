@@ -1,11 +1,9 @@
 package hansung.arcade.ingame.airplane;
 
-import hansung.arcade.ingame.GameWorld;
 import hansung.arcade.ingame.entity.Direction;
 import hansung.arcade.ingame.item.CellOccupancy.Occupant;
 import hansung.arcade.ingame.item.ItemType;
 import hansung.arcade.ingame.map.TileMap;
-import hansung.arcade.ingame.match.Match;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -36,7 +34,8 @@ import java.util.random.RandomGenerator;
  *   <li>날고 있는 중에 경기가 끝나면 비행기는 마저 지나가지만 더 떨어뜨리지 않는다. 이미 떨어지던 아이템은 놓인다.</li>
  * </ul>
  *
- * <p>난수는 밖에서 받아서 테스트는 결과를 고정할 수 있다. 한 번 나올 때 {@link RandomGenerator#nextDouble()}을
+ * <p>게임에서는 {@link DropZone} 창구로 경기 시계·칸 점유·바닥 아이템만 본다.
+ * 난수는 밖에서 받아서 테스트는 결과를 고정할 수 있다. 한 번 나올 때 {@link RandomGenerator#nextDouble()}을
  * 칸 · 아이템 · 칸 · 아이템 순서로 네 번 쓴다.</p>
  */
 public final class AirDrop {
@@ -50,6 +49,8 @@ public final class AirDrop {
     /** 칸에 있으면 떨어뜨리지 않는 것: 물풍선(곧 들어오거나 내려앉을 칸 포함)·아이템·몸이 걸친 캐릭터 */
     private static final Set<Occupant> DROP_BLOCKERS =
             Collections.unmodifiableSet(EnumSet.of(Occupant.BALLOON, Occupant.ITEM, Occupant.BODY));
+    /** 떨어지던 아이템이 칸에 닿았을 때 있으면 놓지 않는 것: 그 사이 놓인 다른 아이템 */
+    private static final Set<Occupant> LANDING_BLOCKERS = Collections.unmodifiableSet(EnumSet.of(Occupant.ITEM));
 
     private static final Logger log = LoggerFactory.getLogger(AirDrop.class);
 
@@ -71,12 +72,13 @@ public final class AirDrop {
     /**
      * dt초(한 틱) 진행한다. 경기 시계를 흘린 뒤에 불러야 이번 틱에 남은 시간이 출현 시각이 됐는지 알 수 있다.
      * 비행기를 띄우고, 날리고, 지나친 칸에 아이템을 떨어뜨리고, 닿은 아이템을 맵에 놓는다.
+     *
+     * @param zone 경기 시계·칸 점유·바닥 아이템을 보여 주는 게임
      */
-    public void update(double dt, GameWorld world) {
-        Match match = world.match();
-        if (!match.isOver()) {
+    public void update(double dt, DropZone zone) {
+        if (!zone.isMatchOver()) {
             for (int seconds : APPEARANCES) {
-                if (match.clock().justReached(seconds)) {
+                if (zone.clock().justReached(seconds)) {
                     launch(plan());
                 }
             }
@@ -84,7 +86,7 @@ public final class AirDrop {
         for (Iterator<Flight> it = flights.iterator(); it.hasNext(); ) {
             Flight flight = it.next();
             for (Drop drop : flight.advance(dt)) {
-                release(drop, world);
+                release(drop, zone);
             }
             if (flight.isGone()) {
                 it.remove();
@@ -94,7 +96,7 @@ public final class AirDrop {
             FallingItem item = it.next();
             item.advance(dt);
             if (item.hasLanded()) {
-                land(item.drop(), world);
+                land(item.drop(), zone);
                 it.remove();
             }
         }
@@ -136,8 +138,8 @@ public final class AirDrop {
     }
 
     /** 비행기가 칸 위를 지나는 순간. 칸이 비어 있고 경기가 진행 중이면 떨어뜨린다 */
-    private void release(Drop drop, GameWorld world) {
-        if (world.match().isOver() || !canDropAt(world, drop.col(), drop.row())) {
+    private void release(Drop drop, DropZone zone) {
+        if (zone.isMatchOver() || !canDropAt(zone, drop.col(), drop.row())) {
             log.debug("떨어뜨리지 않음: {}", drop);
             return;
         }
@@ -148,21 +150,20 @@ public final class AirDrop {
      * 떨어지던 아이템이 칸에 닿는 순간. 그 사이 블럭이 밀려 들어와 막혔으면 놓지 않고,
      * 그 사이 다른 아이템이 놓였으면(밀려 온 블럭이 부서져 나온 아이템 등) 그 아이템을 바꾸지 않도록 놓지 않는다.
      */
-    private void land(Drop drop, GameWorld world) {
-        if (map.isSolid(drop.col(), drop.row()) || world.occupancy().has(drop.col(), drop.row(), Occupant.ITEM)) {
+    private void land(Drop drop, DropZone zone) {
+        if (map.isSolid(drop.col(), drop.row()) || zone.holdsAny(drop.col(), drop.row(), LANDING_BLOCKERS)) {
             log.debug("막혔거나 아이템이 있는 칸에 떨어져 사라짐: {}", drop);
             return;
         }
-        world.items().place(drop.col(), drop.row(), drop.item());
+        zone.placeItem(drop.col(), drop.row(), drop.item());
     }
 
     /**
      * (col, row) 칸에 아이템을 떨어뜨릴 수 있는지. 블럭(지나갈 수 없는 칸)이거나 {@link #DROP_BLOCKERS}가 있으면 떨어뜨리지 않는다.
      * 덤불 칸은 떨어뜨린다.
      */
-    static boolean canDropAt(GameWorld world, int col, int row) {
-        TileMap map = world.map();
-        return map.isInside(col, row) && !map.isSolid(col, row) && !world.occupancy().hasAny(col, row, DROP_BLOCKERS);
+    boolean canDropAt(DropZone zone, int col, int row) {
+        return map.isInside(col, row) && !map.isSolid(col, row) && !zone.holdsAny(col, row, DROP_BLOCKERS);
     }
 
     /** 지금 맵 위를 날고 있는 비행기들. 나온 순서 */
