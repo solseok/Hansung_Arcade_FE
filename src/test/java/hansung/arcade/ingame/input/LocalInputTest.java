@@ -9,11 +9,13 @@ import java.awt.event.KeyEvent;
 import java.util.List;
 import java.util.Map;
 
+import static java.awt.event.InputEvent.ALT_DOWN_MASK;
 import static java.awt.event.InputEvent.CTRL_DOWN_MASK;
 import static java.awt.event.InputEvent.SHIFT_DOWN_MASK;
 import static java.awt.event.KeyEvent.KEY_LOCATION_LEFT;
 import static java.awt.event.KeyEvent.KEY_LOCATION_RIGHT;
 import static java.awt.event.KeyEvent.KEY_LOCATION_STANDARD;
+import static java.awt.event.KeyEvent.VK_ALT;
 import static java.awt.event.KeyEvent.VK_CONTROL;
 import static java.awt.event.KeyEvent.VK_D;
 import static java.awt.event.KeyEvent.VK_LEFT;
@@ -178,21 +180,50 @@ class LocalInputTest {
     }
 
     @Test
-    void 두_명이면_왼쪽_Shift는_1P_마침표는_2P의_아이템이다() {
+    void 두_명이면_왼쪽_Shift는_1P의_아이템이고_2P는_운영체제에_맞는_오른쪽_수정_키가_아이템이다() {
         press(duo, VK_SHIFT, KEY_LOCATION_LEFT, SHIFT_DOWN_MASK);
-        press(duo, VK_PERIOD, KEY_LOCATION_STANDARD, SHIFT_DOWN_MASK);
+        pressSecondItem(duo, SHIFT_DOWN_MASK);
 
         PlayerCommand item = new PlayerCommand(null, false, true);
         assertEquals(Map.of(P1, item, P2, item), duo.takeCommands());
     }
 
     @Test
-    void 두_명이면_오른쪽_Shift와_Ctrl은_아무_키도_아니다() {
+    void 두_명이면_오른쪽_Shift와_왼쪽_Ctrl_왼쪽_Alt와_마침표는_아무_키도_아니다() {
         assertFalse(press(duo, VK_SHIFT, KEY_LOCATION_RIGHT, SHIFT_DOWN_MASK));
         assertFalse(press(duo, VK_CONTROL, KEY_LOCATION_LEFT, CTRL_DOWN_MASK));
-        assertFalse(press(duo, VK_CONTROL, KEY_LOCATION_RIGHT, CTRL_DOWN_MASK));
+        assertFalse(press(duo, VK_ALT, KEY_LOCATION_LEFT, ALT_DOWN_MASK));
+        assertFalse(press(duo, VK_PERIOD));
 
         assertEquals(Map.of(P1, PlayerCommand.IDLE, P2, PlayerCommand.IDLE), duo.takeCommands());
+    }
+
+    @Test
+    void 두_명일_때_2P_아이템_키는_누르고_있는_동안_자동_반복이_와도_한_번만_쓴다() {
+        pressSecondItem(duo, 0);
+        assertTrue(command(duo, P2).useItem());
+
+        pressSecondItem(duo, 0);
+        assertFalse(command(duo, P2).useItem());
+    }
+
+    @Test
+    void 두_명일_때_2P_아이템_키의_뗌을_놓쳐도_그_수정_키가_떼진_뒤에는_다시_누를_수_있다() {
+        pressSecondItem(duo, 0);
+        assertTrue(command(duo, P2).useItem());
+        // 뗌 이벤트가 오지 않았다. 다음 키 이벤트에 그 수정 키가 눌려 있지 않다고 나온다
+        press(duo, VK_UP);
+        release(duo, VK_UP);
+
+        pressSecondItem(duo, 0);
+        assertTrue(command(duo, P2).useItem());
+    }
+
+    /** 이 컴퓨터의 2P 대표 아이템 키(macOS 오른쪽 Option, 그 밖 오른쪽 Ctrl)를 누른다. 그 키의 수정 키 표시를 더해 보낸다 */
+    private static void pressSecondItem(LocalInput input, int otherModifiers) {
+        KeyBindings.Key key = KeyBindings.PLAYER_2.item().get(0);
+        int mask = key.code() == VK_ALT ? ALT_DOWN_MASK : CTRL_DOWN_MASK;
+        assertTrue(press(input, key.code(), key.location(), otherModifiers | mask));
     }
 
     @Test
@@ -212,7 +243,11 @@ class LocalInputTest {
         assertFalse(duo.keyPressed(key(KeyEvent.KEY_PRESSED, VK_SPACE, KEY_LOCATION_STANDARD, 0), true));
         assertFalse(duo.keyPressed(key(KeyEvent.KEY_PRESSED, VK_SHIFT, KEY_LOCATION_LEFT, SHIFT_DOWN_MASK), true));
         assertFalse(duo.keyPressed(key(KeyEvent.KEY_PRESSED, VK_SLASH, KEY_LOCATION_STANDARD, 0), true));
-        assertFalse(duo.keyPressed(key(KeyEvent.KEY_PRESSED, VK_PERIOD, KEY_LOCATION_STANDARD, 0), true));
+        // 2P의 아이템 키(오른쪽 Ctrl·Option·Alt·AltGr)는 글을 치는 동안 받지 않아 Option·AltGr 글자 입력을 막지 않는다
+        for (KeyBindings.Key key : KeyBindings.PLAYER_2.item()) {
+            int location = key.location() == KeyBindings.Key.ANY_LOCATION ? KEY_LOCATION_RIGHT : key.location();
+            assertFalse(duo.keyPressed(key(KeyEvent.KEY_PRESSED, key.code(), location, ALT_DOWN_MASK), true));
+        }
         assertTrue(duo.keyPressed(key(KeyEvent.KEY_PRESSED, VK_UP, KEY_LOCATION_STANDARD, 0), true));
 
         Map<Integer, PlayerCommand> tick = duo.takeCommands();

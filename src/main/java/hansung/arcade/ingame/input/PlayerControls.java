@@ -73,19 +73,25 @@ final class PlayerControls {
     }
 
     /**
-     * 키 이벤트의 수정 키 상태(modifiersEx)에 Shift가 없는데 Shift에 묶인 행동이 눌린 채로 남아 있으면 뗀 것으로 친다.
+     * 수정 키(Shift·Ctrl·Alt·AltGr)에만 묶인 행동이 눌린 채로 남아 있는데, 키 이벤트의 수정 키 상태(modifiersEx)에
+     * 그 수정 키가 하나도 없으면 뗀 것으로 친다.
      * 좌우 Shift를 함께 누르면 한쪽의 누름·뗌 이벤트가 오지 않는 플랫폼이 있다(macOS, Windows). 2인 모드에서는
      * Shift를 1P(왼쪽)만 쓰지만, 1P가 왼쪽 Shift를 누른 채 누군가 오른쪽 Shift를 누르면 1P의 뗌이 빠질 수 있고,
-     * 그대로 두면 1P의 다음 누름을 자동 반복으로 여겨 받지 않는다. Shift를 모두 떼면 그 뒤 이벤트에는 Shift가 없으므로
-     * 그때 바로잡는다.
+     * 그대로 두면 1P의 다음 누름을 자동 반복으로 여겨 받지 않는다. 수정 키를 모두 떼면 그 뒤 이벤트에는 그 키가 없으므로
+     * 그때 바로잡는다. 2P의 아이템 키(오른쪽 Ctrl·Option·Alt)도 같은 규칙을 따른다.
      *
      * @param pressedKeyCode 이 이벤트가 누른 키. 누른 그 키는 수정 키 상태와 상관없이 그대로 둔다. 누름이 아니면 {@link KeyEvent#VK_UNDEFINED}
      */
     void forgetReleasedModifiers(int modifiersEx, int pressedKeyCode) {
         held.removeIf(action -> {
-            int code = keyOf(action).code();
-            int mask = modifierMask(code);
-            return mask != 0 && code != pressedKeyCode && (modifiersEx & mask) == 0;
+            boolean modifiersOnly = true;
+            boolean stillDown = false;
+            for (KeyBindings.Key key : keys.keysOf(action)) {
+                int mask = modifierMask(key.code());
+                modifiersOnly &= mask != 0;
+                stillDown |= key.code() == pressedKeyCode || (modifiersEx & mask) != 0;
+            }
+            return modifiersOnly && !stillDown;
         });
     }
 
@@ -109,15 +115,14 @@ final class PlayerControls {
         return movement.current();
     }
 
-    private KeyBindings.Key keyOf(Action action) {
-        return switch (action) {
-            case BALLOON -> keys.balloon();
-            case ITEM -> keys.item();
-        };
-    }
-
-    /** 수정 키의 눌림 표시. 키 배치에 묶인 수정 키는 Shift뿐이라 Shift만 본다 (다른 수정 키를 묶으면 여기에 더한다) */
+    /** 수정 키의 눌림 표시. 수정 키가 아니면 0 */
     private static int modifierMask(int keyCode) {
-        return keyCode == KeyEvent.VK_SHIFT ? InputEvent.SHIFT_DOWN_MASK : 0;
+        return switch (keyCode) {
+            case KeyEvent.VK_SHIFT -> InputEvent.SHIFT_DOWN_MASK;
+            case KeyEvent.VK_CONTROL -> InputEvent.CTRL_DOWN_MASK;
+            case KeyEvent.VK_ALT -> InputEvent.ALT_DOWN_MASK;
+            case KeyEvent.VK_ALT_GRAPH -> InputEvent.ALT_GRAPH_DOWN_MASK;
+            default -> 0;
+        };
     }
 }

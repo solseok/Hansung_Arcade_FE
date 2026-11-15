@@ -10,6 +10,7 @@ import hansung.arcade.ingame.entity.CharacterColor;
 import hansung.arcade.ingame.entity.Mascot;
 import hansung.arcade.ingame.entity.PlayerProfile;
 import hansung.arcade.ingame.hud.HudSkin;
+import hansung.arcade.ingame.input.KeyBindings;
 import hansung.arcade.ingame.map.TileMap;
 import hansung.arcade.ingame.match.MatchMode;
 import hansung.arcade.ingame.render.BalloonSprites;
@@ -55,8 +56,9 @@ public final class StartScreenStep implements BootStep {
         List<PlayerProfile> players = localProfiles(properties);
         MatchMode mode = matchMode(properties);
         if (players.size() > 1) {
-            log.info("한 키보드 2인 모드로 시작합니다. 1P({}): W/A/S/D 이동, Space 물풍선, 왼쪽 Shift 아이템 / "
-                    + "2P({}): 방향키 이동, / 물풍선, . 아이템", players.get(0).nickname(), players.get(1).nickname());
+            log.info("한 키보드 2인 모드로 시작합니다. 1P({}): W/A/S/D 이동, Space 물풍선, {} 아이템 / "
+                    + "2P({}): 방향키 이동, / 물풍선, {} 아이템", players.get(0).nickname(),
+                    KeyBindings.PLAYER_1.itemKeyGuide(), players.get(1).nickname(), KeyBindings.PLAYER_2.itemKeyGuide());
         }
 
         SwingThread.runAndWait(() -> {

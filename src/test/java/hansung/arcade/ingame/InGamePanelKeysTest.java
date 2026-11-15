@@ -8,6 +8,7 @@ import hansung.arcade.ingame.entity.PlayerProfile;
 import hansung.arcade.ingame.hud.HudFonts;
 import hansung.arcade.ingame.hud.HudLayout;
 import hansung.arcade.ingame.hud.HudSkin;
+import hansung.arcade.ingame.input.KeyBindings;
 import hansung.arcade.ingame.input.PlayerCommand;
 import hansung.arcade.ingame.map.MapLoader;
 import hansung.arcade.ingame.render.Tileset;
@@ -133,6 +134,9 @@ class InGamePanelKeysTest {
         assertFalse(press(chat, KeyEvent.VK_SHIFT, KeyEvent.KEY_LOCATION_LEFT, KeyEvent.SHIFT_DOWN_MASK).isConsumed());
         assertFalse(press(chat, KeyEvent.VK_SLASH).isConsumed());
         assertFalse(press(chat, KeyEvent.VK_PERIOD).isConsumed());
+        // 2P 아이템 키(오른쪽 Option·Ctrl)는 Option·AltGr 글자 입력에 쓰이도록 그대로 둔다
+        KeyBindings.Key secondItem = KeyBindings.PLAYER_2.item().get(0);
+        assertFalse(press(chat, secondItem.code(), secondItem.location(), KeyEvent.ALT_DOWN_MASK).isConsumed());
         assertTrue(press(chat, KeyEvent.VK_DOWN).isConsumed());
 
         assertNull(panel.input().heldDirection(0));

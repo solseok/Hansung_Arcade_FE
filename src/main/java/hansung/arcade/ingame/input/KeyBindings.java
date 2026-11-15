@@ -4,12 +4,16 @@ import hansung.arcade.ingame.entity.Direction;
 
 import java.awt.event.KeyEvent;
 import java.util.List;
+import java.util.Locale;
+import java.util.stream.Collectors;
 
 import static java.awt.event.KeyEvent.VK_A;
+import static java.awt.event.KeyEvent.VK_ALT;
+import static java.awt.event.KeyEvent.VK_ALT_GRAPH;
+import static java.awt.event.KeyEvent.VK_CONTROL;
 import static java.awt.event.KeyEvent.VK_D;
 import static java.awt.event.KeyEvent.VK_DOWN;
 import static java.awt.event.KeyEvent.VK_LEFT;
-import static java.awt.event.KeyEvent.VK_PERIOD;
 import static java.awt.event.KeyEvent.VK_RIGHT;
 import static java.awt.event.KeyEvent.VK_S;
 import static java.awt.event.KeyEvent.VK_SHIFT;
@@ -22,28 +26,66 @@ import static java.awt.event.KeyEvent.VK_W;
  * 플레이어 한 명의 키 배치. 이동 방향 키 네 개와 물풍선·아이템 키.
  *
  * <p>한 키보드 2인 모드에서는 1P가 키보드 왼쪽(W/A/S/D 둘레), 2P가 오른쪽(방향키 둘레)을 쓴다.
- * 수정 키는 1P의 왼쪽 Shift 하나만 쓴다. Ctrl은 누가 눌러도 Ctrl+방향키(macOS의 데스크톱 전환)가 되므로 쓰지 않고,
- * 좌우 Shift를 둘이 나눠 쓰면 한쪽을 누른 채 다른 쪽을 누르거나 뗀 이벤트가 오지 않는 플랫폼(macOS, Windows)이 있어
- * Shift는 한 사람만 쓴다. 왼쪽·오른쪽은 {@link KeyEvent#getKeyLocation()}으로 가린다.</p>
+ * Shift는 1P의 왼쪽 Shift만 쓴다. 좌우 Shift를 둘이 나눠 쓰면 한쪽을 누른 채 다른 쪽을 누르거나 뗀 이벤트가 오지 않는
+ * 플랫폼(macOS, Windows)이 있어서다. 2P의 아이템 키는 운영체제마다 다르다({@link #player2}).
+ * macOS에서는 Ctrl+방향키가 데스크톱 전환이라 방향키를 쓰는 2P에게 Ctrl을 주지 않고 오른쪽 Option을 준다.
+ * Windows 등에서는 오른쪽 Ctrl이고, 오른쪽 Ctrl이 없는 키보드를 위해 오른쪽 Alt(유럽식 배열의 AltGr 포함)도 받는다.
+ * 왼쪽·오른쪽은 {@link KeyEvent#getKeyLocation()}으로 가린다.</p>
  *
  * @param up      위로 이동 ({@link KeyEvent#VK_UP} 같은 키 코드)
  * @param down    아래로 이동
  * @param left    왼쪽으로 이동
  * @param right   오른쪽으로 이동
  * @param balloon 물풍선 놓기
- * @param item    아이템 쓰기
+ * @param item    아이템 쓰기. 여러 개면 어느 것을 눌러도 된다. 첫 키가 대표 키다 (화면에 이름을 보여 줄 키)
  */
-public record KeyBindings(int up, int down, int left, int right, Key balloon, Key item) {
+public record KeyBindings(int up, int down, int left, int right, Key balloon, List<Key> item) {
+
+    /** 이 컴퓨터가 macOS인지. 키 이름과 2P 아이템 키가 달라진다 */
+    public static final boolean MAC = isMac(System.getProperty("os.name", ""));
 
     /** 혼자 할 때: 방향키 이동, Space 물풍선, Shift(좌우 아무거나) 아이템 */
     public static final KeyBindings SOLO = new KeyBindings(VK_UP, VK_DOWN, VK_LEFT, VK_RIGHT,
-            Key.any(VK_SPACE), Key.any(VK_SHIFT));
+            Key.any(VK_SPACE), List.of(Key.any(VK_SHIFT)));
     /** 한 키보드 2인의 1P: W/A/S/D 이동, Space 물풍선, 왼쪽 Shift 아이템 */
     public static final KeyBindings PLAYER_1 = new KeyBindings(VK_W, VK_S, VK_A, VK_D,
-            Key.any(VK_SPACE), Key.left(VK_SHIFT));
-    /** 한 키보드 2인의 2P: 방향키 이동, / 물풍선, . 아이템 */
-    public static final KeyBindings PLAYER_2 = new KeyBindings(VK_UP, VK_DOWN, VK_LEFT, VK_RIGHT,
-            Key.any(VK_SLASH), Key.any(VK_PERIOD));
+            Key.any(VK_SPACE), List.of(Key.left(VK_SHIFT)));
+    /** 한 키보드 2인의 2P: 방향키 이동, / 물풍선, 이 컴퓨터의 운영체제에 맞는 아이템 키({@link #player2}) */
+    public static final KeyBindings PLAYER_2 = player2(MAC);
+
+    public KeyBindings {
+        item = List.copyOf(item);
+        if (item.isEmpty()) {
+            throw new IllegalArgumentException("아이템 키가 하나는 있어야 합니다.");
+        }
+    }
+
+    /**
+     * 한 키보드 2인의 2P 키 배치. 방향키 이동, / 물풍선.
+     * 아이템은 macOS면 오른쪽 Option, 그 밖에서는 오른쪽 Ctrl이고 오른쪽 Ctrl이 없는 키보드를 위해 오른쪽 Alt·AltGr도 된다.
+     *
+     * @param mac macOS인지
+     */
+    static KeyBindings player2(boolean mac) {
+        List<Key> item = mac
+                ? List.of(Key.right(VK_ALT))
+                : List.of(Key.right(VK_CONTROL), Key.right(VK_ALT), Key.any(VK_ALT_GRAPH));
+        return new KeyBindings(VK_UP, VK_DOWN, VK_LEFT, VK_RIGHT, Key.any(VK_SLASH), item);
+    }
+
+    static boolean isMac(String osName) {
+        return osName.toLowerCase(Locale.ROOT).startsWith("mac");
+    }
+
+    /** 화면 아이템 칸에 적는 대표 아이템 키 이름 (예: Shift, L-Shift, Ctrl-R, Opt-R) */
+    public String itemKeyName() {
+        return item.get(0).shortName(MAC);
+    }
+
+    /** 안내 글에 적는 아이템 키 이름. 여러 개면 "오른쪽 Ctrl 또는 오른쪽 Alt 또는 AltGr"처럼 잇는다 */
+    public String itemKeyGuide() {
+        return item.stream().map(key -> key.koreanName(MAC)).collect(Collectors.joining(" 또는 "));
+    }
 
     /**
      * 한 키보드로 함께 하는 인원에 맞는 키 배치. 0번째가 1P 몫이다.
@@ -85,8 +127,10 @@ public record KeyBindings(int up, int down, int left, int right, Key balloon, Ke
         if (balloon.matches(keyCode, keyLocation)) {
             return Action.BALLOON;
         }
-        if (item.matches(keyCode, keyLocation)) {
-            return Action.ITEM;
+        for (Key key : item) {
+            if (key.matches(keyCode, keyLocation)) {
+                return Action.ITEM;
+            }
         }
         return null;
     }
@@ -95,6 +139,14 @@ public record KeyBindings(int up, int down, int left, int right, Key balloon, Ke
     public enum Action {
         BALLOON,
         ITEM
+    }
+
+    /** action에 묶인 키들 */
+    public List<Key> keysOf(Action action) {
+        return switch (action) {
+            case BALLOON -> List.of(balloon);
+            case ITEM -> item;
+        };
     }
 
     /**
@@ -117,8 +169,44 @@ public record KeyBindings(int up, int down, int left, int right, Key balloon, Ke
             return new Key(code, KeyEvent.KEY_LOCATION_LEFT);
         }
 
+        /** 오른쪽에 있는 것만 (오른쪽 Ctrl 등) */
+        public static Key right(int code) {
+            return new Key(code, KeyEvent.KEY_LOCATION_RIGHT);
+        }
+
         public boolean matches(int keyCode, int keyLocation) {
             return keyCode == code && (location == ANY_LOCATION || location == keyLocation);
+        }
+
+        /** 좁은 칸에 적는 짧은 이름. 왼쪽 키는 앞에 "L-", 오른쪽 키는 뒤에 "-R"을 붙인다 (예: L-Shift, Ctrl-R) */
+        public String shortName(boolean mac) {
+            String name = baseName(mac);
+            return switch (location) {
+                case KeyEvent.KEY_LOCATION_LEFT -> "L-" + name;
+                case KeyEvent.KEY_LOCATION_RIGHT -> name + "-R";
+                default -> name;
+            };
+        }
+
+        /** 안내 글에 적는 이름 (예: 왼쪽 Shift, 오른쪽 Option) */
+        public String koreanName(boolean mac) {
+            String name = mac && code == VK_ALT ? "Option" : baseName(mac);
+            return switch (location) {
+                case KeyEvent.KEY_LOCATION_LEFT -> "왼쪽 " + name;
+                case KeyEvent.KEY_LOCATION_RIGHT -> "오른쪽 " + name;
+                default -> name;
+            };
+        }
+
+        private String baseName(boolean mac) {
+            return switch (code) {
+                case VK_SHIFT -> "Shift";
+                case VK_CONTROL -> "Ctrl";
+                case VK_ALT -> mac ? "Opt" : "Alt";
+                case VK_ALT_GRAPH -> "AltGr";
+                case VK_SPACE -> "Space";
+                default -> KeyEvent.getKeyText(code);
+            };
         }
     }
 }
