@@ -10,10 +10,10 @@ import java.awt.Point;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.Deque;
 import java.util.List;
 import java.util.Optional;
-import java.util.OptionalInt;
 
 /**
  * 맵 위의 물풍선과 물줄기. Swing에 의존하지 않는다.
@@ -38,7 +38,7 @@ import java.util.OptionalInt;
  *   <li>물풍선이 사람이 있는 칸에 미끄러져 들어오거나 내려앉으면, 그 사람은 놓는 순간처럼 그 칸을 벗어날 때까지 지나갈 수 있다.</li>
  * </ul>
  *
- * <p>물줄기에 맞은 플레이어를 어떻게 할지는 게임 상태(GameWorld)가 {@link #wetOwnerAt}을 보고 정한다.
+ * <p>물줄기에 맞은 플레이어를 어떻게 할지는 게임 상태(GameWorld)가 {@link #wetOwnersAt}을 보고 정한다.
  * 블럭 파괴·아이템처럼 터질 때마다 할 일은 {@link #takeNewExplosions}로 이번에 터진 것을 받아 처리한다.</p>
  */
 public final class BalloonField {
@@ -387,18 +387,30 @@ public final class BalloonField {
 
     /** (col, row) 칸에 물줄기가 보이는지 */
     public boolean isWet(int col, int row) {
-        return wetOwnerAt(col, row).isPresent();
-    }
-
-    /** (col, row) 칸을 덮은 물줄기의 주인 번호. 여럿이면 가장 늦게 터진 것이고, 물줄기가 없으면 비어 있다 */
-    public OptionalInt wetOwnerAt(int col, int row) {
-        for (int i = explosions.size() - 1; i >= 0; i--) {
-            Explosion explosion = explosions.get(i);
+        for (Explosion explosion : explosions) {
             if (explosion.covers(col, row)) {
-                return OptionalInt.of(explosion.ownerId());
+                return true;
             }
         }
-        return OptionalInt.empty();
+        return false;
+    }
+
+    /**
+     * (col, row) 칸을 덮은 물줄기들의 주인 번호. 물줄기가 없으면 빈 목록이다.
+     * 그 칸 가까이에서 터진(터진 칸과 그 칸 사이의 칸 수가 적은) 물줄기의 주인부터 늘어놓고, 거리가 같으면 늦게 터진 물줄기의 주인이
+     * 먼저다. 같은 틱에 연쇄로 터진 물줄기는 연쇄가 이어진 차례대로 터진 것으로 친다. 한 사람의 물줄기가 여럿이면 처음 한 번만 넣는다.
+     * 그 칸에 선 사람을 누가 가뒀는지는 게임 상태가 이 차례를 보고 고른다.
+     */
+    public List<Integer> wetOwnersAt(int col, int row) {
+        List<Explosion> covering = new ArrayList<>();
+        for (int i = explosions.size() - 1; i >= 0; i--) {
+            if (explosions.get(i).covers(col, row)) {
+                covering.add(explosions.get(i));
+            }
+        }
+        // 안정 정렬이라 거리가 같으면 늦게 터진 것이 앞에 남는다
+        covering.sort(Comparator.comparingInt(explosion -> Math.abs(explosion.col() - col) + Math.abs(explosion.row() - row)));
+        return covering.stream().map(Explosion::ownerId).distinct().toList();
     }
 
     /** 놓인 물풍선들(미끄러지거나 날아가는 것 포함). 놓은 순서 */

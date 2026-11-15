@@ -157,7 +157,7 @@ class BalloonFieldTest {
         assertEquals(2, explosion.frame());
         ticks(field, List.of(me), 8);
         assertEquals(1, field.explosions().size());
-        assertEquals(1, field.wetOwnerAt(0, 0).orElseThrow());
+        assertEquals(List.of(1), field.wetOwnersAt(0, 0));
 
         ticks(field, List.of(me), 1);
         assertTrue(field.explosions().isEmpty());
@@ -208,6 +208,56 @@ class BalloonFieldTest {
         List<Explosion> burst = field.takeNewExplosions();
         assertEquals(1, burst.size());
         assertEquals(2, burst.get(0).ownerId());
+    }
+
+    @Test
+    void 여러_물줄기가_덮은_칸의_주인은_가까이에서_터진_것부터_거리가_같으면_늦게_터진_것부터다() {
+        // 1P는 1열, 2P는 5열, 3P는 2열 아랫줄. 상찌는 물줄기 2칸으로 시작한다
+        TileMap map = MapLoader.parse("fixture/open", List.of(".1....", "......", "......"));
+        BalloonField field = new BalloonField(map);
+        Player first = playerAt(1, Mascot.SANGZZI, 1, 0);
+        Player second = playerAt(2, Mascot.SANGZZI, 5, 0);
+        Player third = playerAt(3, Mascot.SANGZZI, 3, 2);
+        List<Player> players = List.of(first, second, third);
+        field.place(first, players);
+        field.place(second, players);
+        field.place(third, players);
+
+        field.detonate(1, 0);
+        field.detonate(5, 0);
+        field.detonate(3, 2);
+
+        // (3, 0)은 1P·2P 물풍선에서 2칸, 3P 물풍선에서 2칸. 모두 거리가 같아 늦게 터진 차례로
+        assertEquals(List.of(3, 2, 1), field.wetOwnersAt(3, 0));
+        // (2, 0)은 1P에게서 1칸, 3P에게서 3칸이라 3P 물줄기가 닿지 않는다
+        assertEquals(List.of(1), field.wetOwnersAt(2, 0));
+        // (4, 0)은 2P에게서 1칸
+        assertEquals(List.of(2), field.wetOwnersAt(4, 0));
+        // (3, 1)은 3P에게서 1칸뿐
+        assertEquals(List.of(3), field.wetOwnersAt(3, 1));
+        assertEquals(List.of(), field.wetOwnersAt(0, 2));
+    }
+
+    @Test
+    void 거리가_다르면_먼저_터졌어도_가까운_물줄기의_주인이_앞이고_한_사람은_한_번만_넣는다() {
+        TileMap map = MapLoader.parse("fixture/open", List.of("..2....", "....1.."));
+        BalloonField field = new BalloonField(map);
+        Player first = playerAt(1, Mascot.SANGZZI, 4, 1);
+        Player second = playerAt(2, Mascot.SANGZZI, 2, 0);
+        List<Player> players = List.of(first, second);
+        second.addBalloons(1);
+        field.place(first, players);
+        field.place(second, players);
+        second.placeAt(TileMap.centerX(6), TileMap.centerY(0));
+        field.place(second, players);
+
+        // 1P 물풍선이 먼저, 2P 물풍선 둘이 나중에 터진다
+        field.detonate(4, 1);
+        field.detonate(2, 0);
+        field.detonate(6, 0);
+
+        // (4, 0)은 1P 물풍선에서 1칸, 2P의 두 물풍선에서 각각 2칸
+        assertEquals(List.of(1, 2), field.wetOwnersAt(4, 0));
     }
 
     @Test

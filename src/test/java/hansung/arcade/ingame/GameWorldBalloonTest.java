@@ -210,6 +210,29 @@ class GameWorldBalloonTest {
     }
 
     @Test
+    void 같은_틱에_연쇄로_터진_자기_물줄기와_상대_물줄기에_함께_갇히면_상대가_kill을_얻는다() {
+        // 2P가 (0, 0)에, 1P가 (2, 0)에 물풍선을 놓는다. 물줄기가 2칸이라 2P 물풍선이 터지면 1P 물풍선도 같은 틱에 터지고,
+        // 둘 다 그 사이 (1, 0)을 덮는다
+        GameWorld world = new GameWorld(MapLoader.parse("fixture/chain", List.of("2.1..", ".....")),
+                List.of(new PlayerProfile("부기", Mascot.SANGZZI), new PlayerProfile("냥이", Mascot.SANGZZI)), MatchMode.SOLO);
+        Player first = world.localPlayers().get(0);
+        Player second = world.localPlayers().get(1);
+        world.update(TICK, Map.of(second.id(), BALLOON));
+        world.update(TICK, Map.of(first.id(), BALLOON));
+        first.placeAt(TileMap.centerX(1), TileMap.centerY(0));
+        second.placeAt(TileMap.centerX(4), TileMap.centerY(1));
+
+        ticks(world, 119);
+        assertEquals(PlayerState.TRAPPED, first.state());
+        assertEquals(2, world.balloonField().explosions().size(), "연쇄로 같은 틱에 둘 다 터졌다");
+        assertEquals(second.id(), first.trapperId().orElseThrow());
+
+        ticks(world, 300);
+        assertFalse(first.isAlive());
+        assertEquals(1, world.match().kills(second.id()));
+    }
+
+    @Test
     void 자기_물줄기에_갇혀_시간이_다_되면_아무도_kill을_얻지_않는다() {
         GameWorld world = duo(MatchMode.SOLO, 1, 1);
         Player first = world.localPlayers().get(0);

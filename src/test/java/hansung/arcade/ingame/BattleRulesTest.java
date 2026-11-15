@@ -16,7 +16,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.OptionalInt;
+import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -32,8 +32,8 @@ class BattleRulesTest {
 
     private final List<Player> players = new ArrayList<>();
     private final Map<Integer, PlayerGear> gears = new HashMap<>();
-    /** "col,row" → 그 칸을 덮은 물줄기의 주인 */
-    private final Map<String, Integer> water = new HashMap<>();
+    /** "col,row" → 그 칸을 덮은 물줄기의 주인들. 가둔 사람으로 칠 차례대로 */
+    private final Map<String, List<Integer>> water = new HashMap<>();
 
     /** team 편의 플레이어를 (col, row) 칸 가운데에 세운다. 번호는 넣은 차례대로 1부터 */
     private Player join(int team, int col, int row) {
@@ -44,17 +44,16 @@ class BattleRulesTest {
         return player;
     }
 
-    private void wet(int col, int row, int owner) {
-        water.put(col + "," + row, owner);
+    private void wet(int col, int row, int... owners) {
+        water.put(col + "," + row, IntStream.of(owners).boxed().toList());
     }
 
-    private OptionalInt ownerAt(int col, int row) {
-        Integer owner = water.get(col + "," + row);
-        return owner == null ? OptionalInt.empty() : OptionalInt.of(owner);
+    private List<Integer> ownersAt(int col, int row) {
+        return water.getOrDefault(col + "," + row, List.of());
     }
 
     private BattleRules rules(Match match) {
-        return new BattleRules(players, match, player -> gears.get(player.id()), this::ownerAt);
+        return new BattleRules(players, match, player -> gears.get(player.id()), this::ownersAt);
     }
 
     /** 플레이어들의 상태 시간을 seconds초 흘린다 (움직이지는 않는다) */
@@ -76,6 +75,60 @@ class BattleRulesTest {
         assertEquals(PlayerState.TRAPPED, first.state());
         assertEquals(second.id(), first.trapperId().orElseThrow());
         assertEquals(PlayerState.NORMAL, second.state());
+    }
+
+    @Test
+    void 자기_물줄기와_상대_물줄기가_함께_덮은_칸에서는_상대가_가둔_사람이_되어_kill을_얻는다() {
+        Player first = join(1, 0, 0);
+        Player second = join(2, 3, 0);
+        // 차례로는 자기 물줄기가 앞이어도 상대를 먼저 본다
+        wet(0, 0, first.id(), second.id());
+        Match match = new Match(MatchMode.SOLO, players);
+        BattleRules rules = rules(match);
+
+        rules.settle();
+        assertEquals(second.id(), first.trapperId().orElseThrow());
+
+        elapse(Player.TRAP_SECONDS);
+        rules.settle();
+        assertFalse(first.isAlive());
+        assertEquals(1, match.kills(second.id()));
+    }
+
+    @Test
+    void 팀전에서_같은_편과_상대의_물줄기가_함께_덮으면_상대가_가둔_사람이다() {
+        Player first = join(1, 0, 0);
+        Player ally = join(1, 3, 0);
+        Player enemy = join(2, 6, 0);
+        wet(0, 0, ally.id(), enemy.id());
+
+        rules(new Match(MatchMode.TEAM, players)).settle();
+
+        assertEquals(enemy.id(), first.trapperId().orElseThrow());
+    }
+
+    @Test
+    void 상대_물줄기가_여럿이면_주어진_차례에서_맨_앞_상대가_가둔_사람이다() {
+        Player first = join(1, 0, 0);
+        join(2, 3, 0);
+        Player third = join(3, 6, 0);
+        wet(0, 0, first.id(), third.id(), 2);
+
+        rules(new Match(MatchMode.SOLO, players)).settle();
+
+        assertEquals(third.id(), first.trapperId().orElseThrow());
+    }
+
+    @Test
+    void 자기와_같은_편_물줄기뿐이면_맨_앞_주인이_가둔_사람이다() {
+        Player first = join(1, 0, 0);
+        Player ally = join(1, 3, 0);
+        join(2, 6, 0);
+        wet(0, 0, ally.id(), first.id());
+
+        rules(new Match(MatchMode.TEAM, players)).settle();
+
+        assertEquals(ally.id(), first.trapperId().orElseThrow());
     }
 
     @Test

@@ -134,7 +134,7 @@ public final class GameWorld {
         this.localPlayer = localPlayers.get(0);
         // 플레이어를 모두 만든 뒤에 경기를 연다 (경기 중에 플레이어를 더하지 않는다)
         this.match = new Match(mode, players());
-        this.battleRules = new BattleRules(localPlayers, match, this::gear, balloonField::wetOwnerAt);
+        this.battleRules = new BattleRules(localPlayers, match, this::gear, balloonField::wetOwnersAt);
     }
 
     /**
