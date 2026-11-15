@@ -155,6 +155,33 @@ class GameWorldPushTest {
     }
 
     @Test
+    void 밀려_갈_칸에_물줄기가_남아_있으면_밀리지_않고_물줄기가_사라지면_바로_밀린다() {
+        GameWorld world = duo("1P.2", "....");
+        Player first = world.localPlayers().get(0);
+        Player second = world.localPlayers().get(1);
+        // 2P가 (3, 0)에 물풍선을 놓고 물줄기가 닿지 않는 (1, 1)로 비킨다
+        world.update(TICK, Map.of(second.id(), new PlayerCommand(null, true, false)));
+        second.placeAt(TileMap.centerX(1), TileMap.centerY(1));
+        walk(world, first, Direction.RIGHT, REACH_TICKS + PUSH_TICKS - 3);
+        assertEquals(Tile.PUSH_BOX, world.map().tileAt(1, 0));
+
+        // 물풍선이 터져 밀려 갈 칸 (2, 0)에 물줄기가 남는다
+        world.balloonField().detonate(3, 0);
+        walk(world, first, Direction.RIGHT, 10);
+        assertTrue(world.balloonField().isWet(2, 0));
+        assertEquals(Tile.PUSH_BOX, world.map().tileAt(1, 0), "물줄기가 남은 칸으로는 밀리지 않는다");
+
+        // 물줄기는 밀기를 본 뒤에 사라지므로, 사라진 다음 틱에 민 시간이 이미 차 있어 바로 밀린다
+        while (world.balloonField().isWet(2, 0)) {
+            walk(world, first, Direction.RIGHT, 1);
+        }
+        assertEquals(Tile.PUSH_BOX, world.map().tileAt(1, 0));
+        walk(world, first, Direction.RIGHT, 1);
+        assertEquals(Tile.FLOOR, world.map().tileAt(1, 0));
+        assertEquals(Tile.PUSH_BOX, world.map().tileAt(2, 0));
+    }
+
+    @Test
     void 밀린_상자는_떠난_칸에서_도착_칸까지_미끄러져_보인다() {
         GameWorld world = solo("1P..");
         Player me = world.localPlayer();

@@ -18,7 +18,7 @@ import java.util.Optional;
  * 몸으로 미는 블럭({@link Tile#isPushable()}). Swing에 의존하지 않는다.
  *
  * <p>보통 상태의 플레이어가 한 방향으로 걷다가 바로 앞(몸 가운데 칸의 다음 칸) 블럭에 막힌 채 {@link #PUSH_SECONDS}초를
- * 계속 밀면, 블럭이 그 방향으로 한 칸 밀린다. 밀려 갈 칸이 바닥이고(블럭·덤불·맵 밖이 아니고) 물풍선·아이템·플레이어가
+ * 계속 밀면, 블럭이 그 방향으로 한 칸 밀린다. 밀려 갈 칸이 바닥이고(블럭·덤불·맵 밖이 아니고) 물풍선·아이템·플레이어·물줄기가
  * 없어야 밀린다. 맵 칸은 미는 순간 옮기고, 그림만 {@link #SLIDE_SECONDS}초 동안 미끄러진다.
  * 미끄러지는 동안에는 그 블럭을 다시 밀 수 없다.</p>
  */
@@ -43,7 +43,7 @@ public final class BoxPusher {
      * player가 이번 틱에 input 쪽으로 움직이려 한 뒤에 부른다. 막혀서 못 움직였고 앞 칸이 밀리는 블럭이면 민 시간을 쌓고,
      * 다 찼으면 블럭을 한 칸 민다. 움직였거나, 방향을 바꿨거나, 손을 뗐으면 민 시간은 처음부터 다시 센다.
      *
-     * @param occupied 블럭을 밀어 넣을 수 없는 칸 (물풍선·아이템·플레이어가 있는 칸). 맵의 블럭·덤불은 여기서 따로 본다
+     * @param occupied 블럭을 밀어 넣을 수 없는 칸 (물풍선·아이템·플레이어·물줄기가 있는 칸). 맵의 블럭·덤불은 여기서 따로 본다
      * @return 이번에 블럭을 밀었으면 그 미끄러짐
      */
     public Optional<SlidingBlock> push(Player player, Direction input, double dt, Obstacles occupied) {

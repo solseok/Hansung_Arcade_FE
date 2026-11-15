@@ -223,12 +223,14 @@ public final class GameWorld {
 
     /**
      * 밀린 블럭이 들어갈 수 없게 무언가 있는 칸인지: 물풍선(미끄러져 들어오거나 던져져 내려앉을 칸 포함), 아이템,
-     * 몸이 조금이라도 걸친 플레이어(사라진 사람 빼고), 점프해 내려앉을 칸
+     * 몸이 조금이라도 걸친 플레이어(사라진 사람 빼고), 점프해 내려앉을 칸, 물줄기가 남은 칸.
+     * 물줄기가 남은 칸에 들어간 블럭은 바로 부서질 수 있는데, 거기서 나온 아이템은 그 물줄기에 바로 사라지므로 밀지 않는다.
      */
     private boolean holdsSomething(int col, int row) {
         return balloonField.holds(col, row) || items.at(col, row).isPresent()
                 || players().stream().anyMatch(p -> p.state() != PlayerState.GONE && p.overlapsTile(col, row))
-                || gears.values().stream().anyMatch(gear -> gear.isLandingOn(col, row));
+                || gears.values().stream().anyMatch(gear -> gear.isLandingOn(col, row))
+                || balloonField.isWet(col, row);
     }
 
     /**
