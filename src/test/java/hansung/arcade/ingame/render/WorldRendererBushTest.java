@@ -1,6 +1,7 @@
 package hansung.arcade.ingame.render;
 
 import hansung.arcade.ingame.GameWorld;
+import hansung.arcade.ingame.balloon.WaterBalloon;
 import hansung.arcade.ingame.block.SlidingBlock;
 import hansung.arcade.ingame.entity.Direction;
 import hansung.arcade.ingame.entity.Mascot;
@@ -31,8 +32,8 @@ class WorldRendererBushTest {
     private static final double TICK = 1.0 / 60;
     private static final Tileset TILESET = Tileset.forTheme("fixture");
     private static final ItemSprites ITEMS = ItemSprites.load();
-    private static final WorldRenderer RENDERER = new WorldRenderer(TILESET, CharacterSprites.load(),
-            BalloonSprites.load(), ITEMS);
+    private static final BalloonSprites BALLOONS = BalloonSprites.load();
+    private static final WorldRenderer RENDERER = new WorldRenderer(TILESET, CharacterSprites.load(), BALLOONS, ITEMS);
 
     private static BufferedImage draw(GameWorld world, Concealment concealment) {
         BufferedImage canvas = new BufferedImage(world.map().pixelWidth(), world.map().pixelHeight(),
@@ -138,6 +139,66 @@ class WorldRendererBushTest {
         // 아이템 그림은 칸 위쪽으로 떠 있어 덤불 상자 위 2px 틈에 걸친다
         assertEquals(0, paintedIn(draw(world, nobody), 2 * T, T, T, 2));
         assertTrue(paintedIn(draw(world, inSecond), 2 * T, T, T, 2) > 0);
+    }
+
+    @Test
+    void 던진_물풍선은_숨은_덤불_칸_위를_나는_동안에도_보이고_숨은_덤불에_내려앉으면_숨는다() {
+        // 1P가 (0, 1)에 놓고 오른쪽으로 던지면 덤불 (2, 1)~(5, 1) 위를 날아 덤불 (6, 1)에 내려앉는다
+        TileMap map = MapLoader.parse("fixture/throw-over-bush", List.of(".......", "1.TTTTT", "......."));
+        GameWorld world = new GameWorld(map, new PlayerProfile("부기", Mascot.SANGSANGBUGI));
+        Player me = world.localPlayer();
+        world.update(TICK, Map.of(me.id(), new PlayerCommand(null, true, false)));
+        WaterBalloon balloon = world.balloonField().balloons().get(0);
+        assertTrue(world.balloonField().throwBalloon(balloon, Direction.RIGHT));
+
+        int overHiddenBush = 0;
+        for (world.update(TICK, Map.of()); balloon.isFlying(); world.update(TICK, Map.of())) {
+            Concealment concealment = Concealment.of(world);
+            if (concealment.hides(TileMap.colAt(balloon.x()), TileMap.rowAt(balloon.y()))) {
+                overHiddenBush++;
+            }
+            BufferedImage canvas = draw(world, concealment);
+            int[] drawn = spritePixels(BALLOONS.balloon(balloon.age()), canvas,
+                    (int) Math.round(balloon.x()) - BalloonSprites.BALLOON_CENTER_X,
+                    (int) Math.round(balloon.y()) - BalloonSprites.BALLOON_CENTER_Y - (int) Math.round(balloon.height()));
+            // 덤불 위라도 날아가는 물풍선 그림은 맨 위에 빠짐없이 그대로 찍힌다
+            assertTrue(drawn[1] > 1000, "x " + balloon.x());
+            assertEquals(drawn[1], drawn[0], "x " + balloon.x());
+        }
+        assertTrue(overHiddenBush > 10, "숨은 덤불 위를 난 틱 " + overHiddenBush);
+
+        assertEquals(6, balloon.col());
+        int left = 6 * T + T / 2 - BalloonSprites.BALLOON_CENTER_X;
+        int top = T + T / 2 - BalloonSprites.BALLOON_CENTER_Y;
+        BufferedImage hidden = draw(world, Concealment.of(world));
+        BufferedImage revealed = draw(world, Concealment.forViewers(map, List.of(new Player(9, 6, 1))));
+        // 숨은 덤불에서는 덤불 상자가 비워 둔 칸 둘레에도 물풍선이 보이지 않는다
+        assertEquals(0, spritePixels(BALLOONS.balloon(balloon.age()), hidden, left, top)[0]);
+        assertTrue(spritePixels(BALLOONS.balloon(balloon.age()), revealed, left, top)[0] > 0);
+    }
+
+    /**
+     * sprite의 완전히 불투명한 픽셀 중 canvas 안에 드는 것을 (left, top)부터 놓아 본다.
+     *
+     * @return {canvas에 같은 색으로 찍힌 픽셀 수, canvas 안에 드는 픽셀 수}
+     */
+    private static int[] spritePixels(BufferedImage sprite, BufferedImage canvas, int left, int top) {
+        int same = 0;
+        int inside = 0;
+        for (int y = 0; y < sprite.getHeight(); y++) {
+            for (int x = 0; x < sprite.getWidth(); x++) {
+                int rgb = sprite.getRGB(x, y);
+                int cx = left + x;
+                int cy = top + y;
+                if ((rgb >>> 24) == 0xFF && cx >= 0 && cy >= 0 && cx < canvas.getWidth() && cy < canvas.getHeight()) {
+                    inside++;
+                    if (canvas.getRGB(cx, cy) == rgb) {
+                        same++;
+                    }
+                }
+            }
+        }
+        return new int[]{same, inside};
     }
 
     @Test

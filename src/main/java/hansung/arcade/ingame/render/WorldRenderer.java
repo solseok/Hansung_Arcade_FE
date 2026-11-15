@@ -50,7 +50,7 @@ import java.util.Optional;
  * 보호막을 쓰는 중이면 캐릭터를 머리 꼭대기까지 반투명한 물방울 막(세로로 긴 타원)으로 감싸고, 끝나기 {@link #SHIELD_WARNING_SECONDS}초 전부터 깜빡인다.
  * 탱크가 막 부서진 뒤 맞지 않는 동안은 캐릭터가 깜빡인다. 스프링 신발로 뛰면 그림자는 땅에 두고 캐릭터만 포물선으로
  * {@link #JUMP_HEIGHT}px 솟는다. 밀려 미끄러지는 물풍선은 칸 사이에, 던진 물풍선은 모든 줄을 그린 뒤 맨 위에
- * 땅의 그림자와 함께 떠 있는 높이만큼 올려 그린다. 날아가는 물풍선도 땅 위 자리가 숨은 덤불이면 그리지 않는다.</p>
+ * 땅의 그림자와 함께 떠 있는 높이만큼 올려 그린다. 날아가는 물풍선은 공중에 있는 동안 덤불 칸 위라도 보인다.</p>
  */
 public final class WorldRenderer {
 
@@ -148,7 +148,7 @@ public final class WorldRenderer {
             }
             drawBushes(g, map, row, concealment);
         }
-        drawFlyingBalloons(g, field, concealment);
+        drawFlyingBalloons(g, field);
     }
 
     /** row줄의 덤불이 아닌 물체. 밀려 미끄러지는 블럭은 떠난 칸과 도착 칸 사이에 그린다 */
@@ -239,11 +239,13 @@ public final class WorldRenderer {
     /**
      * 던져져 날아가는 물풍선. 공중에 있으니 모든 줄을 그린 뒤 맨 위에 그린다. 땅 위 자리에 그림자를 깔고,
      * 떠 있는 높이가 높을수록 그림자를 작게 한다.
+     *
+     * <p>비행기에서 떨어지는 아이템처럼 공중에 있는 동안은 숨은 덤불 칸 위를 지나도 그림자째 보인다.
+     * 그래야 덤불 위를 지날 때 사라졌다 나타나며 깜빡이지 않는다. 숨은 덤불에 내려앉으면 놓인 물풍선이 되어 숨는다.</p>
      */
-    private void drawFlyingBalloons(Graphics2D g, BalloonField field, Concealment concealment) {
+    private void drawFlyingBalloons(Graphics2D g, BalloonField field) {
         for (WaterBalloon balloon : field.balloons()) {
-            if (!balloon.isFlying()
-                    || concealment.hides(TileMap.colAt(balloon.x()), TileMap.rowAt(balloon.y()))) {
+            if (!balloon.isFlying()) {
                 continue;
             }
             int x = (int) Math.round(balloon.x());
