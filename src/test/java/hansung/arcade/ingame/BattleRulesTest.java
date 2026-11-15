@@ -127,6 +127,53 @@ class BattleRulesTest {
         assertEquals(0, match.kills(second.id()));
     }
 
+    /** 1P는 (2, 0) 칸 아래쪽 끝, 2P는 바로 밑 (2, 1) 칸 위쪽 끝에 세워 반 칸 안으로 붙인다. 1P 칸만 1P의 물줄기가 덮는다 */
+    private void touchingAcrossCells(Player first, Player second) {
+        first.placeAt(TileMap.centerX(2), TileMap.TILE_SIZE - 5);
+        second.placeAt(TileMap.centerX(2), TileMap.TILE_SIZE + 5);
+        assertEquals(0, first.row());
+        assertEquals(1, second.row());
+        assertTrue(second.touches(first));
+        wet(2, 0, first.id());
+    }
+
+    @Test
+    void 갇히는_틱에_이미_닿아_있던_상대는_그_틱에는_터뜨리지_않고_다음_틱에_터뜨린다() {
+        Player first = join(1, 0, 0);
+        Player second = join(2, 0, 0);
+        touchingAcrossCells(first, second);
+        Match match = new Match(MatchMode.SOLO, players);
+        BattleRules rules = rules(match);
+
+        rules.settle();
+        assertEquals(PlayerState.TRAPPED, first.state());
+        assertEquals(0, match.kills(second.id()));
+
+        elapse(TICK);
+        rules.settle();
+        assertEquals(PlayerState.DYING, first.state());
+        assertEquals(1, match.kills(second.id()));
+    }
+
+    @Test
+    void 갇히는_틱에_이미_닿아_있던_팀원은_그_틱에는_구하지_않고_다음_틱에_구한다() {
+        Player first = join(1, 0, 0);
+        Player second = join(1, 0, 0);
+        join(2, 5, 5);
+        touchingAcrossCells(first, second);
+        Match match = new Match(MatchMode.TEAM, players);
+        BattleRules rules = rules(match);
+
+        rules.settle();
+        assertEquals(PlayerState.TRAPPED, first.state());
+        assertEquals(0, match.saves(second.id()));
+
+        elapse(TICK);
+        rules.settle();
+        assertEquals(PlayerState.ESCAPING, first.state());
+        assertEquals(1, match.saves(second.id()));
+    }
+
     @Test
     void 반_칸_넘게_떨어져_있으면_닿지_않는다() {
         Player first = join(1, 0, 0);

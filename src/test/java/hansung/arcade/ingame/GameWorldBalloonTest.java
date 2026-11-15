@@ -133,6 +133,56 @@ class GameWorldBalloonTest {
         assertTrue(first.x() > x);
     }
 
+    /**
+     * 1P가 (1, 0)에 물풍선을 놓은 뒤, 1P는 물줄기가 닿을 (2, 0) 칸 아래쪽 끝에, 2P는 물줄기 밖인 바로 밑 (2, 1) 칸 위쪽 끝에
+     * 옮겨 세워 반 칸 안으로 붙여 둔다. 다음 틱에 물풍선이 터진다.
+     */
+    private static GameWorld touchingWhenSoaked(MatchMode mode) {
+        GameWorld world = new GameWorld(MapLoader.parse("fixture/touching", List.of(".1...", "..2..", ".....")),
+                List.of(new PlayerProfile("부기", Mascot.SANGSANGBUGI, 1), new PlayerProfile("냥이", Mascot.HANSUNGNYANGI, 1)),
+                mode);
+        Player first = world.localPlayers().get(0);
+        Player second = world.localPlayers().get(1);
+        world.update(TICK, Map.of(first.id(), BALLOON));
+        first.placeAt(TileMap.centerX(2), TileMap.TILE_SIZE - 5);
+        second.placeAt(TileMap.centerX(2), TileMap.TILE_SIZE + 5);
+        assertTrue(first.touches(second));
+        ticks(world, 119);
+        assertEquals(PlayerState.NORMAL, first.state());
+        return world;
+    }
+
+    @Test
+    void 개인전에서_갇히는_틱에_닿아_있던_상대는_한_틱_뒤에_터뜨린다() {
+        GameWorld world = touchingWhenSoaked(MatchMode.SOLO);
+        Player first = world.localPlayers().get(0);
+        Player second = world.localPlayers().get(1);
+
+        ticks(world, 1);
+        assertEquals(PlayerState.TRAPPED, first.state(), "갇힌 모습이 적어도 한 틱은 보인다");
+        assertEquals(PlayerState.NORMAL, second.state());
+        assertEquals(0, world.match().kills(second.id()));
+
+        ticks(world, 1);
+        assertEquals(PlayerState.DYING, first.state());
+        assertEquals(1, world.match().kills(second.id()));
+    }
+
+    @Test
+    void 팀전에서_갇히는_틱에_닿아_있던_팀원은_한_틱_뒤에_구한다() {
+        GameWorld world = touchingWhenSoaked(MatchMode.TEAM);
+        Player first = world.localPlayers().get(0);
+        Player second = world.localPlayers().get(1);
+
+        ticks(world, 1);
+        assertEquals(PlayerState.TRAPPED, first.state(), "갇힌 모습이 적어도 한 틱은 보인다");
+        assertEquals(0, world.match().saves(second.id()));
+
+        ticks(world, 1);
+        assertEquals(PlayerState.ESCAPING, first.state());
+        assertEquals(1, world.match().saves(second.id()));
+    }
+
     @Test
     void 아무도_건드리지_않으면_5초_뒤_탈락하고_가둔_사람이_상대면_kill을_얻는다() {
         GameWorld world = duo(MatchMode.SOLO, 1, 1);
