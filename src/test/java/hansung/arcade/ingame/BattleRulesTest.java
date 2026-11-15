@@ -175,6 +175,70 @@ class BattleRulesTest {
     }
 
     @Test
+    void 같은_틱에_팀원과_상대가_함께_닿으면_번호와_상관없이_터뜨린다() {
+        // 팀원의 번호가 상대보다 작을 때와 클 때 모두
+        for (boolean allyFirst : new boolean[]{true, false}) {
+            players.clear();
+            gears.clear();
+            Player trapped = join(1, 2, 2);
+            Player ally;
+            Player enemy;
+            if (allyFirst) {
+                ally = join(1, 0, 0);
+                enemy = join(2, 0, 0);
+            } else {
+                enemy = join(2, 0, 0);
+                ally = join(1, 0, 0);
+            }
+            Match match = new Match(MatchMode.TEAM, players);
+            trapped.trap(trapped.id());
+            // 팀원이 상대보다 더 가까이 붙어 있다
+            ally.placeAt(trapped.x() - 5, trapped.y());
+            enemy.placeAt(trapped.x() + 15, trapped.y());
+
+            rules(match).settle();
+
+            String when = allyFirst ? "팀원 번호가 작을 때" : "팀원 번호가 클 때";
+            assertEquals(PlayerState.DYING, trapped.state(), when);
+            assertEquals(1, match.kills(enemy.id()), when);
+            assertEquals(0, match.saves(ally.id()), when);
+        }
+    }
+
+    @Test
+    void 상대가_여럿_닿으면_가장_가까운_상대가_kill을_얻는다() {
+        Player trapped = join(1, 2, 2);
+        Player far = join(2, 0, 0);
+        Player near = join(3, 0, 0);
+        Match match = new Match(MatchMode.SOLO, players);
+        trapped.trap(trapped.id());
+        far.placeAt(trapped.x() - 15, trapped.y());
+        near.placeAt(trapped.x(), trapped.y() + 10);
+
+        rules(match).settle();
+
+        assertEquals(PlayerState.DYING, trapped.state());
+        assertEquals(1, match.kills(near.id()));
+        assertEquals(0, match.kills(far.id()));
+    }
+
+    @Test
+    void 같은_거리에서_여럿_닿으면_번호가_작은_사람이_얻는다() {
+        Player trapped = join(1, 2, 2);
+        Player second = join(2, 0, 0);
+        Player third = join(3, 0, 0);
+        Match match = new Match(MatchMode.SOLO, players);
+        trapped.trap(trapped.id());
+        third.placeAt(trapped.x() + 10, trapped.y());
+        second.placeAt(trapped.x() - 10, trapped.y());
+
+        rules(match).settle();
+
+        assertEquals(1, match.kills(second.id()));
+        assertEquals(0, match.kills(third.id()));
+    }
+
+    @Test
     void 반_칸_넘게_떨어져_있으면_닿지_않는다() {
         Player first = join(1, 0, 0);
         Player second = join(2, 3, 0);

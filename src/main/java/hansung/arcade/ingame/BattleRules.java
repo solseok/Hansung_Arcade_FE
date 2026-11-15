@@ -5,6 +5,7 @@ import hansung.arcade.ingame.entity.PlayerState;
 import hansung.arcade.ingame.item.PlayerGear;
 import hansung.arcade.ingame.match.Match;
 
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
@@ -23,7 +24,8 @@ import java.util.function.Function;
  *       보호막을 쓰는 중이거나, 탱크가 막 부서졌거나, 점프해 공중에 있으면 맞지 않고, 탱크에 타고 있으면 갇히는 대신 탱크가 부서진다.</li>
  *   <li>접촉: 갇힌 사람에게 보통 상태의 다른 플레이어가 닿으면, 같은 편이면 구하고(save) 상대면 터뜨린다(kill, 탈락).
  *       이전 틱부터 갇혀 있던 사람만 본다. 그래서 갇히는 틱에 이미 닿아 있었어도 그 틱에는 갇힌 채로 남고, 다음 틱부터 가린다.
- *       같은 틱에 여럿이 닿으면 번호가 작은 사람이 먼저 닿은 것으로 친다.</li>
+ *       같은 틱에 상대와 같은 편이 함께 닿으면 번호와 상관없이 터뜨린다(처치가 먼저).
+ *       kill·save는 닿은 사람 가운데 중심이 갇힌 사람과 가장 가까운 사람이 얻고, 거리까지 같으면 번호가 작은 사람이 얻는다.</li>
  *   <li>시간 초과: 갇힌 채 {@link Player#TRAP_SECONDS}초가 지나면 탈락한다. 가둔 물줄기의 주인이 상대면 그 주인이 kill을 얻는다.</li>
  * </ol>
  */
@@ -85,8 +87,9 @@ final class BattleRules {
     }
 
     /**
-     * 갇힌 사람에게 보통 상태의 플레이어가 닿으면 같은 편은 구하고 상대는 터뜨린다.
-     * 같은 틱에 여럿이 닿으면 번호가 작은 사람이 먼저 닿은 것으로 친다.
+     * 갇힌 사람에게 보통 상태의 플레이어가 닿으면 상대는 터뜨리고 같은 편은 구한다. 점프해 공중에 있는 사람은 닿지 않는다.
+     * 상대가 하나라도 닿았으면 같은 편이 함께 닿았어도 터뜨린다. 닿은 상대(상대가 없으면 같은 편) 가운데
+     * {@link #nearest 가장 가까운 사람}이 kill(save)을 얻는다.
      *
      * @param justTrapped 이번 틱에 갇힌 사람들. 갇힌 모습이 한 틱도 보이지 않은 채 풀리거나 터지지 않도록 이번 틱에는 가리지 않는다
      */
@@ -95,21 +98,28 @@ final class BattleRules {
             if (trapped.state() != PlayerState.TRAPPED || justTrapped.contains(trapped)) {
                 continue;
             }
-            for (Player other : players) {
-                if (other == trapped || other.state() != PlayerState.NORMAL || gears.apply(other).isAirborne()
-                        || !other.touches(trapped)) {
-                    continue;
-                }
-                if (match.isAlly(other, trapped)) {
-                    trapped.escape();
-                    match.recordSave(other.id());
-                } else {
-                    trapped.eliminate();
-                    match.recordKill(other.id());
-                }
-                break;
+            List<Player> touching = players.stream()
+                    .filter(other -> other != trapped && other.state() == PlayerState.NORMAL
+                            && !gears.apply(other).isAirborne() && other.touches(trapped))
+                    .toList();
+            Optional<Player> killer = nearest(trapped, touching.stream().filter(other -> !match.isAlly(other, trapped)).toList());
+            if (killer.isPresent()) {
+                trapped.eliminate();
+                match.recordKill(killer.get().id());
+                continue;
             }
+            nearest(trapped, touching).ifPresent(saver -> {
+                trapped.escape();
+                match.recordSave(saver.id());
+            });
         }
+    }
+
+    /** candidates 가운데 중심이 trapped의 중심과 가장 가까운 사람. 거리까지 같으면 번호가 작은 사람이다 */
+    private static Optional<Player> nearest(Player trapped, List<Player> candidates) {
+        return candidates.stream().min(Comparator
+                .comparingDouble((Player other) -> Math.hypot(other.x() - trapped.x(), other.y() - trapped.y()))
+                .thenComparingInt(Player::id));
     }
 
     /** 갇힌 채 시간이 다 된 사람을 탈락시킨다. 가둔 물줄기의 주인이 상대면 그 주인에게 kill을 준다 */
