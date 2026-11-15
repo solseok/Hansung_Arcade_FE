@@ -27,7 +27,9 @@ import java.util.random.RandomGenerator;
  *   <li>비행기가 고른 칸의 열을 지나는 순간 그 칸을 본다. 블럭(지나갈 수 없는 칸)·캐릭터·물풍선·이미 놓인 아이템이 있으면
  *       떨어뜨리지 않는다. 그래서 한 번에 0~2개가 떨어진다. 덤불은 지나갈 수 있는 칸이라 떨어뜨리고, 떨어진 아이템은 덤불에 숨는다.
  *       아이템이 있는 칸에 떨어뜨리면 그 아이템을 바꿔 버리므로 떨어뜨리지 않는다.</li>
- *   <li>떨어뜨린 아이템은 짧게 떨어지는 연출({@link FallingItem}) 뒤 칸에 놓인다. 그 사이 밀린 블럭이 들어와 칸이 막혔으면 놓지 않는다.</li>
+ *   <li>떨어뜨린 아이템은 짧게 떨어지는 연출({@link FallingItem}) 뒤 칸에 놓인다. 그 사이 밀린 블럭이 들어와 칸이 막혔거나
+ *       다른 아이템이 놓였으면 놓지 않는다. 캐릭터·물풍선은 지나가는 순간에만 보므로, 떨어지는 사이 들어온 캐릭터는
+ *       놓이는 대로 아이템을 먹고 물풍선 밑에 놓인 아이템은 물풍선이 터질 때 사라진다.</li>
  *   <li>날고 있는 중에 경기가 끝나면 비행기는 마저 지나가지만 더 떨어뜨리지 않는다. 이미 떨어지던 아이템은 놓인다.</li>
  * </ul>
  *
@@ -136,10 +138,13 @@ public final class AirDrop {
         falling.add(new FallingItem(drop, TileMap.centerY(drop.row()) - Flight.CRUISE_Y));
     }
 
-    /** 떨어지던 아이템이 칸에 닿는 순간. 그 사이 블럭이 밀려 들어와 막혔으면 놓지 않는다 */
+    /**
+     * 떨어지던 아이템이 칸에 닿는 순간. 그 사이 블럭이 밀려 들어와 막혔으면 놓지 않고,
+     * 그 사이 다른 아이템이 놓였으면(밀려 온 블럭이 부서져 나온 아이템 등) 그 아이템을 바꾸지 않도록 놓지 않는다.
+     */
     private void land(Drop drop, GameWorld world) {
-        if (map.isSolid(drop.col(), drop.row())) {
-            log.debug("막힌 칸에 떨어져 사라짐: {}", drop);
+        if (map.isSolid(drop.col(), drop.row()) || world.items().at(drop.col(), drop.row()).isPresent()) {
+            log.debug("막혔거나 아이템이 있는 칸에 떨어져 사라짐: {}", drop);
             return;
         }
         world.items().place(drop.col(), drop.row(), drop.item());

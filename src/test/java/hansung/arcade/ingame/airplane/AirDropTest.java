@@ -317,6 +317,22 @@ class AirDropTest {
     }
 
     @Test
+    void 떨어지는_동안_칸에_다른_아이템이_놓이면_그_아이템을_바꾸지_않는다() {
+        GameWorld world = world(map(), 1);
+        AirDrop airDrop = new AirDrop(world.map(), ScriptedRandom.of(0.5));
+        airDrop.launch(eastward(new Drop(7, 9, ItemType.BUBBLE)));
+        flyUntilJustBefore(world, airDrop, 7);
+        run(world, airDrop, 1);
+        assertEquals(1, airDrop.fallingItems().size());
+
+        world.items().place(7, 9, ItemType.ROLLER_SHOE);
+        run(world, airDrop, 60);
+
+        assertTrue(airDrop.fallingItems().isEmpty());
+        assertEquals(Optional.of(ItemType.ROLLER_SHOE), world.items().at(7, 9).map(i -> i.type()));
+    }
+
+    @Test
     void 날다가_경기가_끝나면_더_떨어뜨리지_않고_마저_지나간다() {
         GameWorld world = world(map(), 2);
         AirDrop airDrop = new AirDrop(world.map(), ScriptedRandom.of(0.5));

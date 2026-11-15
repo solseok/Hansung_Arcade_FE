@@ -41,6 +41,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class InGamePanelAirDropTest {
 
     private static final double TICK = 1.0 / 60;
+    /** fixture 테마 집 그림의 색 */
+    private static final int HOUSE = 0xC82828;
 
     private static HudSkin skin;
     private static CharacterSprites characters;
@@ -112,11 +114,15 @@ class InGamePanelAirDropTest {
 
         BufferedImage screen = paint(world);
 
-        // 떨어뜨리는 자리는 맨 윗줄 집 칸 안(y 46)이고, 그 자리에 집 대신 비행기 몸체가 보인다
+        // 집 그림이 덮는 맨 윗줄(맵 y 0~39)의 y 22에서, 떨어뜨리는 자리와 같은 열에 집 대신 비행기 몸체가 보인다
+        int mapY = 22;
+        int x = FIELD.x() + (int) Math.round(flight.x());
+        int y = FIELD.y() + mapY;
         BufferedImage frame = airplanes.frame(Direction.RIGHT, flight.age());
-        int expected = frame.getRGB(AirplaneSprites.CARGO_X, AirplaneSprites.CARGO_Y);
-        assertEquals(expected & 0xFFFFFF,
-                screen.getRGB(FIELD.x() + (int) Math.round(flight.x()), FIELD.y() + Flight.CRUISE_Y) & 0xFFFFFF);
+        int expected = frame.getRGB(AirplaneSprites.CARGO_X, mapY - (Flight.CRUISE_Y - AirplaneSprites.CARGO_Y));
+        assertEquals(0xFF, expected >>> 24, "비행기 그림의 불투명한 곳을 본다");
+        assertEquals(HOUSE, paint(world()).getRGB(x, y) & 0xFFFFFF, "비행기가 없으면 집이 보이는 자리다");
+        assertEquals(expected & 0xFFFFFF, screen.getRGB(x, y) & 0xFFFFFF);
     }
 
     @Test
