@@ -11,6 +11,7 @@ import hansung.arcade.ingame.entity.Mascot;
 import hansung.arcade.ingame.entity.PlayerProfile;
 import hansung.arcade.ingame.hud.HudSkin;
 import hansung.arcade.ingame.input.KeyBindings;
+import hansung.arcade.ingame.item.TestItems;
 import hansung.arcade.ingame.map.TileMap;
 import hansung.arcade.ingame.match.MatchMode;
 import hansung.arcade.ingame.render.BalloonSprites;
@@ -31,12 +32,16 @@ import java.util.List;
  *
  * <p>설정값 game.local-players=2 로 실행하면 대기방 없이 한 키보드 2인 모드로 바로 시작한다.
  * 2P는 player2.nickname, player2.character, player2.team, player2.color 로 정한다 (없으면 Player2, 한성냥이, 2팀, 원래 색).</p>
+ *
+ * <p>설정값 game.test-items=true 로 실행하면 1P 스폰 둘레에 아이템 11종을 한 개씩 깔아 두고 시작한다 ({@link TestItems}).</p>
  */
 public final class StartScreenStep implements BootStep {
 
     private static final Logger log = LoggerFactory.getLogger(StartScreenStep.class);
     /** 한 키보드로 함께 할 인원 (1 또는 2) */
     static final String LOCAL_PLAYERS = "game.local-players";
+    /** 아이템을 시험해 보도록 시작할 때 11종을 깔아 둘지 (true/false) */
+    static final String TEST_ITEMS = "game.test-items";
 
     @Override
     public String name() {
@@ -61,9 +66,14 @@ public final class StartScreenStep implements BootStep {
                     KeyBindings.PLAYER_1.itemKeyGuide(), players.get(1).nickname(), KeyBindings.PLAYER_2.itemKeyGuide());
         }
 
+        GameWorld world = new GameWorld(map, players, mode);
+        if (testItems(properties)) {
+            TestItems.scatter(map, world.items());
+            log.info("아이템 시험 모드: 1P 스폰 둘레에 아이템 {}종을 깔아 둡니다.", world.items().all().size());
+        }
+
         SwingThread.runAndWait(() -> {
-            InGamePanel inGamePanel = new InGamePanel(new GameWorld(map, players, mode), tileset, skin, characters,
-                    balloons, items);
+            InGamePanel inGamePanel = new InGamePanel(world, tileset, skin, characters, balloons, items);
             window.show(inGamePanel);
             inGamePanel.start();
         });
@@ -103,6 +113,18 @@ public final class StartScreenStep implements BootStep {
             throw new IllegalStateException("설정값 %s=%d 를 쓸 수 없습니다. 팀 번호는 1 이상입니다.".formatted(teamKey, team));
         }
         return new PlayerProfile(nickname, mascot, team, color(properties, prefix + ".color"));
+    }
+
+    /** {@value #TEST_ITEMS} 설정값. 없으면 끈다. true·false 말고 다른 값이면 실패한다 */
+    static boolean testItems(GameProperties properties) {
+        String value = properties.get(TEST_ITEMS, "false").strip();
+        if (value.equalsIgnoreCase("true")) {
+            return true;
+        }
+        if (value.equalsIgnoreCase("false")) {
+            return false;
+        }
+        throw new IllegalStateException("설정값 %s=%s 는 쓸 수 없습니다. true 또는 false만 됩니다.".formatted(TEST_ITEMS, value));
     }
 
     static MatchMode matchMode(GameProperties properties) {

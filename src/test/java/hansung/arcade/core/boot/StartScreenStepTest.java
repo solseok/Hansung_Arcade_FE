@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -145,5 +146,22 @@ class StartScreenStepTest {
 
         IllegalStateException e = assertThrows(IllegalStateException.class, () -> StartScreenStep.localProfiles(properties));
         assertTrue(e.getMessage().contains("player2.character"), e.getMessage());
+    }
+
+    @Test
+    void 아이템_시험_모드는_설정값_game_test_items로_켜고_없으면_끈다() {
+        assertFalse(StartScreenStep.testItems(GameProperties.of(Map.of(), List.of())));
+        assertFalse(StartScreenStep.testItems(GameProperties.of(Map.of("game.test-items", "false"), List.of())));
+        assertTrue(StartScreenStep.testItems(GameProperties.of(Map.of("game.test-items", "false"),
+                List.of("--game.test-items=true"))));
+        assertTrue(StartScreenStep.testItems(GameProperties.of(Map.of(), List.of("--game.test-items=TRUE"))));
+    }
+
+    @Test
+    void 아이템_시험_모드에_true_false가_아닌_값을_적으면_설정_이름과_함께_실패한다() {
+        GameProperties properties = GameProperties.of(Map.of(), List.of("--game.test-items=yes"));
+
+        IllegalStateException error = assertThrows(IllegalStateException.class, () -> StartScreenStep.testItems(properties));
+        assertTrue(error.getMessage().contains("game.test-items=yes"));
     }
 }
