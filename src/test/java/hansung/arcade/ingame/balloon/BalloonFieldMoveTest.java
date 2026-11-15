@@ -229,11 +229,13 @@ class BalloonFieldMoveTest {
     }
 
     @Test
-    void 내려앉을_곳이_하나도_없으면_제자리에_내려앉는다() {
+    void 내려앉을_곳이_제자리밖에_없으면_던지지_않는다() {
         BalloonField field = new BalloonField(MapLoader.parse("fixture/throw", List.of("1.BBB")));
         WaterBalloon balloon = placeAt(field, 1, 1);
 
         assertEquals(new Point(1, 0), field.landingCell(1, 0, Direction.RIGHT, 6, balloon));
+        assertFalse(field.throwBalloon(balloon, Direction.RIGHT));
+        assertTrue(balloon.isResting());
     }
 
     @Test
@@ -270,17 +272,19 @@ class BalloonFieldMoveTest {
     }
 
     @Test
-    void 나는_사이_내려앉을_칸에_물풍선이_놓이면_다음_빈_칸으로_더_날아간다() {
+    void 던진_물풍선이_내려앉을_칸은_미리_차지해서_그_칸에는_물풍선을_놓을_수_없다() {
         BalloonField field = new BalloonField(MapLoader.parse("fixture/throw", List.of("1..........")));
         WaterBalloon thrown = placeAt(field, 1, 1);
 
         field.throwBalloon(thrown, Direction.RIGHT);
         ticks(field, List.of(), 5);
-        placeAt(field, 2, 7);
-        ticks(field, List.of(), 40);
+        Player waiting = playerAt(2, 7, 0);
 
+        assertTrue(field.holds(7, 0));
+        assertTrue(field.place(waiting, List.of(waiting)).isEmpty());
+        ticks(field, List.of(waiting), 40);
+        assertEquals(7, thrown.col());
         assertTrue(thrown.isResting());
-        assertEquals(8, thrown.col());
     }
 
     @Test
@@ -298,5 +302,58 @@ class BalloonFieldMoveTest {
         assertEquals(6, second.col());
         assertTrue(first.isResting());
         assertTrue(second.isResting());
+    }
+
+    @Test
+    void 미끄러지는_물풍선이_다른_물풍선_위를_지나다_터지면_겹친_물풍선도_함께_터진다() {
+        BalloonField field = new BalloonField(MapLoader.parse("fixture/slide", List.of("1.....#")));
+        WaterBalloon pushed = placeAt(field, 1, 1);
+        ticks(field, List.of(), 60);
+        placeAt(field, 2, 2);
+        ticks(field, List.of(), 54);
+
+        // 남은 0.1초 동안 한 칸 미끄러져 2열 물풍선 위에서 터진다
+        field.push(pushed, Direction.RIGHT);
+        ticks(field, List.of(), 6);
+
+        assertTrue(field.balloons().isEmpty());
+        assertEquals(2, field.explosions().size());
+    }
+
+    @Test
+    void 지나는_사이_앞이_막혀_다른_물풍선이_있는_칸에_멈추게_되면_둘_다_터진다() {
+        BalloonField field = new BalloonField(MapLoader.parse("fixture/slide", List.of("1....B")));
+        WaterBalloon pushed = placeAt(field, 1, 1);
+        placeAt(field, 2, 3);
+
+        field.push(pushed, Direction.RIGHT);
+        // 3열에 막 들어섰을 때 4열에 서 있던 사람이 물풍선을 놓는다. 멈출 곳이 3열밖에 없다
+        ticks(field, List.of(), 9);
+        assertEquals(3, pushed.col());
+        placeAt(field, 3, 4);
+        ticks(field, List.of(), 5);
+
+        assertTrue(field.balloons().isEmpty());
+        assertTrue(field.explosions().stream().anyMatch(explosion -> explosion.col() == 3));
+    }
+
+    @Test
+    void 칸_가운데를_지난_사이_앞_칸에_상자가_밀려_들어오면_지금_칸_가운데에_멈춘다() {
+        TileMap map = MapLoader.parse("fixture/slide", List.of("1....#", "...P.."));
+        BalloonField field = new BalloonField(map);
+        WaterBalloon pushed = placeAt(field, 1, 1);
+
+        field.push(pushed, Direction.RIGHT);
+        // 2열 가운데를 막 지났다. 다음에 들어갈 3열은 물풍선이 곧 차지할 칸이다
+        ticks(field, List.of(), 7);
+        assertEquals(2, pushed.col());
+        assertTrue(field.holds(3, 0));
+        // 그래도 상자가 들어왔다면(게임에서는 막는다) 물풍선은 상자를 지나가지 않는다
+        map.moveBlock(3, 1, 3, 0);
+        ticks(field, List.of(), 20);
+
+        assertTrue(pushed.isResting());
+        assertEquals(2, pushed.col());
+        assertEquals(TileMap.centerX(2), pushed.x(), 1e-9);
     }
 }

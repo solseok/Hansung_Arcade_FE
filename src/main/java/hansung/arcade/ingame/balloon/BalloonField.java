@@ -28,10 +28,13 @@ import java.util.OptionalInt;
  *   <li>{@link #push 밀린} 물풍선은 그 방향으로 미끄러져, 통과할 수 없는 블럭(맵 끝 포함) 바로 앞 칸에 멈춘다.
  *       다른 물풍선·캐릭터·덤불은 막지 않고 지나간다. 다만 멈출 칸에 다른 물풍선이 있으면 그 앞의 빈 칸에 멈춘다.
  *       블럭의 가시 난 면({@link Tile#popsBalloonMoving})에 닿아 멈추면 그 자리에서 바로 터지고,
- *       미끄러지다 물줄기가 남은 칸에 들어가도 바로 터진다.</li>
+ *       미끄러지다 물줄기가 남은 칸에 들어가도 바로 터진다. 지나가는 사이 앞 칸이 막혀(상자가 밀려 들어오는 등)
+ *       다른 물풍선이 있는 칸에 멈추게 되면, 한 칸에 둘을 둘 수 없으므로 그 자리에서 터진다(겹친 물풍선도 함께 터진다).</li>
  *   <li>{@link #throwBalloon 던진} 물풍선은 공중을 날아 원래 칸에서 {@link #THROW_DISTANCE}칸째에 내려앉는다
  *       ({@link #landingCell} 참고). 나는 동안에는 길을 막지 않고 물줄기에도 맞지 않으며, 그 사이 터질 때가 되면
- *       내려앉자마자 터진다.</li>
+ *       내려앉자마자 터진다. 내려앉을 칸은 미리 차지한 것으로 쳐서 그 칸에는 물풍선을 놓을 수 없다.</li>
+ *   <li>한 칸에 물풍선이 둘 있는 동안(미끄러지는 물풍선이 다른 물풍선 위를 지나는 중) 그 칸에서 하나가 터지거나
+ *       물줄기가 닿으면 둘 다 터진다.</li>
  *   <li>물풍선이 사람이 있는 칸에 미끄러져 들어오거나 내려앉으면, 그 사람은 놓는 순간처럼 그 칸을 벗어날 때까지 지나갈 수 있다.</li>
  * </ul>
  *
@@ -106,31 +109,31 @@ public final class BalloonField {
             return false;
         }
         balloon.startSliding(direction);
-        return switch (nextMove(balloon)) {
-            case CONTINUE -> true;
-            case POP -> {
-                balloon.stopSliding();
-                explode(balloon);
-                yield true;
-            }
-            case STOP -> {
-                balloon.stopSliding();
-                yield false;
-            }
-        };
+        if (keepsSliding(balloon)) {
+            return true;
+        }
+        boolean thorn = facesThorn(balloon);
+        balloon.stopSliding();
+        if (thorn) {
+            explode(balloon);
+        }
+        return thorn;
     }
 
     /**
      * 가만히 놓인 balloon을 direction 쪽으로 던진다. 내려앉을 칸은 {@link #landingCell}로 정하고,
      * 거리에 맞춰 {@link #FLIGHT_SECONDS_PER_TILE}초씩(적어도 {@link #MIN_FLIGHT_SECONDS}초) 난다.
      *
-     * @return 던졌는지. 이미 움직이는 중이면 false
+     * @return 던졌는지. 이미 움직이는 중이거나, 내려앉을 곳이 제자리밖에 없으면 던지지 않고 false
      */
     public boolean throwBalloon(WaterBalloon balloon, Direction direction) {
         if (!balloons.contains(balloon) || !balloon.isResting()) {
             return false;
         }
         Point landing = landingCell(balloon.col(), balloon.row(), direction, THROW_DISTANCE, balloon);
+        if (landing.x == balloon.col() && landing.y == balloon.row()) {
+            return false;
+        }
         fly(balloon, direction, landing);
         return true;
     }
@@ -142,7 +145,7 @@ public final class BalloonField {
      *   <li>distance칸째가 비어 있으면 거기. 비어 있지 않으면(통과할 수 없는 블럭이거나 이미 물풍선이 있으면)
      *       같은 방향으로 다음 빈 칸까지 더 간다. 캐릭터·덤불이 있는 칸은 빈 칸이다.</li>
      *   <li>맵 끝까지 빈 칸이 없으면(distance칸째가 맵 밖인 경우도) 맵 끝에서 거꾸로 돌아오며 처음 만난 빈 칸.</li>
-     *   <li>그것도 없으면 (col, row) 그대로.</li>
+     *   <li>그것도 없으면 (col, row) 그대로. 이때는 던지지 않는다.</li>
      * </ol>
      *
      * @param self 내려앉을 물풍선 자신. 자기가 있는 칸은 비어 있는 것으로 본다
@@ -220,20 +223,20 @@ public final class BalloonField {
                 balloon.setSlideOffset(offset + step > -EPSILON ? 0 : offset + step);
                 continue;
             }
-            if (offset <= EPSILON) {
-                Move move = nextMove(balloon);
-                if (move != Move.CONTINUE) {
-                    balloon.stopSliding();
-                    if (move == Move.POP) {
-                        burst.add(balloon);
-                    }
-                    return;
-                }
+            if (offset <= EPSILON && !keepsSliding(balloon)) {
+                stopHere(balloon, burst);
+                return;
             }
             double step = Math.min(remaining, HALF_TILE - offset);
             remaining -= step;
             balloon.setSlideOffset(offset + step);
             if (offset + step >= HALF_TILE - EPSILON) {
+                Direction direction = balloon.slideDirection();
+                if (map.isSolid(balloon.col() + direction.dx(), balloon.row() + direction.dy())) {
+                    // 칸 가운데를 지난 사이 앞 칸이 막혔다(밀린 상자가 들어오는 등). 지금 칸 가운데로 돌아가 선다
+                    stopHere(balloon, burst);
+                    return;
+                }
                 balloon.setSlideOffset(HALF_TILE);
                 balloon.stepCell();
                 admitOverlapping(balloon, players);
@@ -249,33 +252,39 @@ public final class BalloonField {
     /**
      * 칸 가운데에 온 미끄러지는 balloon이 다음 칸으로 갈지. 앞쪽으로 통과할 수 없는 블럭(맵 끝 포함)이 나오기 전까지의 칸 중
      * 다른 물풍선이 없는 가장 먼 칸이 멈출 칸이고, 그 칸이 지금 칸보다 앞이면 더 간다.
-     * 바로 앞 칸이 블럭이라 멈추는데 그 블럭의 가시 난 면을 향해 왔으면 터진다.
      */
-    private Move nextMove(WaterBalloon balloon) {
+    private boolean keepsSliding(WaterBalloon balloon) {
         Direction direction = balloon.slideDirection();
-        int nextCol = balloon.col() + direction.dx();
-        int nextRow = balloon.row() + direction.dy();
-        if (map.isSolid(nextCol, nextRow)) {
-            boolean thorn = map.isInside(nextCol, nextRow) && map.tileAt(nextCol, nextRow).popsBalloonMoving(direction);
-            return thorn ? Move.POP : Move.STOP;
-        }
         for (int step = 1; ; step++) {
             int col = balloon.col() + direction.dx() * step;
             int row = balloon.row() + direction.dy() * step;
             if (map.isSolid(col, row)) {
-                return Move.STOP;
+                return false;
             }
             if (canLand(col, row, balloon)) {
-                return Move.CONTINUE;
+                return true;
             }
         }
     }
 
-    /** 미끄러지는 물풍선이 칸 가운데에서 할 일 */
-    private enum Move {
-        CONTINUE,
-        STOP,
-        POP
+    /** 미끄러지는 balloon의 바로 앞이 가시 블럭이고, 그 가시 난 면을 향해 왔는지 */
+    private boolean facesThorn(WaterBalloon balloon) {
+        Direction direction = balloon.slideDirection();
+        int col = balloon.col() + direction.dx();
+        int row = balloon.row() + direction.dy();
+        return map.isInside(col, row) && map.tileAt(col, row).popsBalloonMoving(direction);
+    }
+
+    /**
+     * 미끄러지던 balloon을 지금 칸 가운데에 세운다. 가시 난 면에 닿았거나, 다른 물풍선이 있는 칸이라 한 칸에 둘이 서게 되면
+     * 터뜨린다 (겹친 물풍선은 연쇄로 함께 터진다).
+     */
+    private void stopHere(WaterBalloon balloon, List<WaterBalloon> burst) {
+        boolean pop = facesThorn(balloon) || balloonsAt(balloon.col(), balloon.row()).size() > 1;
+        balloon.stopSliding();
+        if (pop) {
+            burst.add(balloon);
+        }
     }
 
     /** balloon이 있는 칸에 몸이 걸친 사람은 그 칸을 벗어날 때까지 지나갈 수 있다 */
@@ -304,12 +313,12 @@ public final class BalloonField {
      * 놓는 순간 그 칸에 몸이 걸쳐 있는 플레이어(놓은 사람 포함)는 그 칸을 벗어날 때까지 지나갈 수 있다.
      *
      * @param players 맵 위의 모든 플레이어
-     * @return 놓은 물풍선. 갇혀 있거나, 이미 놓아 둔 개수가 꽉 찼거나, 그 칸에 물풍선이 있으면 비어 있다
+     * @return 놓은 물풍선. 갇혀 있거나, 이미 놓아 둔 개수가 꽉 찼거나, 그 칸을 물풍선이 차지했으면({@link #holds}) 비어 있다
      */
     public Optional<WaterBalloon> place(Player player, List<Player> players) {
         int col = player.col();
         int row = player.row();
-        if (!player.canPlaceBalloon() || map.isSolid(col, row) || balloonAt(col, row).isPresent()
+        if (!player.canPlaceBalloon() || map.isSolid(col, row) || holds(col, row)
                 || placedBy(player) >= player.balloons()) {
             return Optional.empty();
         }
@@ -337,6 +346,24 @@ public final class BalloonField {
         return balloonAt(col, row).map(balloon -> !balloon.lets(player)).orElse(false);
     }
 
+    /**
+     * (col, row) 칸을 물풍선이 차지했거나 곧 차지할지: 놓인 물풍선·미끄러지는 물풍선이 있는 칸, 미끄러지는 물풍선이
+     * 막 들어가려는 칸(칸 가운데를 지나 그쪽으로 가는 중), 던진 물풍선이 내려앉을 칸. 이런 칸에는 물풍선을 놓거나 상자를 밀어 넣지 않는다.
+     */
+    public boolean holds(int col, int row) {
+        for (WaterBalloon balloon : balloons) {
+            if (balloon.col() == col && balloon.row() == row) {
+                return true;
+            }
+            Direction direction = balloon.slideDirection();
+            if (direction != null && balloon.slideOffset() > EPSILON
+                    && balloon.col() + direction.dx() == col && balloon.row() + direction.dy() == row) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** (col, row) 칸에 놓인 물풍선. 미끄러지는 물풍선은 가운데가 가장 가까운 칸에 있고, 날아가는 물풍선은 어느 칸에도 없다 */
     public Optional<WaterBalloon> balloonAt(int col, int row) {
         for (WaterBalloon balloon : balloons) {
@@ -345,6 +372,17 @@ public final class BalloonField {
             }
         }
         return Optional.empty();
+    }
+
+    /** (col, row) 칸에 있는 물풍선 모두. 미끄러지는 물풍선이 다른 물풍선 위를 지나는 동안에는 둘일 수 있다 */
+    private List<WaterBalloon> balloonsAt(int col, int row) {
+        List<WaterBalloon> found = new ArrayList<>();
+        for (WaterBalloon balloon : balloons) {
+            if (!balloon.isFlying() && balloon.col() == col && balloon.row() == row) {
+                found.add(balloon);
+            }
+        }
+        return found;
     }
 
     /** (col, row) 칸에 물줄기가 보이는지 */
@@ -394,11 +432,16 @@ public final class BalloonField {
         }
     }
 
-    /** balloon이 터진 물줄기 칸을 정한다. 물줄기가 닿은 다른 물풍선은 chain에 넣는다 */
+    /** balloon이 터진 물줄기 칸을 정한다. 물줄기가 닿은 다른 물풍선(터진 칸에 겹쳐 있던 것 포함)은 chain에 넣는다 */
     private Explosion burst(WaterBalloon balloon, Deque<WaterBalloon> chain) {
         List<WaterCell> cells = new ArrayList<>();
         List<Point> blocked = new ArrayList<>();
         cells.add(new WaterCell(balloon.col(), balloon.row(), Part.CENTER, null));
+        for (WaterBalloon overlapping : balloonsAt(balloon.col(), balloon.row())) {
+            if (overlapping != balloon) {
+                chain.add(overlapping);
+            }
+        }
         for (Direction direction : Direction.values()) {
             List<WaterCell> arm = new ArrayList<>();
             boolean joined = false;
@@ -411,10 +454,10 @@ public final class BalloonField {
                     }
                     break;
                 }
-                Optional<WaterBalloon> other = balloonAt(col, row);
-                if (other.isPresent()) {
+                List<WaterBalloon> others = balloonsAt(col, row);
+                if (!others.isEmpty()) {
                     // 닿은 물풍선이 같은 순간 터져 그 칸을 덮으므로, 이 물줄기는 끝 모양 없이 그 칸에 이어진다
-                    chain.add(other.get());
+                    chain.addAll(others);
                     joined = true;
                     break;
                 }

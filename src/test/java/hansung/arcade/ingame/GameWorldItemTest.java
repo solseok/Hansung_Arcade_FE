@@ -274,4 +274,23 @@ class GameWorldItemTest {
         // 터진 물풍선은 가시 블럭 바로 앞 칸에서 터졌고, 물줄기에 맞은 가시 블럭은 부서졌다
         assertTrue(world.map().tileAt(6, 0).isGround());
     }
+
+    @Test
+    void 장갑으로_맵_끝을_보고_던지면_던지지_않고_물풍선도_새로_놓지_않는다() {
+        GameWorld world = solo("1....", ".....");
+        Player me = world.localPlayer();
+        pickUp(world, ItemType.GLOVE);
+        pickUp(world, ItemType.BUBBLE);
+        walk(world, Direction.LEFT, 1);
+        tick(world, BALLOON);
+
+        tick(world, BALLOON);
+        tick(world, BALLOON);
+        ticks(world, 10);
+
+        assertEquals(1, world.balloonField().balloons().size());
+        assertTrue(world.balloonField().balloons().get(0).isResting());
+        assertEquals(PlayerState.NORMAL, me.state());
+        assertTrue(world.balloonField().explosions().isEmpty());
+    }
 }

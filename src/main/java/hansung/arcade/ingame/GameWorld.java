@@ -218,11 +218,11 @@ public final class GameWorld {
     }
 
     /**
-     * 밀린 블럭이 들어갈 수 없게 무언가 있는 칸인지: 물풍선, 아이템, 몸이 조금이라도 걸친 플레이어(사라진 사람 빼고),
-     * 점프해 내려앉을 칸
+     * 밀린 블럭이 들어갈 수 없게 무언가 있는 칸인지: 물풍선(미끄러져 들어오거나 던져져 내려앉을 칸 포함), 아이템,
+     * 몸이 조금이라도 걸친 플레이어(사라진 사람 빼고), 점프해 내려앉을 칸
      */
     private boolean holdsSomething(int col, int row) {
-        return balloonField.balloonAt(col, row).isPresent() || items.at(col, row).isPresent()
+        return balloonField.holds(col, row) || items.at(col, row).isPresent()
                 || players().stream().anyMatch(p -> p.state() != PlayerState.GONE && p.overlapsTile(col, row))
                 || gears.values().stream().anyMatch(gear -> gear.isLandingOn(col, row));
     }
