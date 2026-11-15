@@ -7,6 +7,7 @@ import hansung.arcade.ingame.hud.HudSkin;
 import hansung.arcade.ingame.map.MapLoader;
 import hansung.arcade.ingame.map.Tile;
 import hansung.arcade.ingame.map.TileMap;
+import hansung.arcade.ingame.render.AirplaneSprites;
 import hansung.arcade.ingame.render.BalloonSprites;
 import hansung.arcade.ingame.render.CharacterSprites;
 import hansung.arcade.ingame.render.ItemSprites;
@@ -41,6 +42,7 @@ public final class ResourceStep implements BootStep {
         context.register(CharacterSprites.class, CharacterSprites.load());
         context.register(BalloonSprites.class, BalloonSprites.load());
         context.register(ItemSprites.class, ItemSprites.load());
+        context.register(AirplaneSprites.class, AirplaneSprites.load());
 
         HudFonts fonts = HudFonts.load();
         if (!fonts.missing().isEmpty()) {

@@ -9,6 +9,8 @@ import hansung.arcade.ingame.hud.HudSkin;
 import hansung.arcade.ingame.hud.InGameHud;
 import hansung.arcade.ingame.input.KeyBindings;
 import hansung.arcade.ingame.input.LocalInput;
+import hansung.arcade.ingame.render.AirDropRenderer;
+import hansung.arcade.ingame.render.AirplaneSprites;
 import hansung.arcade.ingame.render.BalloonSprites;
 import hansung.arcade.ingame.render.CharacterSprites;
 import hansung.arcade.ingame.render.ItemSprites;
@@ -57,6 +59,7 @@ public final class InGamePanel extends JPanel {
     private final GameWorld world;
     private final LocalInput input;
     private final WorldRenderer worldRenderer;
+    private final AirDropRenderer airDropRenderer;
     private final InGameHud hud;
     private final Timer loopTimer;
     private final ChatField chatField;
@@ -133,10 +136,11 @@ public final class InGamePanel extends JPanel {
     private boolean enterHeld;
 
     public InGamePanel(GameWorld world, Tileset tileset, HudSkin skin, CharacterSprites characters,
-                       BalloonSprites balloons, ItemSprites items) {
+                       BalloonSprites balloons, ItemSprites items, AirplaneSprites airplanes) {
         this.world = world;
         this.input = new LocalInput(world.localPlayers().stream().map(Player::id).toList());
         this.worldRenderer = new WorldRenderer(tileset, characters, balloons, items);
+        this.airDropRenderer = new AirDropRenderer(airplanes, items);
         this.hud = new InGameHud(skin, world.map(), tileset, items,
                 KeyBindings.forLocalPlayers(world.localPlayers().size()).stream().map(KeyBindings::itemKeyName).toList());
         setPreferredSize(new Dimension(HudLayout.WIDTH, HudLayout.HEIGHT));
@@ -160,7 +164,13 @@ public final class InGamePanel extends JPanel {
         loopTimer.setCoalesce(true);
     }
 
-    /** 아이템 그림을 기본 위치에서 새로 읽는다. 미리 읽어 둔 그림이 없는 테스트에서 쓴다. */
+    /** 비행기 그림을 기본 위치에서 새로 읽는다. 미리 읽어 둔 그림이 없는 테스트에서 쓴다. */
+    public InGamePanel(GameWorld world, Tileset tileset, HudSkin skin, CharacterSprites characters,
+                       BalloonSprites balloons, ItemSprites items) {
+        this(world, tileset, skin, characters, balloons, items, AirplaneSprites.load());
+    }
+
+    /** 아이템·비행기 그림을 기본 위치에서 새로 읽는다. 미리 읽어 둔 그림이 없는 테스트에서 쓴다. */
     public InGamePanel(GameWorld world, Tileset tileset, HudSkin skin, CharacterSprites characters,
                        BalloonSprites balloons) {
         this(world, tileset, skin, characters, balloons, ItemSprites.load());
@@ -281,6 +291,8 @@ public final class InGamePanel extends JPanel {
         // 위쪽은 창 끝까지 열어 두고 아래는 맵 영역으로 자른다. 좌우는 프레임 두께만큼 열어서,
         // 충돌 박스보다 넓은 캐릭터 그림이 맵 끝에서 잘리지 않고 프레임 위에 겹쳐 보이게 한다
         inMap(g, originX, originY, 0, FRAME_EDGE, () -> worldRenderer.drawObjects(g, world));
+        // 비행기와 떨어지는 아이템은 모든 물체 위에 그리되, 맵 영역 밖(테두리와 그 바깥)은 자른다
+        inMap(g, originX, originY, field.y(), 0, () -> airDropRenderer.draw(g, world));
 
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_OFF);
         g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_OFF);

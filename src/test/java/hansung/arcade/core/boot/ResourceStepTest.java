@@ -4,6 +4,7 @@ import hansung.arcade.core.game.GameContext;
 import hansung.arcade.core.game.GameProperties;
 import hansung.arcade.ingame.hud.HudSkin;
 import hansung.arcade.ingame.map.TileMap;
+import hansung.arcade.ingame.render.AirplaneSprites;
 import hansung.arcade.ingame.render.BalloonSprites;
 import hansung.arcade.ingame.render.CharacterSprites;
 import hansung.arcade.ingame.render.ItemSprites;
@@ -32,6 +33,7 @@ class ResourceStepTest {
         assertTrue(context.contains(CharacterSprites.class));
         assertTrue(context.contains(BalloonSprites.class));
         assertTrue(context.contains(ItemSprites.class));
+        assertTrue(context.contains(AirplaneSprites.class));
         assertTrue(context.contains(HudSkin.class));
     }
 }

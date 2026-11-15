@@ -14,6 +14,7 @@ import hansung.arcade.ingame.input.KeyBindings;
 import hansung.arcade.ingame.item.TestItems;
 import hansung.arcade.ingame.map.TileMap;
 import hansung.arcade.ingame.match.MatchMode;
+import hansung.arcade.ingame.render.AirplaneSprites;
 import hansung.arcade.ingame.render.BalloonSprites;
 import hansung.arcade.ingame.render.CharacterSprites;
 import hansung.arcade.ingame.render.ItemSprites;
@@ -57,6 +58,7 @@ public final class StartScreenStep implements BootStep {
         CharacterSprites characters = context.get(CharacterSprites.class);
         BalloonSprites balloons = context.get(BalloonSprites.class);
         ItemSprites items = context.get(ItemSprites.class);
+        AirplaneSprites airplanes = context.get(AirplaneSprites.class);
         GameProperties properties = context.get(GameProperties.class);
         List<PlayerProfile> players = localProfiles(properties);
         MatchMode mode = matchMode(properties);
@@ -73,7 +75,7 @@ public final class StartScreenStep implements BootStep {
         }
 
         SwingThread.runAndWait(() -> {
-            InGamePanel inGamePanel = new InGamePanel(world, tileset, skin, characters, balloons, items);
+            InGamePanel inGamePanel = new InGamePanel(world, tileset, skin, characters, balloons, items, airplanes);
             window.show(inGamePanel);
             inGamePanel.start();
         });
