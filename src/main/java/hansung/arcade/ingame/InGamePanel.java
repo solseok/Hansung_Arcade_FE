@@ -137,7 +137,8 @@ public final class InGamePanel extends JPanel {
         this.world = world;
         this.input = new LocalInput(world.localPlayers().stream().map(Player::id).toList());
         this.worldRenderer = new WorldRenderer(tileset, characters, balloons, items);
-        this.hud = new InGameHud(skin, world.map(), tileset);
+        this.hud = new InGameHud(skin, world.map(), tileset, items,
+                KeyBindings.forLocalPlayers(world.localPlayers().size()).stream().map(KeyBindings::itemKeyName).toList());
         setPreferredSize(new Dimension(HudLayout.WIDTH, HudLayout.HEIGHT));
         // 바탕은 HUD 그림이 화면 전체를 덮으므로 따로 지우지 않는다.
         setOpaque(true);

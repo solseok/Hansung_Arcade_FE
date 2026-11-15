@@ -26,6 +26,7 @@ public final class FontTextArt implements TextArt {
     private final Font font;
     private final Color color;
     private final Color shadow;
+    private final Color outline;
     private final Map<String, Rendered> cache = new LinkedHashMap<>(16, 0.75f, true) {
         @Override
         protected boolean removeEldestEntry(Map.Entry<String, Rendered> eldest) {
@@ -39,9 +40,19 @@ public final class FontTextArt implements TextArt {
 
     /** @param shadow 1px 아래에 깔 그림자 색. 없으면 null */
     public FontTextArt(Font font, Color color, Color shadow) {
+        this(font, color, shadow, null);
+    }
+
+    private FontTextArt(Font font, Color color, Color shadow, Color outline) {
         this.font = Objects.requireNonNull(font);
         this.color = Objects.requireNonNull(color);
         this.shadow = shadow;
+        this.outline = outline;
+    }
+
+    /** 글자 둘레 1px을 outline 색으로 감싼 글자. 바탕색이 여러 가지인 곳에 걸쳐 놓아도 읽힌다. 정렬은 테두리를 뺀 글자 기준이다 */
+    public static FontTextArt outlined(Font font, Color color, Color outline) {
+        return new FontTextArt(font, color, null, Objects.requireNonNull(outline));
     }
 
     public Font font() {
@@ -76,6 +87,21 @@ public final class FontTextArt implements TextArt {
 
         BufferedImage glyphs = PixelImages.quantizeAlpha(mask(text, width, height, baseline, color));
         Box ink = PixelImages.opaqueBounds(glyphs);
+        if (outline != null) {
+            BufferedImage edge = PixelImages.quantizeAlpha(mask(text, width, height, baseline, outline));
+            BufferedImage combined = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+            Graphics2D g = combined.createGraphics();
+            for (int dy = -1; dy <= 1; dy++) {
+                for (int dx = -1; dx <= 1; dx++) {
+                    if (dx != 0 || dy != 0) {
+                        g.drawImage(edge, dx, dy, null);
+                    }
+                }
+            }
+            g.drawImage(glyphs, 0, 0, null);
+            g.dispose();
+            return new Rendered(combined, ink, advance);
+        }
         if (shadow == null) {
             return new Rendered(glyphs, ink, advance);
         }

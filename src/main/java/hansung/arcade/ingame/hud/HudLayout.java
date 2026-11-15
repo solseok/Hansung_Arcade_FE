@@ -152,6 +152,26 @@ public final class HudLayout {
     /** A 안의 회색 아이템 칸 61 x 50 (66 x 57). A 기준 위 13 (15), 왼쪽 15 (16) */
     public static final Box ITEM_VIEW = ITEM_INNER.child(15, 13, 61, 50);
     public static final int ITEM_VIEW_RADIUS = 3;
+    /**
+     * 2인 모드에서는 A 안에 1P·2P 아이템 칸 두 개를 나란히 두고 칸 위 띠에 "1P"·"2P"를 쓴다 (참고 이미지의 구조).
+     * 칸 하나 54 x 50 (혼자일 때 칸과 같은 높이), 사이 11, A 위쪽에서 13 아래. 두 칸이 A 가로 가운데에 온다
+     */
+    public static final int DUO_ITEM_VIEW_WIDTH = 54;
+    public static final int DUO_ITEM_VIEW_HEIGHT = 50;
+    public static final int DUO_ITEM_VIEW_GAP = 11;
+    public static final int DUO_ITEM_VIEW_TOP = 13;
+    /** 1P·2P 글씨 높이와, 글씨 아래 끝과 칸 사이 */
+    public static final int ITEM_SLOT_LABEL_HEIGHT = 7;
+    public static final int ITEM_SLOT_LABEL_GAP = 3;
+    /** 칸 안 위쪽에 흐리게 적는 아이템 키 이름의 글자 높이와, 칸 안쪽 끝에서 띄운 거리 */
+    public static final int ITEM_KEY_HEIGHT = 6;
+    public static final int ITEM_KEY_INSET = 3;
+    /** 아이템 그림 위쪽 끝과 칸 위쪽 끝 사이. 그림이 키 이름 아래에 온다 */
+    public static final int ITEM_IMAGE_TOP = 9;
+    /** 칸 오른쪽 아래 개수 글씨 높이. 글씨 세로 가운데가 칸 아래 테두리에 걸친다 */
+    public static final int ITEM_COUNT_HEIGHT = 8;
+    /** 개수 글씨 오른쪽 끝과 칸 오른쪽 끝 사이 */
+    public static final int ITEM_COUNT_RIGHT = 3;
     /** ITEM 글씨 아래 끝과 상자 A 사이 (참고 화면 3.5) */
     public static final int ITEM_LABEL_GAP = 3;
     /**
@@ -218,6 +238,31 @@ public final class HudLayout {
     }
 
     /** index번째(0부터) 플레이어 슬롯 */
+    /** 2인 모드의 index번째(0이 1P) 아이템 칸 */
+    public static Box duoItemView(int index) {
+        int left = ITEM_INNER.x() + (ITEM_INNER.width() - 2 * DUO_ITEM_VIEW_WIDTH - DUO_ITEM_VIEW_GAP) / 2;
+        return new Box(left + index * (DUO_ITEM_VIEW_WIDTH + DUO_ITEM_VIEW_GAP), ITEM_INNER.y() + DUO_ITEM_VIEW_TOP,
+                DUO_ITEM_VIEW_WIDTH, DUO_ITEM_VIEW_HEIGHT);
+    }
+
+    /** 아이템 칸 view 위 "1P"·"2P" 글씨 자리. 칸과 폭이 같고, 글씨 아래 끝을 칸에서 {@link #ITEM_SLOT_LABEL_GAP} 위에 붙인다 */
+    public static Box itemSlotLabel(Box view) {
+        int bottom = view.y() - ITEM_SLOT_LABEL_GAP;
+        return new Box(view.x(), bottom - ITEM_SLOT_LABEL_HEIGHT, view.width(), ITEM_SLOT_LABEL_HEIGHT);
+    }
+
+    /** 아이템 칸 view 안 위쪽의 아이템 키 이름 자리. 테두리 안쪽에서 {@link #ITEM_KEY_INSET}만큼 띄운다 */
+    public static Box itemKey(Box view) {
+        Box inside = view.inset(EDGE + ITEM_KEY_INSET - 1, EDGE + ITEM_KEY_INSET, 0, EDGE + ITEM_KEY_INSET);
+        return new Box(inside.x(), inside.y(), inside.width(), ITEM_KEY_HEIGHT);
+    }
+
+    /** 아이템 칸 view 오른쪽 아래 개수 글씨 자리. 글씨 세로 가운데가 칸 아래 테두리에 온다 */
+    public static Box itemCount(Box view) {
+        return new Box(view.x(), view.bottom() - ITEM_COUNT_HEIGHT / 2 - 1, view.width() - ITEM_COUNT_RIGHT,
+                ITEM_COUNT_HEIGHT);
+    }
+
     public static Box playerSlot(int index) {
         int top = TIMER.bottom() + TIMER_SLOT_GAP + index * (PLAYER_SLOT_HEIGHT + PLAYER_SLOT_GAP);
         return new Box(PLAYER_LIST.x() + PLAYER_SLOT_LEFT, top, PLAYER_SLOT_WIDTH, PLAYER_SLOT_HEIGHT);

@@ -24,6 +24,9 @@ import java.util.Objects;
  * @param chatText     맵 위 채팅 글자 (돋움체, 흰 글자에 검은 테두리). 입력칸·다른 플레이어의 채팅·말풍선에 쓴다
  * @param myChatText   채팅 목록에서 내가 친 줄 (같은 글꼴, #DFDB86)
  * @param portraits    플레이어 목록에 넣을 캐릭터 얼굴. 고정색별로 칠한 얼굴도 여기서 얻는다
+ * @param itemSlotLabel 2인 모드 아이템 칸 위 "1P"·"2P" (Michroma)
+ * @param itemKey      아이템 칸 안에 흐리게 적는 아이템 키 이름
+ * @param itemCount    아이템 칸 오른쪽 아래 액티브 아이템 개수 "×02" (Michroma, 노란 글자에 테두리)
  */
 public record HudSkin(
         TextArt timerLabel,
@@ -35,7 +38,10 @@ public record HudSkin(
         TextArt nickname,
         OutlineText chatText,
         OutlineText myChatText,
-        Portraits portraits) {
+        Portraits portraits,
+        TextArt itemSlotLabel,
+        TextArt itemKey,
+        TextArt itemCount) {
 
     public HudSkin {
         Objects.requireNonNull(portraits);
@@ -51,6 +57,10 @@ public record HudSkin(
         Font exitFont = HudFonts.fitInkHeight(fonts.yunGothic(18), "나가기", HudLayout.EXIT_TEXT_HEIGHT);
         Font nicknameFont = HudFonts.fitInkHeight(fonts.gyeonGothic(12), "가", HudLayout.NICKNAME_HEIGHT);
         Font chatFont = fonts.dotumChe(HudLayout.CHAT_TEXT_HEIGHT);
+        Font itemSlotFont = HudFonts.fitInkHeight(fonts.michroma(8), "1P", HudLayout.ITEM_SLOT_LABEL_HEIGHT);
+        Font itemKeyFont = HudFonts.fitInkHeight(fonts.gyeonGothic(8), "L", HudLayout.ITEM_KEY_HEIGHT);
+        Font itemCountFont = HudFonts.fitInkHeight(fonts.michroma(10), "0", HudLayout.ITEM_COUNT_HEIGHT)
+                .deriveFont(Font.BOLD);
 
         return new HudSkin(
                 new FontTextArt(timerLabelFont, HudPalette.DISPLAY_LABEL),
@@ -62,6 +72,9 @@ public record HudSkin(
                 new FontTextArt(nicknameFont, HudPalette.NICKNAME, HudPalette.edgeOf(HudPalette.PLAYER_SLOT)),
                 new OutlineText(chatFont, HudLayout.CHAT_TEXT_HEIGHT, HudPalette.CHAT_TEXT, HudPalette.CHAT_OUTLINE),
                 new OutlineText(chatFont, HudLayout.CHAT_TEXT_HEIGHT, HudPalette.CHAT_TEXT_MINE, HudPalette.CHAT_OUTLINE),
-                Portraits.load());
+                Portraits.load(),
+                new FontTextArt(itemSlotFont, HudPalette.ITEM_SLOT_LABEL, HudPalette.edgeOf(HudPalette.ITEM_INNER)),
+                new FontTextArt(itemKeyFont, HudPalette.ITEM_KEY),
+                FontTextArt.outlined(itemCountFont, HudPalette.ITEM_COUNT, HudPalette.ITEM_COUNT_OUTLINE));
     }
 }
