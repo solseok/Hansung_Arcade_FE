@@ -12,15 +12,18 @@ import hansung.arcade.ingame.entity.PlayerProfile;
 import hansung.arcade.ingame.entity.PlayerState;
 import hansung.arcade.ingame.item.FieldItems.FieldItem;
 import hansung.arcade.ingame.item.ItemType;
+import hansung.arcade.ingame.item.PlayerGear;
 import hansung.arcade.ingame.map.Tile;
 import hansung.arcade.ingame.map.TileMap;
 
 import java.awt.AlphaComposite;
+import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Composite;
 import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Graphics2D;
+import java.awt.Stroke;
 import java.awt.image.BufferedImage;
 import java.util.List;
 import java.util.Objects;
@@ -41,6 +44,13 @@ import java.util.Optional;
  *
  * <p>덤불에 숨은 캐릭터·물풍선·아이템·물줄기는 {@link Concealment}를 보고 아예 그리지 않는다.
  * 화면을 보는 플레이어가 들어간 덤불만 {@link #REVEALED_BUSH_ALPHA} 불투명도로 그려 안이 비쳐 보이게 한다.</p>
+ *
+ * <p>아이템으로 생긴 것({@link PlayerGear}): 탱크에 타면 캐릭터를 {@link #TANK_SEAT}px 올리고 탱크 그림을 캐릭터 아랫몸 앞에
+ * {@link #TANK_SIZE}px로 그려 탱크에 들어앉은 모습으로 보인다.
+ * 보호막을 쓰는 중이면 캐릭터를 반투명한 물방울 막으로 감싸고, 끝나기 {@link #SHIELD_WARNING_SECONDS}초 전부터 깜빡인다.
+ * 탱크가 막 부서진 뒤 맞지 않는 동안은 캐릭터가 깜빡인다. 스프링 신발로 뛰면 그림자는 땅에 두고 캐릭터만 포물선으로
+ * {@link #JUMP_HEIGHT}px 솟는다. 밀려 미끄러지는 물풍선은 칸 사이에, 던진 물풍선은 모든 줄을 그린 뒤 맨 위에
+ * 땅의 그림자와 함께 떠 있는 높이만큼 올려 그린다. 날아가는 물풍선도 땅 위 자리가 숨은 덤불이면 그리지 않는다.</p>
  */
 public final class WorldRenderer {
 
@@ -70,6 +80,24 @@ public final class WorldRenderer {
     static final int ITEM_BOB = 2;
     /** 아이템이 한 번 오르내리는 시간(초) */
     static final double ITEM_BOB_SECONDS = 1.0;
+    /** 스프링 신발로 뛴 캐릭터가 가장 높이 솟는 높이(px). 한 칸 */
+    public static final int JUMP_HEIGHT = T;
+    /** 탱크에 탄 캐릭터를 땅보다 올려 그리는 높이(px) */
+    public static final int TANK_SEAT = 6;
+    /** 탱크 그림을 그리는 크기(px). 아이템 그림(38)보다 조금 크게 */
+    public static final int TANK_SIZE = 46;
+    /** 탱크 그림 아래 끝이 발끝보다 낮은 거리(px) */
+    static final int TANK_BELOW_FEET = 5;
+    /** 보호막 물방울의 반지름(px). 캐릭터 몸을 다 감싼다 */
+    static final int SHIELD_RADIUS = 27;
+    /** 보호막 물방울 가운데가 발끝보다 높은 거리(px) */
+    static final int SHIELD_CENTER_ABOVE_FEET = 26;
+    /** 보호막이 이만큼 남으면 깜빡여 곧 끝난다고 알린다(초) */
+    public static final double SHIELD_WARNING_SECONDS = 0.6;
+    private static final Color SHIELD_FILL = new Color(120, 200, 255, 85);
+    private static final Color SHIELD_EDGE = new Color(225, 245, 255, 220);
+    private static final Color SHIELD_SHINE = new Color(255, 255, 255, 170);
+    private static final Stroke SHIELD_STROKE = new BasicStroke(2f);
 
     private static final double FRAME_BOUNDARY_SLACK = 1e-6;
 
@@ -120,11 +148,12 @@ public final class WorldRenderer {
             drawBalloons(g, field, row, concealment);
             for (Player player : players) {
                 if (player.row() == row && !concealment.hides(player)) {
-                    drawPlayer(g, player);
+                    drawPlayer(g, player, world.gear(player), world.elapsedSeconds());
                 }
             }
             drawBushes(g, map, row, concealment);
         }
+        drawFlyingBalloons(g, field, concealment);
     }
 
     /** row줄의 덤불이 아닌 물체. 밀려 미끄러지는 블럭은 떠난 칸과 도착 칸 사이에 그린다 */
@@ -199,10 +228,36 @@ public final class WorldRenderer {
      */
     private void drawBalloons(Graphics2D g, BalloonField field, int row, Concealment concealment) {
         for (WaterBalloon balloon : field.balloons()) {
-            if (balloon.row() == row && !concealment.hides(balloon.col(), balloon.row())) {
-                g.drawImage(balloons.balloon(balloon.age()), balloon.col() * T + T / 2 - BalloonSprites.BALLOON_CENTER_X,
-                        row * T + T / 2 - BalloonSprites.BALLOON_CENTER_Y, null);
+            if (!balloon.isFlying() && balloon.row() == row && !concealment.hides(balloon.col(), balloon.row())) {
+                drawBalloon(g, balloon, 0);
             }
+        }
+    }
+
+    /** 몸체 가운데를 물풍선의 땅 위 자리에서 lift px 위에 맞춰 그린다 */
+    private void drawBalloon(Graphics2D g, WaterBalloon balloon, int lift) {
+        g.drawImage(balloons.balloon(balloon.age()),
+                (int) Math.round(balloon.x()) - BalloonSprites.BALLOON_CENTER_X,
+                (int) Math.round(balloon.y()) - BalloonSprites.BALLOON_CENTER_Y - lift, null);
+    }
+
+    /**
+     * 던져져 날아가는 물풍선. 공중에 있으니 모든 줄을 그린 뒤 맨 위에 그린다. 땅 위 자리에 그림자를 깔고,
+     * 떠 있는 높이가 높을수록 그림자를 작게 한다.
+     */
+    private void drawFlyingBalloons(Graphics2D g, BalloonField field, Concealment concealment) {
+        for (WaterBalloon balloon : field.balloons()) {
+            if (!balloon.isFlying()
+                    || concealment.hides(TileMap.colAt(balloon.x()), TileMap.rowAt(balloon.y()))) {
+                continue;
+            }
+            int x = (int) Math.round(balloon.x());
+            int ground = (int) Math.round(balloon.y()) + T / 2 - 6;
+            double rise = balloon.height() / WaterBalloon.FLIGHT_HEIGHT;
+            int width = (int) Math.round(28 - 10 * rise);
+            g.setColor(SHADOW);
+            g.fillOval(x - width / 2, ground - 4, width, 7);
+            drawBalloon(g, balloon, (int) Math.round(balloon.height()));
         }
     }
 
@@ -259,18 +314,71 @@ public final class WorldRenderer {
      * 발밑에 그림자를 깔고, 그림의 가로 가운데를 캐릭터 위치에 맞춰 그린다. 머리는 윗칸으로 솟는다.
      * 탈락 연출 중에는 그림자는 땅에 두고 그림만 솟았다 떨어지며, 깜빡이는 동안 숨는 차례에는 그림자째 그리지 않는다.
      */
-    private void drawPlayer(Graphics2D g, Player player) {
+    private void drawPlayer(Graphics2D g, Player player, PlayerGear gear, double seconds) {
         if (!isShown(player)) {
             return;
         }
         int x = (int) Math.round(player.x());
         int feet = (int) Math.round(player.y()) + FEET_BELOW_CENTER;
+        int jump = jumpLiftOf(gear);
 
+        // 뛰어 솟을수록 그림자가 작아진다
+        int shadow = 28 - 12 * jump / JUMP_HEIGHT;
         g.setColor(SHADOW);
-        g.fillOval(x - 14, feet - 6, 28, 9);
+        g.fillOval(x - shadow / 2, feet - 6, shadow, 9);
 
-        BufferedImage frame = frameOf(player);
-        g.drawImage(frame, x - CharacterSprites.FRAME_SIZE / 2, feet - CharacterSprites.FEET_Y - liftOf(player), null);
+        boolean riding = gear.hasTank() && isUpright(player);
+        if (!isBlinkedOut(gear, seconds)) {
+            BufferedImage frame = frameOf(player);
+            int lift = liftOf(player) + jump + (riding ? TANK_SEAT : 0);
+            g.drawImage(frame, x - CharacterSprites.FRAME_SIZE / 2, feet - CharacterSprites.FEET_Y - lift, null);
+        }
+        if (riding) {
+            g.drawImage(items.image(ItemType.TANK), x - TANK_SIZE / 2, feet + TANK_BELOW_FEET - TANK_SIZE - jump,
+                    TANK_SIZE, TANK_SIZE, null);
+        }
+        if (gear.isShielded() && isShieldVisible(gear, seconds)) {
+            drawShield(g, x, feet - SHIELD_CENTER_ABOVE_FEET - jump - (riding ? TANK_SEAT : 0));
+        }
+    }
+
+    /** 반투명한 물방울 막. 테두리와 왼쪽 위 반짝임을 그려 막처럼 보이게 한다 */
+    private static void drawShield(Graphics2D g, int centerX, int centerY) {
+        int r = SHIELD_RADIUS;
+        g.setColor(SHIELD_FILL);
+        g.fillOval(centerX - r, centerY - r, 2 * r, 2 * r);
+        Stroke stroke = g.getStroke();
+        g.setStroke(SHIELD_STROKE);
+        g.setColor(SHIELD_EDGE);
+        g.drawOval(centerX - r, centerY - r, 2 * r, 2 * r);
+        g.setColor(SHIELD_SHINE);
+        g.drawArc(centerX - r + 6, centerY - r + 6, 2 * r - 12, 2 * r - 12, 110, 50);
+        g.setStroke(stroke);
+    }
+
+    /** 탱크에 타 있는 모습으로 그릴 상태인지. 갇히거나 쓰러진 그림은 탱크 없이 그린다 */
+    private static boolean isUpright(Player player) {
+        return player.state() == PlayerState.NORMAL;
+    }
+
+    /** 스프링 신발로 뛰어 솟은 높이(px). 포물선을 그리고, 공중이 아니면 0이다 */
+    static int jumpLiftOf(PlayerGear gear) {
+        if (!gear.isAirborne()) {
+            return 0;
+        }
+        double t = gear.jumpProgress();
+        return (int) Math.round(JUMP_HEIGHT * 4 * t * (1 - t));
+    }
+
+    /** 탱크가 막 부서져 맞지 않는 동안, {@link #BLINK_SECONDS}초씩 숨는 차례인지 */
+    static boolean isBlinkedOut(PlayerGear gear, double seconds) {
+        return gear.isRecoveringFromTank() && (int) Math.floor(seconds / BLINK_SECONDS + FRAME_BOUNDARY_SLACK) % 2 == 1;
+    }
+
+    /** 보호막을 보이는 차례인지. 끝나기 {@link #SHIELD_WARNING_SECONDS}초 전부터 {@link #BLINK_SECONDS}초씩 깜빡인다 */
+    static boolean isShieldVisible(PlayerGear gear, double seconds) {
+        return gear.shieldSecondsLeft() > SHIELD_WARNING_SECONDS
+                || (int) Math.floor(seconds / BLINK_SECONDS + FRAME_BOUNDARY_SLACK) % 2 == 0;
     }
 
     private BufferedImage frameOf(Player player) {
