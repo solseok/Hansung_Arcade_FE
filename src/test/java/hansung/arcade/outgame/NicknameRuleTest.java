@@ -87,7 +87,7 @@ class NicknameRuleTest {
         LoginPanel login = new LoginPanel(new OutgameSession(new MockLobbyService()), scenes);
 
         SwingTree.named(login, "nickname-1", JTextField.class).setText("ㅁㄴㅇㄹ");
-        SwingTree.button(login, "로비 입장").doClick();
+        SwingTree.button(login, "시작하기").doClick();
 
         assertNull(displayed.get());
         assertTrue(SwingTree.named(login, "login-message", JLabel.class).getText().contains("완성된 한글"));

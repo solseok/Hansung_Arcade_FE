@@ -98,7 +98,8 @@ class LoginLookTest {
             JToggleButton button = SwingTree.named(login, name, JToggleButton.class);
             button.setSelected(true);
             BufferedImage image = SwingTree.render(button);
-            int x = image.getWidth() / 2;
+            // 글자가 버튼 한가운데에 오므로 글자 옆 세로줄에서 잰다
+            int x = image.getWidth() / 5;
             double shine = 0;
             for (int y = image.getHeight() / 10; y < image.getHeight() * 3 / 10; y++) {
                 shine = Math.max(shine, luminance(color(image, x, y)));

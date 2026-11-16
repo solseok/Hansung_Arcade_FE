@@ -110,7 +110,7 @@ class LoginModeTest {
         SwingTree.named(login, "mode-2p", JToggleButton.class).doClick();
         SwingTree.named(login, "nickname-1", JTextField.class).setText("부기");
         SwingTree.named(login, "nickname-2", JTextField.class).setText("꾸꾸");
-        SwingTree.button(login, "로비 입장").doClick();
+        SwingTree.button(login, "시작하기").doClick();
 
         assertSame(lobbyView, displayed.get());
         assertEquals(List.of("부기", "꾸꾸"), session.nicknames());
@@ -123,7 +123,7 @@ class LoginModeTest {
         SwingTree.named(login, "nickname-1", JTextField.class).setText("부기");
         SwingTree.named(login, "nickname-2", JTextField.class).setText("꾸꾸");
         SwingTree.named(login, "mode-1p", JToggleButton.class).doClick();
-        SwingTree.button(login, "로비 입장").doClick();
+        SwingTree.button(login, "시작하기").doClick();
 
         assertEquals(List.of("부기"), session.nicknames());
     }
@@ -133,7 +133,7 @@ class LoginModeTest {
         SwingTree.named(login, "mode-2p", JToggleButton.class).doClick();
         SwingTree.named(login, "nickname-1", JTextField.class).setText("부기");
         SwingTree.named(login, "nickname-2", JTextField.class).setText("부기");
-        SwingTree.button(login, "로비 입장").doClick();
+        SwingTree.button(login, "시작하기").doClick();
 
         assertNull(displayed.get());
         assertTrue(SwingTree.named(login, "login-message", JLabel.class).getText().contains("같"));
