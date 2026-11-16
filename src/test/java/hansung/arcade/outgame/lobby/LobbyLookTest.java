@@ -5,6 +5,7 @@ import hansung.arcade.core.ui.RunOnEdt;
 import hansung.arcade.outgame.OutgameSession;
 import hansung.arcade.outgame.SwingTree;
 import hansung.arcade.outgame.ui.RoundPanel;
+import hansung.arcade.outgame.ui.TextLabel;
 import hansung.arcade.outgame.ui.OutgameFonts;
 import hansung.arcade.outgame.ui.OutgamePalette;
 import org.junit.jupiter.api.BeforeEach;
@@ -12,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import javax.swing.AbstractButton;
+import javax.swing.JComponent;
 import javax.swing.JLabel;
 import java.awt.Color;
 import java.awt.Component;
@@ -69,7 +71,7 @@ class LobbyLookTest {
         BufferedImage screen = SwingTree.render(lobby);
         RoundPanel list = SwingTree.named(lobby, "room-list", RoundPanel.class);
         RoomCard card = SwingTree.named(lobby, "room-card-1", RoomCard.class);
-        JLabel header = SwingTree.named(card, "room-header", JLabel.class);
+        JComponent header = SwingTree.named(card, "room-header", JComponent.class);
         Rectangle listBox = SwingTree.boundsIn(list, lobby);
         Rectangle cardBox = SwingTree.boundsIn(card, lobby);
         Rectangle headerBox = SwingTree.boundsIn(header, lobby);
@@ -78,8 +80,34 @@ class LobbyLookTest {
         assertEquals(OutgamePalette.ROOM_LIST, rgb(screen, listBox.x + 4, listBox.y + listBox.height / 2));
         // 방 칸 가장자리는 광택(밝은 안테두리)이 있어서, 맵 미리보기와 제목줄 사이 빈 칸에서 잰다
         assertEquals(OutgamePalette.ROOM_ITEM, rgb(screen, cardBox.x + 88, cardBox.y + cardBox.height / 2));
-        assertEquals(OutgamePalette.ROOM_HEADER, rgb(screen, headerBox.x + 2, headerBox.y + headerBox.height / 2));
-        assertTrue(header.getText().contains("함께 한 판 해요"), header.getText());
+        assertEquals(OutgamePalette.ROOM_HEADER, rgb(screen, headerBox.x + headerBox.width - 8,
+                headerBox.y + headerBox.height - 4));
+    }
+
+    /** 9. 제목줄 안에 방번호를 담는 상자를 따로 두고, 그 오른쪽에 제목을 쓴다 (스켈레톤에도 빈 상자가 있다) */
+    @Test
+    void 방번호는_제목줄_안의_번호_상자에_쓴다() {
+        BufferedImage screen = SwingTree.render(lobby);
+        RoomCard card = SwingTree.named(lobby, "room-card-1", RoomCard.class);
+        JComponent header = SwingTree.named(card, "room-header", JComponent.class);
+        TextLabel number = SwingTree.named(header, "room-number", TextLabel.class);
+        JLabel title = SwingTree.named(header, "room-title", JLabel.class);
+        Rectangle box = SwingTree.boundsIn(number, lobby);
+
+        assertEquals("001", number.getText());
+        assertEquals("함께 한 판 해요", title.getText());
+        assertEquals(OutgamePalette.ROOM_NUMBER_BOX, number.getBackground());
+        assertTrue(number.radius() > 0, "번호 상자 모서리가 둥글지 않습니다.");
+        assertTrue(SwingTree.boundsIn(header, lobby).contains(box));
+        assertTrue(box.x + box.width <= SwingTree.boundsIn(title, lobby).x, "번호 상자가 제목 왼쪽에 있어야 합니다.");
+        assertEquals(OutgamePalette.ROOM_NUMBER_BOX, rgb(screen, box.x + 3, box.y + box.height - 4));
+        assertP3(72, 160, 238, OutgamePalette.ROOM_NUMBER_BOX);
+
+        lastPage();
+        RoomCard skeleton = (RoomCard) SwingTree.namedStartingWith(lobby, "room-skeleton-").getFirst();
+        TextLabel empty = SwingTree.named(skeleton, "room-number", TextLabel.class);
+        assertEquals("", empty.getText());
+        assertTrue(empty.getWidth() > 0 && empty.getHeight() > 0, "스켈레톤에도 빈 번호 상자가 있어야 합니다.");
     }
 
     @Test
