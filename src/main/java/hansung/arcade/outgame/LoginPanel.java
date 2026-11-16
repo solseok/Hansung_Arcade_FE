@@ -23,10 +23,10 @@ public final class LoginPanel extends JPanel implements Scene {
         super(new java.awt.GridBagLayout());
         setPreferredSize(new Dimension(800, 600));
         setBackground(new Color(0x00BCEB));
-        JPanel form = new JPanel(new GridLayout(0, 1, 8, 8));
+        JPanel form = LobbyArtwork.panel(new GridLayout(0, 1, 8, 8), new Color(0xC0F8FF), new Color(0x41C9F2));
         form.setPreferredSize(new Dimension(440, 550));
-        form.setBorder(BorderFactory.createEmptyBorder(26, 35, 26, 35));
-        JLabel title = new JLabel("HANSUNG ARCADE");
+        form.setBorder(BorderFactory.createCompoundBorder(LobbyArtwork.frame(4), BorderFactory.createEmptyBorder(18, 27, 18, 27)));
+        JLabel title = LobbyArtwork.outlined("HANSUNG ARCADE", 27, new Color(0xFFF39D), new Color(0x00558F));
         title.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 28));
         form.add(title);
         form.add(new JLabel("오프라인 목업 · 서버 설정은 향후 연결에 사용됩니다"));

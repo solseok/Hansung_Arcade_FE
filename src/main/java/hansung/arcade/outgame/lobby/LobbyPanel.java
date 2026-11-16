@@ -38,7 +38,7 @@ public final class LobbyPanel extends JPanel implements Scene {
     private final LobbyService service;
     private final SceneManager scenes;
     private final JTabbedPane tabs = new JTabbedPane();
-    private final JPanel cards = new JPanel(new GridLayout(4, 2, 12, 10));
+    private final JPanel cards = new JPanel(new GridLayout(4, 2, 6, 6));
     private final JLabel pageLabel = new JLabel();
     private final JLabel feedback = new JLabel(" ", SwingConstants.CENTER);
     private final JButton previous = LobbyArtwork.button("이전쪽", false);
@@ -47,7 +47,7 @@ public final class LobbyPanel extends JPanel implements Scene {
     private final JLabel nickname = new JLabel("오프라인 목업");
 
     public LobbyPanel(LobbyService service, SceneManager scenes) {
-        super(new BorderLayout(12, 12));
+        super(new BorderLayout(8, 8));
         this.service = service;
         this.scenes = scenes;
         setPreferredSize(new Dimension(800, 600));
@@ -68,13 +68,23 @@ public final class LobbyPanel extends JPanel implements Scene {
         nickname.setForeground(new Color(0x003C70));
         actions.add(nickname);
         add(actions, BorderLayout.NORTH);
-        JPanel content = new JPanel(new BorderLayout(8, 8));
+        JPanel content = LobbyArtwork.panel(new BorderLayout(6, 6), new Color(0x03C8EF), new Color(0x009CD9));
         content.setBackground(new Color(0x0099D4));
         content.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createLineBorder(new Color(154, 227, 255), 2),
                 BorderFactory.createEmptyBorder(8, 10, 8, 10)));
         tabs.addTab("대기중", new JPanel());
         tabs.addTab("게임중", new JPanel());
+        tabs.setUI(new javax.swing.plaf.basic.BasicTabbedPaneUI() {
+            @Override
+            protected void paintContentBorder(Graphics g, int placement, int selected) { }
+            @Override
+            protected void paintTabBackground(Graphics g, int placement, int index,
+                    int x, int y, int w, int h, boolean selected) {
+                g.setColor(new Color(selected ? 0xACF5FF : 0x138DD0));
+                g.fillRoundRect(x, y, w, h + 8, 8, 8);
+            }
+        });
         tabs.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 14));
         tabs.setBackground(new Color(0x59B8EF));
         tabs.setForeground(new Color(0x103E79));
@@ -109,6 +119,7 @@ public final class LobbyPanel extends JPanel implements Scene {
         add(content, BorderLayout.CENTER);
         JPanel footer = new JPanel(new BorderLayout());
         footer.setOpaque(false);
+        footer.setPreferredSize(new Dimension(760, 30));
         JButton menu = LobbyArtwork.button("메뉴", false);
         JPopupMenu popup = new JPopupMenu();
         JMenuItem reload = new JMenuItem("방 목록 새로고침");
@@ -125,6 +136,8 @@ public final class LobbyPanel extends JPanel implements Scene {
                 window.dispatchEvent(new WindowEvent(window, WindowEvent.WINDOW_CLOSING));
             }
         });
+        menu.setPreferredSize(new Dimension(86, 28));
+        exit.setPreferredSize(new Dimension(86, 28));
         footer.add(menu, BorderLayout.WEST);
         footer.add(exit, BorderLayout.EAST);
         add(footer, BorderLayout.SOUTH);
@@ -180,17 +193,28 @@ public final class LobbyPanel extends JPanel implements Scene {
     }
 
     private JPanel emptyCard() {
-        JPanel panel = new JPanel(new BorderLayout());
-        panel.setBackground(HsuColor.SKY_BLUE.toAwt());
-        panel.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(new Color(0x63EDFF), 3),
-                BorderFactory.createEmptyBorder(5, 7, 5, 7)));
+        JPanel panel = LobbyArtwork.panel(new BorderLayout(), new Color(0x1DE1F5), new Color(0x02C7EC));
+        panel.setBorder(LobbyArtwork.frame(4));
+        JLabel thumbnail = new JLabel();
+        thumbnail.setPreferredSize(new Dimension(62, 60));
+        thumbnail.setOpaque(true);
+        thumbnail.setBackground(new Color(0x13A5E8));
+        thumbnail.setBorder(BorderFactory.createLineBorder(new Color(0x0872BA)));
+        panel.add(thumbnail, BorderLayout.WEST);
+        JPanel placeholder = new JPanel(new BorderLayout());
+        placeholder.setOpaque(false);
+        placeholder.setBorder(BorderFactory.createEmptyBorder(0, 6, 0, 0));
+        JLabel bar = new JLabel(" ");
+        bar.setOpaque(true);
+        bar.setBackground(new Color(0x079BD5));
+        placeholder.add(bar, BorderLayout.NORTH);
+        panel.add(placeholder, BorderLayout.CENTER);
         return panel;
     }
 
     private JPanel roomCard(Room room) {
         JPanel panel = emptyCard();
-        panel.setBackground(new Color(0x03CEE9));
+        panel.removeAll();
         JLabel thumbnail = new JLabel(new ImageIcon(LobbyArtwork.map(room.map())
                 .getScaledInstance(60, 60, java.awt.Image.SCALE_SMOOTH)));
         thumbnail.setBorder(BorderFactory.createLineBorder(new Color(0x155A76), 2));
@@ -198,21 +222,32 @@ public final class LobbyPanel extends JPanel implements Scene {
         JPanel info = new JPanel(new BorderLayout(4, 3));
         info.setOpaque(false);
         info.setBorder(BorderFactory.createEmptyBorder(0, 8, 0, 0));
-        JLabel title = new JLabel(String.format("%03d  %s", room.number(), room.title()));
+        JLabel title = new JLabel(room.title());
         title.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 14));
         title.setForeground(Color.WHITE);
         title.setOpaque(true);
         title.setBackground(new Color(0x008FCB));
         title.setToolTipText(room.title());
-        info.add(title, BorderLayout.NORTH);
+        JPanel heading = new JPanel(new BorderLayout(5, 0));
+        heading.setBackground(new Color(0x008FCB));
+        JLabel number = new JLabel(String.format(" %03d ", room.number()));
+        number.setForeground(new Color(0xFFF263));
+        number.setFont(new Font(Font.MONOSPACED, Font.BOLD, 13));
+        number.setBorder(BorderFactory.createLineBorder(new Color(0xFFF263)));
+        heading.add(number, BorderLayout.WEST);
+        heading.add(title, BorderLayout.CENTER);
+        info.add(heading, BorderLayout.NORTH);
         JLabel map = new JLabel(room.map());
         map.setForeground(new Color(0x285579));
         map.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 11));
         info.add(map, BorderLayout.CENTER);
         JPanel bottom = new JPanel(new BorderLayout(5, 0));
         bottom.setOpaque(false);
-        JLabel state = new JLabel(room.status() == Room.Status.WAITING ? "WAITING" : "PLAYING");
-        state.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 18));
+        JLabel state = LobbyArtwork.outlined(room.status() == Room.Status.WAITING ? "WAITING" : "PLAYING",
+                17, room.status() == Room.Status.WAITING ? new Color(0xFFF393) : Color.WHITE,
+                room.status() == Room.Status.WAITING ? new Color(0x793B16) : new Color(0x226198));
+        state.setPreferredSize(new Dimension(98, 24));
+
         state.setForeground(room.status() == Room.Status.WAITING ? new Color(0x005487) : new Color(0x505B8C));
         bottom.add(state, BorderLayout.WEST);
         JPanel entry = new JPanel(new FlowLayout(FlowLayout.RIGHT, 3, 0));

@@ -25,12 +25,20 @@ public final class ChatPanel extends JPanel {
     public ChatPanel(ChatSender sender) {
         super(new BorderLayout(6, 6));
         this.sender = sender;
-        setBorder(BorderFactory.createTitledBorder("채팅"));
+        setBackground(new java.awt.Color(0x078FCE));
+        setBorder(javax.swing.BorderFactory.createTitledBorder(
+                hansung.arcade.outgame.lobby.LobbyArtwork.frame(5), "방 채팅",
+                0, 0, new java.awt.Font(java.awt.Font.SANS_SERIF, java.awt.Font.BOLD, 12), java.awt.Color.WHITE));
+        messages.setBackground(new java.awt.Color(0x0778BE));
+        input.setBackground(new java.awt.Color(0xA9F2FF));
+        input.setForeground(new java.awt.Color(0x003E6C));
+        feedback.setForeground(java.awt.Color.WHITE);
         setPreferredSize(new Dimension(760, 190));
         messages.setEditable(false);
         add(new JScrollPane(messages), BorderLayout.CENTER);
         JPanel bottom = new JPanel(new BorderLayout(6, 4));
-        JButton send = new JButton("전송");
+        bottom.setOpaque(false);
+        JButton send = hansung.arcade.outgame.lobby.LobbyArtwork.button("전송", false);
         input.setToolTipText("메시지를 입력하고 Enter를 누르세요");
         input.addActionListener(event -> send());
         send.addActionListener(event -> send());
@@ -68,7 +76,7 @@ public final class ChatPanel extends JPanel {
             return;
         }
         SimpleAttributeSet style = new SimpleAttributeSet();
-        StyleConstants.setForeground(style, (system ? HsuColor.GRAY : HsuColor.DARK_BLUE).toAwt());
+        StyleConstants.setForeground(style, system ? new java.awt.Color(0xFFE979) : java.awt.Color.WHITE);
         StyleConstants.setItalic(style, system);
         try {
             messages.getStyledDocument().insertString(messages.getDocument().getLength(), text + "\n", style);

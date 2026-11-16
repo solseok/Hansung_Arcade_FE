@@ -40,12 +40,31 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
     public WaitingRoomPanel(OutgameSession session, SceneManager scenes) {
         super(new BorderLayout(10, 10));
         this.session = session;
+        character.setRenderer(new javax.swing.DefaultListCellRenderer() {
+            @Override
+            public java.awt.Component getListCellRendererComponent(javax.swing.JList<?> list, Object value,
+                    int index, boolean selected, boolean focus) {
+                super.getListCellRendererComponent(list, value, index, selected, focus);
+                if (value instanceof Mascot mascot) {
+                    setText(switch (mascot) {
+                        case SANGSANGBUGI -> "상상부기";
+                        case KKUKKU -> "꾸꾸";
+                        case KKOKKO -> "꼬꼬";
+                        case SANGZZI -> "상찌";
+                        case HANSUNGNYANGI -> "한성냥이";
+                    });
+                }
+                return this;
+            }
+        });
         setPreferredSize(new Dimension(800, 600));
         setBackground(new Color(0x08BDEB));
         setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
-        title.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 21));
+        title.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 18));
+        title.setForeground(Color.WHITE);
         JPanel header = new JPanel(new BorderLayout());
-        header.setOpaque(false);
+        header.setBackground(new Color(0x0869AF));
+        header.setBorder(LobbyArtwork.frame(5));
         header.add(title, BorderLayout.CENTER);
         JButton leave = LobbyArtwork.button("로비로 나가기", false);
         leave.addActionListener(event -> {
@@ -60,18 +79,32 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
         middle.setOpaque(false);
         slots.setOpaque(false);
         middle.add(slots, BorderLayout.CENTER);
-        JPanel controls = new JPanel(new java.awt.FlowLayout());
-        controls.add(new JLabel("캐릭터"));
-        controls.add(character);
-        controls.add(new JLabel("팀"));
-        controls.add(team);
-        controls.add(new JLabel("맵"));
-        controls.add(map);
-        controls.add(ready);
-        controls.add(start);
+        JPanel controls = new JPanel(new BorderLayout(8, 8));
+        controls.setBackground(new Color(0x078FCE));
+        controls.setBorder(LobbyArtwork.frame(6));
+        JPanel choices = new JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.LEFT, 8, 0));
+        choices.setOpaque(false);
+        choices.add(new JLabel("캐릭터"));
+        choices.add(character);
+        choices.add(new JLabel("팀"));
+        choices.add(team);
+        choices.add(new JLabel("맵"));
+        choices.add(map);
+        for (JComboBox<?> choice : new JComboBox<?>[]{character, team, map}) {
+            choice.setBackground(new Color(0xA6F0FF));
+            choice.setForeground(new Color(0x004B7F));
+            choice.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 13));
+        }
+        JPanel buttons = new JPanel(new GridLayout(1, 2, 8, 0));
+        buttons.setOpaque(false);
+        buttons.add(ready);
+        buttons.add(start);
+        buttons.setPreferredSize(new Dimension(280, 38));
+        controls.add(choices, BorderLayout.NORTH);
+        controls.add(buttons, BorderLayout.SOUTH);
         middle.add(controls, BorderLayout.SOUTH);
         add(middle, BorderLayout.CENTER);
-        chat.setPreferredSize(new Dimension(760, 160));
+        chat.setPreferredSize(new Dimension(760, 138));
         add(chat, BorderLayout.SOUTH);
         character.addActionListener(event -> select());
         team.addActionListener(event -> select());
@@ -104,14 +137,18 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
         slots.removeAll();
         var players = session.players();
         for (int index = 0; index < 8; index++) {
-            JPanel slot = new JPanel(new BorderLayout(4, 4));
+            JPanel slot = LobbyArtwork.panel(new BorderLayout(4, 4), new Color(0xD6FAFF), new Color(0x52CCF0));
             slot.setBackground(new Color(0xB4EDFF));
-            slot.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(new Color(0x1277AE), 3),
-                    BorderFactory.createEmptyBorder(5, 5, 5, 5)));
+            slot.setBorder(LobbyArtwork.frame(5));
             if (index < players.size()) {
                 var player = players.get(index);
                 boolean host = session.service.isHost() ? index == 0 : index == 1;
-                slot.add(new JLabel(player.nickname() + (host ? " · 방장" : ""), JLabel.CENTER), BorderLayout.NORTH);
+                JLabel name = new JLabel(player.nickname() + (host ? " · 방장" : ""), JLabel.CENTER);
+                name.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 13));
+                name.setForeground(host ? new Color(0xFFE46B) : Color.WHITE);
+                name.setOpaque(true);
+                name.setBackground(new Color(0x0878BA));
+                slot.add(name, BorderLayout.NORTH);
                 var image = sprites.frame(player.character(), Direction.DOWN, false, 0);
                 slot.add(new JLabel(new ImageIcon(image.getScaledInstance(56, 64, java.awt.Image.SCALE_SMOOTH))), BorderLayout.CENTER);
                 String state = host ? "방장" : !session.isReady(player.id()) ? "대기중" : "준비 완료";
