@@ -27,6 +27,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -223,14 +224,26 @@ class WaitingRoomPanelTest {
         }
     }
 
+    /** 16. ?는 랜덤 캐릭터 선택이다. 고르면 ?가 골라진 채로 남고, 실제 캐릭터는 게임을 시작할 때 정한다 */
     @Test
-    void 랜덤을_고르면_다섯_캐릭터_중_하나가_골라진다() {
+    void 물음표는_랜덤_캐릭터_선택이다() {
         enterAsHost(8);
+        JToggleButton random = SwingTree.named(waiting, "character-random", JToggleButton.class);
 
-        SwingTree.named(waiting, "character-random", JToggleButton.class).doClick();
+        random.doClick();
 
-        Mascot picked = session.character();
-        assertTrue(SwingTree.named(waiting, "character-" + picked.id(), JToggleButton.class).isSelected());
+        assertTrue(session.randomCharacter());
+        assertTrue(random.isSelected());
+        for (Mascot mascot : Mascot.values()) {
+            assertFalse(SwingTree.named(waiting, "character-" + mascot.id(), JToggleButton.class).isSelected(),
+                    mascot + "이(가) 골라져 있으면 안 됩니다.");
+        }
+        assertEquals("랜덤", SwingTree.named(waiting, "character-name", JLabel.class).getText());
+        assertNotNull(session.start().players().getFirst().character(), "게임을 시작할 때는 캐릭터가 정해져야 합니다.");
+
+        SwingTree.named(waiting, "character-kkukku", JToggleButton.class).doClick();
+        assertFalse(session.randomCharacter());
+        assertEquals(Mascot.KKUKKU, session.character());
     }
 
     @Test
