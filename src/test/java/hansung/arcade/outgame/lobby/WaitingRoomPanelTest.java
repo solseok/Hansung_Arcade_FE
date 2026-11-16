@@ -211,6 +211,18 @@ class WaitingRoomPanelTest {
         assertEquals("꾸꾸", SwingTree.named(waiting, "character-name", JLabel.class).getText());
     }
 
+    /** 15. 캐릭터 배너에는 이름만 쓰고 능력치(물풍선·물줄기·속도)는 쓰지 않는다 */
+    @Test
+    void 캐릭터_배너에는_능력치가_없다() {
+        enterAsHost(8);
+        JComponent banner = SwingTree.named(waiting, "character-banner", JComponent.class);
+
+        assertEquals("상상부기", SwingTree.named(banner, "character-name", JLabel.class).getText());
+        for (String text : SwingTree.texts(banner)) {
+            assertFalse(text.contains("물풍선") || text.contains("물줄기") || text.contains("속도"), text);
+        }
+    }
+
     @Test
     void 랜덤을_고르면_다섯_캐릭터_중_하나가_골라진다() {
         enterAsHost(8);
