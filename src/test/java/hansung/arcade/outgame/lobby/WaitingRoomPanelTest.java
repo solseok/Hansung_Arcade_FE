@@ -8,6 +8,7 @@ import hansung.arcade.outgame.OutgameSession;
 import hansung.arcade.outgame.SwingTree;
 import hansung.arcade.outgame.Team;
 import hansung.arcade.outgame.ui.OutgamePalette;
+import hansung.arcade.outgame.ui.StarRating;
 import hansung.arcade.outgame.ui.WaitingRoomLayout;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -276,7 +277,24 @@ class WaitingRoomPanelTest {
         assertEquals("patrit/patrit14", session.mapId());
         assertEquals("패트릿 14", SwingTree.named(waiting, "map-name", JLabel.class).getText());
         assertTrue(SwingTree.named(waiting, "map-info-0", JLabel.class).getText().contains("패트릿 14"));
-        assertTrue(SwingTree.named(waiting, "map-info-1", JLabel.class).getText().contains("1/8"));
+        assertEquals("인  원: 8", SwingTree.named(waiting, "map-info-1", JLabel.class).getText());
+    }
+
+    /** 17. 맵 설명에 크기는 쓰지 않고, 인기도는 별 5개로 보여 준다 */
+    @Test
+    void 맵_설명은_이름_인원_테마_인기도_별_5개() {
+        enterAsHost(8);
+
+        assertEquals("캠프 08", SwingTree.named(waiting, "map-info-0", JLabel.class).getText());
+        assertEquals("인  원: 8", SwingTree.named(waiting, "map-info-1", JLabel.class).getText());
+        assertEquals("테  마: 캠프", SwingTree.named(waiting, "map-info-2", JLabel.class).getText());
+        StarRating popularity = SwingTree.named(waiting, "map-info-3", StarRating.class);
+        assertEquals("인기도:", popularity.getText());
+        assertEquals(5, popularity.stars());
+        for (int i = 0; i < WaitingRoomLayout.MAP_INFO_ROWS; i++) {
+            String text = SwingTree.named(waiting, "map-info-" + i, JLabel.class).getText();
+            assertFalse(text.contains("크기") || text.matches(".*\\d+x\\d+.*"), "크기를 쓰지 않아야 합니다: " + text);
+        }
     }
 
     @Test
