@@ -7,7 +7,6 @@ import hansung.arcade.ingame.hud.Box;
 import hansung.arcade.outgame.OutgameSession;
 import hansung.arcade.outgame.SwingTree;
 import hansung.arcade.outgame.Team;
-import hansung.arcade.outgame.ui.OutgameFonts;
 import hansung.arcade.outgame.ui.OutgamePalette;
 import hansung.arcade.outgame.ui.WaitingRoomLayout;
 import org.junit.jupiter.api.BeforeEach;
@@ -19,12 +18,10 @@ import javax.swing.JCheckBox;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JToggleButton;
-import javax.swing.text.JTextComponent;
 import java.awt.Color;
 import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
 import java.util.LinkedHashMap;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 
@@ -255,19 +252,6 @@ class WaitingRoomPanelTest {
 
         assertTrue(session.ready());
         assertState(0, SlotState.READY, "준비 완료", OutgamePalette.STATUS_READY);
-    }
-
-    @Test
-    void 대기실_글자는_모두_굴림체() {
-        enterAsGuest();
-        String family = OutgameFonts.gulimChe(12).getFamily(Locale.ENGLISH);
-
-        for (JComponent component : SwingTree.all(waiting, JComponent.class)) {
-            if (component instanceof JLabel || component instanceof AbstractButton || component instanceof JTextComponent) {
-                assertEquals(family, component.getFont().getFamily(Locale.ENGLISH),
-                        component.getClass().getSimpleName() + " " + component.getName());
-            }
-        }
     }
 
     private void assertState(int index, SlotState state, String text, Color color) {

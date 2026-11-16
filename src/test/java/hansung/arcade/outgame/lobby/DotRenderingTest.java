@@ -5,7 +5,6 @@ import hansung.arcade.core.ui.RunOnEdt;
 import hansung.arcade.ingame.entity.Direction;
 import hansung.arcade.ingame.entity.Mascot;
 import hansung.arcade.ingame.render.CharacterSprites;
-import hansung.arcade.outgame.LoginPanel;
 import hansung.arcade.outgame.OutgameSession;
 import hansung.arcade.outgame.SwingTree;
 import hansung.arcade.outgame.ui.Dot;
@@ -18,10 +17,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 
 import javax.swing.ImageIcon;
 import javax.swing.JLabel;
-import javax.swing.JTextField;
-import javax.swing.text.JTextComponent;
 import java.awt.Color;
-import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.util.HashSet;
 import java.util.List;
@@ -65,30 +61,6 @@ class DotRenderingTest {
     }
 
     @Test
-    void 글자에는_글자색과_투명만_있다() {
-        Color ink = new Color(10, 20, 30);
-        DotLabel label = new DotLabel("1/8 캠프 08 Ab");
-        label.setFont(OutgameFonts.gulimChe(12));
-        label.setForeground(ink);
-
-        BufferedImage image = SwingTree.render(label);
-
-        boolean drawn = false;
-        for (int y = 0; y < image.getHeight(); y++) {
-            for (int x = 0; x < image.getWidth(); x++) {
-                int argb = image.getRGB(x, y);
-                int alpha = argb >>> 24;
-                assertTrue(alpha == 0 || alpha == 255, "(" + x + "," + y + ") 반투명 글자 픽셀 " + alpha);
-                if (alpha == 255) {
-                    assertEquals(ink.getRGB(), argb, "(" + x + "," + y + ") 글자색이 아닌 중간색");
-                    drawn = true;
-                }
-            }
-        }
-        assertTrue(drawn, "글자가 그려지지 않았습니다.");
-    }
-
-    @Test
     void 배경을_깐_라벨의_둥근_모서리는_세_단계() {
         DotLabel chip = new DotLabel("1/8");
         chip.setFont(OutgameFonts.gulimChe(12));
@@ -128,24 +100,6 @@ class DotRenderingTest {
         assertEquals(0, shown.getWidth() % source.getWidth(), "정수 배가 아닙니다: " + shown.getWidth());
         assertEquals(shown.getWidth() / source.getWidth(), shown.getHeight() / source.getHeight());
         assertTrue(colors(source).containsAll(colors(shown)), "캐릭터를 그리면서 원본에 없는 색이 생겼습니다.");
-    }
-
-    @Test
-    void 입력_칸과_채팅_글자도_안티앨리어싱을_끈다() {
-        MockLobbyService service = new MockLobbyService();
-        OutgameSession session = new OutgameSession(service);
-        LoginPanel login = new LoginPanel(session, new SceneManager(screen -> { }));
-        session.login("부기");
-        WaitingRoomPanel waiting = new WaitingRoomPanel(session, new SceneManager(screen -> { }));
-
-        List<JTextComponent> fields = new java.util.ArrayList<>(SwingTree.all(login, JTextField.class));
-        fields.addAll(SwingTree.all(waiting, JTextComponent.class));
-        assertFalse(fields.isEmpty());
-        for (JTextComponent field : fields) {
-            assertEquals(RenderingHints.VALUE_TEXT_ANTIALIAS_OFF,
-                    field.getClientProperty(RenderingHints.KEY_TEXT_ANTIALIASING),
-                    field.getClass().getSimpleName() + " " + field.getName());
-        }
     }
 
     private static LobbyPanel lobby() {

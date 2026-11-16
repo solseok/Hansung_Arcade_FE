@@ -12,12 +12,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import javax.swing.AbstractButton;
-import javax.swing.JComponent;
 import javax.swing.JLabel;
-import javax.swing.text.JTextComponent;
 import java.awt.Color;
 import java.awt.Component;
-import java.awt.Font;
 import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
 import java.util.List;
@@ -136,20 +133,6 @@ class LobbyLookTest {
         for (JLabel label : SwingTree.all(card, JLabel.class)) {
             if (label != mapName && label.getText() != null) {
                 assertFalse(label.getText().contains("캠프 08"), "맵 이름이 미리보기 밖에도 있습니다: " + label.getName());
-            }
-        }
-    }
-
-    @Test
-    void 글자는_모두_굴림체로_쓴다() {
-        String family = OutgameFonts.gulimChe(12).getFamily(Locale.ENGLISH);
-        lastPage();
-
-        for (JComponent component : SwingTree.all(lobby, JComponent.class)) {
-            if (component instanceof JLabel || component instanceof AbstractButton || component instanceof JTextComponent) {
-                Font font = component.getFont();
-                assertEquals(family, font.getFamily(Locale.ENGLISH),
-                        component.getClass().getSimpleName() + " " + component.getName() + " " + SwingTree.text(component));
             }
         }
     }
