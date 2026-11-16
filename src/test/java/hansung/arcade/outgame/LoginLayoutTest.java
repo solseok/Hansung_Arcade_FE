@@ -10,9 +10,11 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import javax.swing.AbstractButton;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
+import javax.swing.JTextField;
 import javax.swing.JToggleButton;
 import javax.imageio.ImageIO;
 import java.awt.FontMetrics;
+import java.awt.Insets;
 import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
 
@@ -26,12 +28,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * 입력 영역 아래 한 줄의 [시작하기] [종   료] 버튼. 참고 화면 값을 800x600으로 옮겼다 (가로 x1.25, 세로 x1.258).
  * 배경은 800x600 그림(resources/etc/hsu_arcade.png)을 아래 여백 없이 창 전체에 깔고, 그 위에 로그인 영역을 올린다.
  * 입력 영역은 닉네임 칸과 오류 문구 한 줄만 담을 만큼만 높고, 오른쪽 아래 로고는 두지 않는다.
+ * 닉네임 입력 칸은 가장 넓은 8자가 꽉 차는 폭이고, 입력 영역은 그 칸을 감쌀 만큼만 넓다 (2P면 칸 둘).
  */
 @ExtendWith(RunOnEdt.class)
 class LoginLayoutTest {
 
-    /** 1P 모드 입력 영역: 아래 버튼 줄 바로 위, 닉네임 칸과 오류 한 줄만 담는 높이 */
-    private static final Rectangle FORM_SINGLE = new Rectangle(230, 428, 330, 120);
+    /** 입력 영역 위치·높이: 아래 버튼 줄 바로 위, 닉네임 칸과 오류 한 줄만 담는 높이 */
+    private static final int FORM_Y = 448;
+    private static final int FORM_HEIGHT = 100;
+    /** 입력 영역 안쪽 좌우 여백 합 상한: 닉네임 칸을 감쌀 만큼만 넓다 */
+    private static final int FORM_SIDES = 30;
 
     private LoginPanel login;
 
@@ -58,8 +64,31 @@ class LoginLayoutTest {
     }
 
     @Test
-    void 일P_모드의_입력_영역은_아래_가운데() {
-        assertEquals(FORM_SINGLE, bounds("login-form"));
+    void 일P_모드의_입력_영역은_아래_가운데에_닉네임_칸_하나를_감쌀_만큼만_넓다() {
+        Rectangle form = bounds("login-form");
+        Rectangle section = bounds("nickname-1-section");
+
+        assertEquals(FORM_Y, form.y);
+        assertEquals(FORM_HEIGHT, form.height);
+        assertNear(400, form.x + form.width / 2, 1, "가운데 정렬");
+        assertTrue(form.width - section.width <= FORM_SIDES, "입력 영역이 닉네임 칸보다 너무 넓습니다: " + form + " / " + section);
+    }
+
+    @Test
+    void 닉네임_칸은_가장_넓은_8자가_꽉_차는_폭() {
+        for (String mode : new String[]{"mode-1p", "mode-2p"}) {
+            SwingTree.named(login, mode, JToggleButton.class).doClick();
+            for (String name : mode.equals("mode-1p") ? new String[]{"nickname-1"} : new String[]{"nickname-1", "nickname-2"}) {
+                JTextField field = SwingTree.named(login, name, JTextField.class);
+                FontMetrics metrics = field.getFontMetrics(field.getFont());
+                Insets insets = field.getInsets();
+                int inner = field.getWidth() - insets.left - insets.right;
+                int widest = widestNickname(metrics);
+
+                assertTrue(inner >= widest, mode + " " + name + "에 가장 넓은 8자(" + widest + "px)가 다 보이지 않습니다: " + inner);
+                assertTrue(inner <= widest + 4, mode + " " + name + "이 8자보다 너무 넓습니다: " + inner + " / " + widest);
+            }
+        }
     }
 
     @Test
@@ -70,7 +99,7 @@ class LoginLayoutTest {
             Rectangle section = bounds("nickname-1-section");
             Rectangle message = bounds("login-message");
 
-            assertEquals(FORM_SINGLE.height, form.height, mode + " 입력 영역 높이");
+            assertEquals(FORM_HEIGHT, form.height, mode + " 입력 영역 높이");
             int below = form.y + form.height - (section.y + section.height);
             assertTrue(below <= 28, mode + " 닉네임 칸 아래 빈 자리가 큽니다: " + below + "px");
             assertTrue(form.contains(message) && message.y >= section.y + section.height,
@@ -84,7 +113,7 @@ class LoginLayoutTest {
         FontMetrics metrics = message.getFontMetrics(message.getFont());
 
         assertTrue(message.getHeight() >= metrics.getAscent() + metrics.getDescent(), "오류 문구 줄이 글자보다 낮습니다.");
-        for (String text : new String[]{NicknameRule.LENGTH_MESSAGE, NicknameRule.HANGUL_MESSAGE}) {
+        for (String text : new String[]{NicknameRule.LENGTH_MESSAGE, NicknameRule.HANGUL_MESSAGE, NicknameRule.DIGITS_MESSAGE}) {
             assertTrue(metrics.stringWidth(text) <= message.getWidth(), "1P 입력 영역에 다 들어가지 않습니다: " + text);
         }
     }
@@ -145,19 +174,33 @@ class LoginLayoutTest {
     }
 
     @Test
-    void 이P_모드에서는_입력_영역이_넓어지고_1P_2P가_바깥으로_간다() {
+    void 이P_모드에서는_입력_영역이_칸_둘만큼_넓어지고_1P_2P가_바깥으로_간다() {
+        Rectangle single = bounds("login-form");
         SwingTree.named(login, "mode-2p", JToggleButton.class).doClick();
         Rectangle form = bounds("login-form");
+        Rectangle first = bounds("nickname-1-section");
+        Rectangle second = bounds("nickname-2-section");
         Rectangle one = bounds("mode-1p");
         Rectangle two = bounds("mode-2p");
 
-        assertTrue(form.width >= 560, "두 닉네임 칸이 들어가게 넓어져야 합니다: " + form);
-        assertNear(400, form.x + form.width / 2, 2, "가운데 정렬");
+        assertTrue(form.contains(first) && form.contains(second) && first.x + first.width <= second.x,
+                "두 닉네임 칸이 나란히 들어가야 합니다: " + first + " / " + second);
+        assertTrue(form.width - (first.width + second.width) <= FORM_SIDES + 10, "입력 영역이 칸 둘보다 너무 넓습니다: " + form);
+        assertEquals(single.y, form.y);
+        assertEquals(single.height, form.height);
+        assertNear(400, form.x + form.width / 2, 1, "가운데 정렬");
         assertTrue(one.x >= 0 && one.x + one.width <= form.x, one.toString());
         assertTrue(two.x >= form.x + form.width && two.x + two.width <= 800, two.toString());
 
         SwingTree.named(login, "mode-1p", JToggleButton.class).doClick();
-        assertEquals(FORM_SINGLE, bounds("login-form"));
+        assertEquals(single, bounds("login-form"));
+    }
+
+    @Test
+    void 닉네임_규칙_안내_문구는_없다() {
+        for (String text : SwingTree.texts(login)) {
+            assertTrue(!text.contains("2~8자") && !text.contains("영문, 숫자"), "안내 문구가 남아 있습니다: " + text);
+        }
     }
 
     @Test
@@ -175,6 +218,20 @@ class LoginLayoutTest {
 
     private Rectangle bounds(String name) {
         return SwingTree.boundsIn(SwingTree.named(login, name, JComponent.class), login);
+    }
+
+    /** 닉네임으로 받는 글자(완성 한글 가~힣, 영문, 숫자) 가운데 가장 넓은 글자 8개 폭 */
+    private static int widestNickname(FontMetrics metrics) {
+        int widest = 0;
+        for (char c = '가'; c <= '힣'; c++) {
+            widest = Math.max(widest, metrics.charWidth(c));
+        }
+        for (char c = '0'; c <= 'z'; c++) {
+            if (Character.isLetterOrDigit(c)) {
+                widest = Math.max(widest, metrics.charWidth(c));
+            }
+        }
+        return widest * NicknameRule.MAX_LENGTH;
     }
 
     /** 버튼을 글자 있이·없이 그려 달라진 픽셀이 차지하는 칸 (테두리 포함한 글자 자리) */

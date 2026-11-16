@@ -21,13 +21,14 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * 3. 닉네임은 2~8자이고, ㅁㄴㅇㄹ처럼 완성되지 않은 한글(자음·모음 낱자)은 받지 않는다.
+ * 3. 닉네임은 2~8자이고, ㅁㄴㅇㄹ처럼 완성되지 않은 한글(자음·모음 낱자)이나 숫자로만 된 것은 받지 않는다.
+ * 규칙 안내 문구는 화면에 두지 않고, 어긋날 때만 이유를 보여 준다.
  */
 @ExtendWith(RunOnEdt.class)
 class NicknameRuleTest {
 
     @ParameterizedTest
-    @ValueSource(strings = {"가나", "부기", "ab", "a1", "가나다라마바사아", "Player12", "한성Bugi"})
+    @ValueSource(strings = {"가나", "부기", "ab", "a1", "1a", "12가", "가나다라마바사아", "Player12", "한성Bugi", "1234567a"})
     void 두자에서_여덟자까지_받는다(String nickname) {
         assertEquals(nickname, NicknameRule.validate(nickname));
     }
@@ -59,6 +60,20 @@ class NicknameRuleTest {
         assertTrue(e.getMessage().contains("완성된 한글"), e.getMessage());
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "12",
+            "0000",
+            "12345678",
+            " 2024 ",  // 앞뒤 공백을 떼고 본다
+            "１２３"     // 전각 숫자
+    })
+    void 숫자로만_된_닉네임은_받지_않는다(String nickname) {
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> NicknameRule.validate(nickname));
+        assertEquals(NicknameRule.DIGITS_MESSAGE, e.getMessage());
+        assertTrue(e.getMessage().contains("숫자"), e.getMessage());
+    }
+
     @Test
     void 자모로_풀어_쓴_완성_글자는_합쳐서_받는다() {
         // macOS에서 붙여 넣은 글은 "가"가 ㄱ+ㅏ 조합용 자모(NFD)로 들어올 수 있다. 합치면 완성 글자이므로 받는다.
@@ -75,6 +90,8 @@ class NicknameRuleTest {
         assertThrows(IllegalArgumentException.class, () -> session.login("가"));
         assertThrows(IllegalArgumentException.class, () -> session.login("ㅁㄴㅇㄹ"));
         assertThrows(IllegalArgumentException.class, () -> session.login("부기", "ㅋㅋ"));
+        assertThrows(IllegalArgumentException.class, () -> session.login("1234"));
+        assertThrows(IllegalArgumentException.class, () -> session.login("부기", "77"));
         session.login("가나다라마바사아");
         assertEquals(List.of("가나다라마바사아"), session.nicknames());
     }
@@ -91,12 +108,19 @@ class NicknameRuleTest {
 
         assertNull(displayed.get());
         assertTrue(SwingTree.named(login, "login-message", JLabel.class).getText().contains("완성된 한글"));
+
+        SwingTree.named(login, "nickname-1", JTextField.class).setText("1234");
+        SwingTree.button(login, "시작하기").doClick();
+
+        assertNull(displayed.get());
+        assertEquals(NicknameRule.DIGITS_MESSAGE, SwingTree.named(login, "login-message", JLabel.class).getText());
     }
 
     @Test
-    void 안내_문구에_허용_범위가_적혀_있다() {
+    void 규칙_안내_문구는_화면에_두지_않는다() {
         LoginPanel login = new LoginPanel(new OutgameSession(new MockLobbyService()), new SceneManager(c -> { }));
 
-        assertTrue(SwingTree.texts(login).stream().anyMatch(text -> text.contains("2~8자")), SwingTree.texts(login).toString());
+        assertTrue(SwingTree.texts(login).stream().noneMatch(text -> text.contains("2~8자") || text.contains("영문, 숫자")),
+                SwingTree.texts(login).toString());
     }
 }
