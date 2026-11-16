@@ -121,10 +121,8 @@ class LobbyFlowTest {
         SwingUtilities.invokeAndWait(() -> {
             MockLobbyService service = new MockLobbyService();
             OutgameSession session = new OutgameSession(service);
-            assertThrows(IllegalArgumentException.class, () -> session.login(" ", "localhost", "9000"));
-            assertThrows(IllegalArgumentException.class, () -> session.login("전솔", "localhost", "65536"));
-            assertThrows(IllegalArgumentException.class, () -> session.login("전솔", "localhost", "abc"));
-            session.login("전솔", "localhost", "9000");
+            assertThrows(IllegalArgumentException.class, () -> session.login(" "));
+            session.login("전솔");
             session.enter(service.join(1));
             assertThrows(IllegalStateException.class, session::start);
             assertThrows(IllegalStateException.class, () -> session.selectMap("camp/camp08"));
