@@ -147,7 +147,7 @@ class WaitingRoomPanelTest {
         assertEquals(SlotState.HOST, me.state());
         assertEquals("부기", me.nickname());
         JLabel status = SwingTree.named(me, "slot-status", JLabel.class);
-        assertEquals("방장", status.getText());
+        assertEquals("방   장", status.getText());
         assertEquals(OutgamePalette.STATUS_HOST, status.getForeground());
         AbstractButton ready = SwingTree.named(waiting, "ready", AbstractButton.class);
         assertEquals("게임 시작", ready.getText());
@@ -161,20 +161,30 @@ class WaitingRoomPanelTest {
         enterAsGuest();
         AbstractButton ready = SwingTree.named(waiting, "ready", AbstractButton.class);
 
-        assertState(0, SlotState.WAITING, "대기 중", OutgamePalette.STATUS_IDLE);
-        assertState(1, SlotState.HOST, "방장", OutgamePalette.STATUS_HOST);
-        assertState(2, SlotState.READY, "준비 완료", OutgamePalette.STATUS_READY);
+        assertState(0, SlotState.WAITING, "준   비", OutgamePalette.STATUS_IDLE);
+        assertState(1, SlotState.HOST, "방   장", OutgamePalette.STATUS_HOST);
+        assertState(2, SlotState.READY, "준   비", OutgamePalette.STATUS_READY);
         assertEquals("준비", ready.getText());
         assertFalse(SwingTree.named(waiting, "map-select", AbstractButton.class).isEnabled(), "손님은 맵을 고를 수 없습니다.");
 
         ready.doClick();
         assertTrue(session.ready());
-        assertState(0, SlotState.READY, "준비 완료", OutgamePalette.STATUS_READY);
+        assertState(0, SlotState.READY, "준   비", OutgamePalette.STATUS_READY);
         assertEquals("준비 취소", ready.getText());
 
         ready.doClick();
         assertFalse(session.ready());
-        assertState(0, SlotState.WAITING, "대기 중", OutgamePalette.STATUS_IDLE);
+        assertState(0, SlotState.WAITING, "준   비", OutgamePalette.STATUS_IDLE);
+    }
+
+    /** 14. 상태 글자는 자간을 넓힌 "준   비"·"방   장". 준비했으면 불이 들어온 색, 아니면 꺼진 색이다 */
+    @Test
+    void 준비는_같은_글자에_불이_켜지고_꺼지는_것으로_구분한다() {
+        assertEquals("준   비", SlotState.READY.label());
+        assertEquals(SlotState.READY.label(), SlotState.WAITING.label());
+        assertEquals("방   장", SlotState.HOST.label());
+        assertEquals(OutgamePalette.STATUS_READY, SlotState.READY.color());
+        assertEquals(OutgamePalette.STATUS_IDLE, SlotState.WAITING.color());
     }
 
     @Test
@@ -251,7 +261,7 @@ class WaitingRoomPanelTest {
         SwingTree.named(waiting, "auto-ready", JCheckBox.class).doClick();
 
         assertTrue(session.ready());
-        assertState(0, SlotState.READY, "준비 완료", OutgamePalette.STATUS_READY);
+        assertState(0, SlotState.READY, "준   비", OutgamePalette.STATUS_READY);
     }
 
     private void assertState(int index, SlotState state, String text, Color color) {
