@@ -76,7 +76,8 @@ class LobbyLookTest {
 
         assertEquals(OutgamePalette.LOBBY_BACKGROUND, rgb(screen, 2, listBox.y + listBox.height / 2));
         assertEquals(OutgamePalette.ROOM_LIST, rgb(screen, listBox.x + 4, listBox.y + listBox.height / 2));
-        assertEquals(OutgamePalette.ROOM_ITEM, rgb(screen, cardBox.x + 2, cardBox.y + cardBox.height / 2));
+        // 방 칸 가장자리는 광택(밝은 안테두리)이 있어서, 맵 미리보기와 제목줄 사이 빈 칸에서 잰다
+        assertEquals(OutgamePalette.ROOM_ITEM, rgb(screen, cardBox.x + 88, cardBox.y + cardBox.height / 2));
         assertEquals(OutgamePalette.ROOM_HEADER, rgb(screen, headerBox.x + 2, headerBox.y + headerBox.height / 2));
         assertTrue(header.getText().contains("함께 한 판 해요"), header.getText());
     }
@@ -113,7 +114,7 @@ class LobbyLookTest {
             Rectangle p = SwingTree.boundsIn(preview, lobby);
             assertEquals(OutgamePalette.MAP_PREVIEW, rgb(screen, p.x + p.width / 2, p.y + 3));
             assertEquals(OutgamePalette.MAP_NAME_STRIP, rgb(screen, p.x + p.width / 2, p.y + p.height - 3));
-            assertEquals(OutgamePalette.ROOM_ITEM, rgb(screen, SwingTree.boundsIn(skeleton, lobby).x + 2,
+            assertEquals(OutgamePalette.ROOM_ITEM, rgb(screen, SwingTree.boundsIn(skeleton, lobby).x + 88,
                     p.y + p.height / 2));
         }
     }
