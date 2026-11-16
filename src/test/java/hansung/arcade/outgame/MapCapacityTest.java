@@ -99,7 +99,7 @@ class MapCapacityTest {
         }
 
         @Override
-        public Room changeMap(String mapName) {
+        public Room updateRoom(String map, Room.Status status) {
             throw new AssertionError("6명이 넘는 방은 빌리지로 바꾸라고 요청하면 안 됩니다.");
         }
     }

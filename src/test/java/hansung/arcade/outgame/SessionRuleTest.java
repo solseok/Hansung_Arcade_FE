@@ -64,6 +64,8 @@ class SessionRuleTest {
             GameStartInfo start = session.start();
             maps.add(start.mapId());
             characters.add(start.players().getFirst().character());
+            // 시작하면 방이 게임 중이 되므로, 다음 판을 위해 대기 상태로 돌린다
+            session.returnToWaiting();
         }
 
         Set<String> real = GameMaps.ids().stream().filter(id -> !id.equals(GameMaps.RANDOM_ID)).collect(Collectors.toSet());

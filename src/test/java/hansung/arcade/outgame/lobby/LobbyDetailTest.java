@@ -348,8 +348,8 @@ class LobbyDetailTest {
         }
 
         @Override
-        public Room changeMap(String mapName) {
-            return delegate.changeMap(mapName);
+        public Room updateRoom(String map, Room.Status status) {
+            return delegate.updateRoom(map, status);
         }
     }
 }
