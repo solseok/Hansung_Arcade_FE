@@ -55,7 +55,7 @@ class LobbyLookTest {
     /** 스크린샷(Display P3)에서 잰 값으로 정한 색. 토큰은 sRGB라 Display P3로 바꿔 비교한다 */
     @Test
     void 로비_색_토큰() {
-        assertEquals(new Color(60, 128, 235), OutgamePalette.LOBBY_BACKGROUND);
+        assertP3(46, 107, 192, OutgamePalette.LOBBY_BACKGROUND);
         assertP3(88, 192, 242, OutgamePalette.ROOM_LIST);
         assertEquals(new Color(63, 142, 206), OutgamePalette.ROOM_HEADER);
         assertP3(103, 219, 251, OutgamePalette.ROOM_ITEM);
