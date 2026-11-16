@@ -68,7 +68,7 @@ class LobbyFlowTest {
     }
 
     @Test
-    void 탭필터_채팅_입장_퇴장_재입장() throws Exception {
+    void 통합목록_페이지_채팅_입장_퇴장_재입장() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
             MockLobbyService service = new MockLobbyService();
             AtomicReference<JComponent> displayed = new AtomicReference<>();
@@ -78,16 +78,21 @@ class LobbyFlowTest {
             scenes.register("lobby", lobby);
             scenes.register("waiting", waiting);
             scenes.show("lobby", null);
-            JTabbedPane tabs = find(lobby, JTabbedPane.class);
+            assertEquals(null, find(lobby, JTabbedPane.class));
             assertFalse(button(lobby, "이전쪽").isEnabled());
             assertTrue(button(lobby, "다음쪽").isEnabled());
             button(lobby, "다음쪽").doClick();
             assertTrue(button(lobby, "이전쪽").isEnabled());
+            assertTrue(button(lobby, "다음쪽").isEnabled());
+            assertTrue(hasLabel(lobby, "WAITING"));
+            assertTrue(hasLabel(lobby, "PLAYING"));
+            button(lobby, "다음쪽").doClick();
             assertFalse(button(lobby, "다음쪽").isEnabled());
-            tabs.setSelectedIndex(1);
-            assertFalse(button(lobby, "이전쪽").isEnabled());
+            assertFalse(hasLabel(lobby, "WAITING"));
+            assertTrue(hasLabel(lobby, "PLAYING"));
             assertFalse(button(lobby, "입장").isEnabled());
-            tabs.setSelectedIndex(0);
+            button(lobby, "이전쪽").doClick();
+            button(lobby, "이전쪽").doClick();
             assertEquals(null, find(lobby, JTextPane.class));
             button(lobby, "바로시작").doClick();
             assertSame(waiting, displayed.get());
@@ -150,6 +155,18 @@ class LobbyFlowTest {
             assertEquals(1, service.rooms().stream().filter(item -> item.number() == room.number())
                     .findFirst().orElseThrow().players());
         });
+    }
+
+    private static boolean hasLabel(Container parent, String text) {
+        for (Component child : parent.getComponents()) {
+            if (child instanceof javax.swing.JLabel label && text.equals(label.getText())) {
+                return true;
+            }
+            if (child instanceof Container container && hasLabel(container, text)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static JButton button(Container parent, String text) {

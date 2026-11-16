@@ -15,7 +15,6 @@ import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
-import javax.swing.JTabbedPane;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 import java.awt.BorderLayout;
@@ -37,7 +36,6 @@ public final class LobbyPanel extends JPanel implements Scene {
     private static final int PAGE_SIZE = 8;
     private final LobbyService service;
     private final SceneManager scenes;
-    private final JTabbedPane tabs = new JTabbedPane();
     private final JPanel cards = new JPanel(new GridLayout(4, 2, 6, 6));
     private final JLabel pageLabel = new JLabel();
     private final JLabel feedback = new JLabel(" ", SwingConstants.CENTER);
@@ -73,27 +71,6 @@ public final class LobbyPanel extends JPanel implements Scene {
         content.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createLineBorder(new Color(154, 227, 255), 2),
                 BorderFactory.createEmptyBorder(8, 10, 8, 10)));
-        tabs.addTab("대기중", new JPanel());
-        tabs.addTab("게임중", new JPanel());
-        tabs.setUI(new javax.swing.plaf.basic.BasicTabbedPaneUI() {
-            @Override
-            protected void paintContentBorder(Graphics g, int placement, int selected) { }
-            @Override
-            protected void paintTabBackground(Graphics g, int placement, int index,
-                    int x, int y, int w, int h, boolean selected) {
-                g.setColor(new Color(selected ? 0xACF5FF : 0x138DD0));
-                g.fillRoundRect(x, y, w, h + 8, 8, 8);
-            }
-        });
-        tabs.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 14));
-        tabs.setBackground(new Color(0x59B8EF));
-        tabs.setForeground(new Color(0x103E79));
-        tabs.setPreferredSize(new Dimension(760, 30));
-        tabs.addChangeListener(event -> {
-            page = 0;
-            refresh();
-        });
-        content.add(tabs, BorderLayout.NORTH);
         cards.setOpaque(false);
         content.add(cards, BorderLayout.CENTER);
         JPanel pagination = new JPanel(new FlowLayout(FlowLayout.CENTER, 20, 0));
@@ -175,8 +152,9 @@ public final class LobbyPanel extends JPanel implements Scene {
     }
 
     private void refresh() {
-        Room.Status status = tabs.getSelectedIndex() == 0 ? Room.Status.WAITING : Room.Status.PLAYING;
-        List<Room> rooms = service.rooms().stream().filter(room -> room.status() == status).toList();
+        List<Room> rooms = service.rooms().stream()
+                .sorted(java.util.Comparator.comparing((Room room) -> room.status() == Room.Status.PLAYING)
+                        .thenComparingInt(Room::number)).toList();
         int pages = Math.max(1, (rooms.size() + PAGE_SIZE - 1) / PAGE_SIZE);
         page = Math.max(0, Math.min(page, pages - 1));
         cards.removeAll();
