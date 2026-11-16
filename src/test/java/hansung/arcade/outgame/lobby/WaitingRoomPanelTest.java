@@ -25,6 +25,7 @@ import java.awt.image.BufferedImage;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -42,6 +43,8 @@ class WaitingRoomPanelTest {
     private OutgameSession session;
     private SceneManager scenes;
     private WaitingRoomPanel waiting;
+    /** 맵선택 창에서 고를 맵 */
+    private final AtomicReference<String> pick = new AtomicReference<>("patrit/patrit14");
 
     @BeforeEach
     void setUp() {
@@ -49,7 +52,7 @@ class WaitingRoomPanelTest {
         session = new OutgameSession(service);
         session.login("부기");
         scenes = new SceneManager(screen -> { });
-        waiting = new WaitingRoomPanel(session, scenes, (parent, current) -> Optional.of("patrit/patrit14"));
+        waiting = new WaitingRoomPanel(session, scenes, (parent, current) -> Optional.ofNullable(pick.get()));
         scenes.register("waiting", waiting);
     }
 
@@ -295,6 +298,30 @@ class WaitingRoomPanelTest {
             String text = SwingTree.named(waiting, "map-info-" + i, JLabel.class).getText();
             assertFalse(text.contains("크기") || text.matches(".*\\d+x\\d+.*"), "크기를 쓰지 않아야 합니다: " + text);
         }
+    }
+
+    /** 18. 캠프·패트릿은 8명, 빌리지는 6명까지다. 빌리지를 고르면 정원이 6명이 되어 남는 자리가 닫힌다 */
+    @Test
+    void 빌리지를_고르면_정원이_6명이_되어_남는_자리가_닫힌다() {
+        enterAsHost(8);
+        AbstractButton select = SwingTree.named(waiting, "map-select", AbstractButton.class);
+
+        pick.set("village/village10");
+        select.doClick();
+
+        assertEquals(6, session.room().capacity());
+        assertEquals("1/6", SwingTree.named(waiting, "room-count", JLabel.class).getText());
+        assertEquals("인  원: 6", SwingTree.named(waiting, "map-info-1", JLabel.class).getText());
+        for (int i = 1; i < 6; i++) {
+            assertEquals(SlotState.EMPTY, slot(i).state(), "slot " + i);
+        }
+        assertEquals(SlotState.CLOSED, slot(6).state());
+        assertEquals(SlotState.CLOSED, slot(7).state());
+
+        pick.set("camp/camp08");
+        select.doClick();
+        assertEquals(8, session.room().capacity());
+        assertEquals(SlotState.EMPTY, slot(7).state());
     }
 
     @Test
