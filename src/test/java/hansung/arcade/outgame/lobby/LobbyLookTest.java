@@ -147,6 +147,39 @@ class LobbyLookTest {
         }
     }
 
+    /** 11. 방 제목은 노란 글자(Display P3 215,208,76)에 검은 1픽셀 테두리 */
+    @Test
+    void 방제목은_노란_글자에_검은_1픽셀_테두리() {
+        RoomCard card = SwingTree.named(lobby, "room-card-1", RoomCard.class);
+        TextLabel title = SwingTree.named(card, "room-title", TextLabel.class);
+
+        assertP3(215, 208, 76, title.getForeground());
+        assertEquals(Color.BLACK, title.outline());
+        assertEquals(1, title.outlineWidth());
+
+        BufferedImage image = SwingTree.render(title);
+        int dark = 0;
+        int yellow = 0;
+        for (int y = 0; y < image.getHeight(); y++) {
+            for (int x = 0; x < image.getWidth(); x++) {
+                int argb = image.getRGB(x, y);
+                int r = (argb >> 16) & 0xFF;
+                int g = (argb >> 8) & 0xFF;
+                int b = argb & 0xFF;
+                if ((argb >>> 24) < 200) {
+                    continue;
+                }
+                if (r < 50 && g < 50 && b < 50) {
+                    dark++;
+                } else if (r > 180 && g > 170 && b < 120) {
+                    yellow++;
+                }
+            }
+        }
+        assertTrue(dark > 20, "검은 테두리 픽셀이 없습니다: " + dark);
+        assertTrue(yellow > 20, "노란 글자 픽셀이 없습니다: " + yellow);
+    }
+
     @Test
     void 맵_이름은_미리보기_아래_띠에_쓴다() {
         RoomCard card = SwingTree.named(lobby, "room-card-1", RoomCard.class);
