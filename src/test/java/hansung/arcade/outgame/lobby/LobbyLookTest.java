@@ -20,6 +20,7 @@ import java.awt.image.BufferedImage;
 import java.util.List;
 import java.util.Locale;
 
+import static hansung.arcade.outgame.P3.assertP3;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -51,15 +52,16 @@ class LobbyLookTest {
         SwingTree.layout(lobby);
     }
 
+    /** 스크린샷(Display P3)에서 잰 값으로 정한 색. 토큰은 sRGB라 Display P3로 바꿔 비교한다 */
     @Test
     void 로비_색_토큰() {
         assertEquals(new Color(60, 128, 235), OutgamePalette.LOBBY_BACKGROUND);
-        assertEquals(new Color(88, 192, 239), OutgamePalette.ROOM_LIST);
+        assertP3(88, 192, 242, OutgamePalette.ROOM_LIST);
         assertEquals(new Color(63, 142, 206), OutgamePalette.ROOM_HEADER);
-        assertEquals(new Color(103, 219, 251), OutgamePalette.ROOM_ITEM);
+        assertP3(103, 219, 251, OutgamePalette.ROOM_ITEM);
         assertEquals(new Color(82, 168, 233), OutgamePalette.PLAYER_COUNT);
-        assertEquals(new Color(78, 167, 248), OutgamePalette.MAP_PREVIEW);
-        assertEquals(new Color(69, 147, 227), OutgamePalette.MAP_NAME_STRIP);
+        assertP3(78, 167, 248, OutgamePalette.MAP_PREVIEW);
+        assertP3(69, 147, 227, OutgamePalette.MAP_NAME_STRIP);
     }
 
     @Test
