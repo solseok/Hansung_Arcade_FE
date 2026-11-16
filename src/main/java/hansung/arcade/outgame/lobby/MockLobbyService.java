@@ -91,6 +91,20 @@ public final class MockLobbyService implements LobbyService {
         return host;
     }
 
+    @Override
+    public synchronized Room updateRoom(String map, Room.Status status) {
+        if (joinedRoom == null || !host) {
+            throw new IllegalStateException("방장만 방 설정을 변경할 수 있습니다.");
+        }
+        if (!List.of("캠프 08", "패트릿 14", "빌리지 10").contains(map) || status == null) {
+            throw new IllegalArgumentException("올바르지 않은 방 설정입니다.");
+        }
+        Room old = rooms.get(joinedRoom);
+        Room updated = new Room(old.number(), old.title(), old.players(), old.capacity(), map, status);
+        add(updated);
+        return updated;
+    }
+
     private Room withPlayers(Room room, int players) {
         return new Room(room.number(), room.title(), players, room.capacity(), room.map(), room.status());
     }

@@ -17,5 +17,7 @@ public interface LobbyService {
 
     Room quickJoin();
 
+    Room updateRoom(String map, Room.Status status);
+
     void leave();
 }

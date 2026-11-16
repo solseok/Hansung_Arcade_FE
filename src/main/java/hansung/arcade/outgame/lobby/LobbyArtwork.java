@@ -117,6 +117,7 @@ public final class LobbyArtwork {
         button.setFocusPainted(false);
         button.setForeground(gold ? new Color(0x743400) : Color.WHITE);
         button.setFont(new Font(Font.SANS_SERIF, Font.BOLD, gold ? 25 : 14));
+        button.addActionListener(event -> hansung.arcade.outgame.audio.Sound.click());
         return button;
     }
 }

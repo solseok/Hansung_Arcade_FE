@@ -23,6 +23,34 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class LobbyFlowTest {
     @Test
+    void 준비검사와_맵_게임상태_복귀동기화() {
+        MockLobbyService service = new MockLobbyService();
+        OutgameSession session = new OutgameSession(service);
+        assertFalse(session.canStart());
+        Room created = service.create("준비 검사", 8);
+        // 서버에서 두 참가자 스냅샷을 받은 상황을 목업으로 재현한다.
+        session.enter(new Room(created.number(), created.title(), 2, 8, created.map(), created.status()));
+        session.setParticipantReady(2, false);
+        assertFalse(session.canStart());
+        assertThrows(IllegalStateException.class, session::start);
+        session.setParticipantReady(2, true);
+        assertTrue(session.canStart());
+        assertThrows(IllegalArgumentException.class, () -> session.setParticipantReady(9, true));
+        session.selectMap("patrit/patrit14");
+        assertEquals("패트릿 14", service.rooms().getLast().map());
+        session.start();
+        assertEquals(Room.Status.PLAYING, service.rooms().getLast().status());
+        assertThrows(IllegalStateException.class, session::start);
+        session.returnToWaiting();
+        assertEquals(Room.Status.WAITING, service.rooms().getLast().status());
+        assertTrue(session.canStart());
+        session.leave();
+        assertFalse(session.canStart());
+        service.join(1);
+        assertThrows(IllegalStateException.class, () -> service.updateRoom("캠프 08", Room.Status.PLAYING));
+    }
+
+    @Test
     void 입장제한과_중복요청_퇴장시_인원복구() {
         MockLobbyService service = new MockLobbyService();
         assertThrows(IllegalStateException.class, () -> service.join(4));
@@ -109,8 +137,8 @@ class LobbyFlowTest {
             scenes.register("result", result);
             scenes.show("waiting", room);
             session.selectMap("village/village10");
-            assertEquals("village/village10", session.start().mapId());
-            assertEquals("전솔", session.start().players().getFirst().nickname());
+            assertEquals("village/village10", session.mapId());
+            assertEquals("전솔", session.players().getFirst().nickname());
             button(waiting, "게임 시작").doClick();
             assertSame(game.view(), displayed.get());
             button(game.view(), "목업 결과 확인").doClick();

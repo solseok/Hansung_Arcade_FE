@@ -11,6 +11,7 @@ public final class Sound {
     private static final Logger LOG = LoggerFactory.getLogger(Sound.class);
     private static final Track BGM = new Track();
     private static final Track EFFECT = new Track();
+    private static final Track CLICK = new Track();
     private static boolean muted;
     private static String bgm;
 
@@ -33,6 +34,12 @@ public final class Sound {
         }
     }
 
+    public static synchronized void click() {
+        if (!muted) {
+            CLICK.start("Ntc_Count1", false);
+        }
+    }
+
     public static synchronized boolean isMuted() {
         return muted;
     }
@@ -44,6 +51,7 @@ public final class Sound {
         muted = value;
         BGM.stop();
         EFFECT.stop();
+        CLICK.stop();
         if (!muted && bgm != null) {
             BGM.start(bgm, true);
         }
@@ -52,6 +60,7 @@ public final class Sound {
     public static synchronized void stopAll() {
         BGM.stop();
         EFFECT.stop();
+        CLICK.stop();
         bgm = null;
     }
 

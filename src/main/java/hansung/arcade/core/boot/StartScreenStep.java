@@ -62,6 +62,9 @@ public final class StartScreenStep implements BootStep {
                         case "waiting" -> "Patrit";
                         default -> "Village";
                     });
+                    if (name.equals("game")) {
+                        Sound.play("Ntc_GameStart");
+                    }
                     if (name.equals("result")) {
                         Sound.play("Ntc_GameEnd");
                     }

@@ -26,7 +26,7 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
     private final JPanel slots = new JPanel(new GridLayout(2, 4, 8, 8));
     private final ChatPanel chat = new ChatPanel(this::sendChat);
     private final JComboBox<Mascot> character = new JComboBox<>(Mascot.values());
-    private final JComboBox<String> team = new JComboBox<>(new String[]{"빨강", "파랑"});
+    private final JComboBox<String> team = new JComboBox<>(new String[]{"빨강", "노랑", "주황", "초록", "하늘", "파랑", "보라", "마젠타"});
     private final JComboBox<String> map = new JComboBox<>(new String[]{"캠프 08", "패트릿 14", "빌리지 10"});
     private final JButton ready = LobbyArtwork.button("준비", false);
     private final JButton start = LobbyArtwork.button("게임 시작", true);
@@ -50,6 +50,7 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
         JButton leave = LobbyArtwork.button("로비로 나가기", false);
         leave.addActionListener(event -> {
             session.leave();
+            hansung.arcade.outgame.audio.Sound.play("Ntc_GameEnd");
             chat.clear();
             scenes.show("lobby", null);
         });
@@ -113,7 +114,7 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
                 slot.add(new JLabel(player.nickname() + (host ? " · 방장" : ""), JLabel.CENTER), BorderLayout.NORTH);
                 var image = sprites.frame(player.character(), Direction.DOWN, false, 0);
                 slot.add(new JLabel(new ImageIcon(image.getScaledInstance(56, 64, java.awt.Image.SCALE_SMOOTH))), BorderLayout.CENTER);
-                String state = host ? "방장" : index == 0 && !session.ready() ? "대기중" : "준비 완료";
+                String state = host ? "방장" : !session.isReady(player.id()) ? "대기중" : "준비 완료";
                 slot.add(new JLabel(player.team() + " · " + state, JLabel.CENTER), BorderLayout.SOUTH);
             } else {
                 slot.add(new JLabel(index < room.capacity() ? "빈 자리" : "닫힌 자리", JLabel.CENTER));
@@ -122,7 +123,7 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
         }
         ready.setEnabled(!session.service.isHost());
         ready.setText(session.ready() ? "준비 취소" : "준비");
-        start.setEnabled(session.service.isHost());
+        start.setEnabled(session.canStart());
         map.setEnabled(session.service.isHost());
         slots.revalidate();
         slots.repaint();
@@ -135,7 +136,7 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
             chat.clear();
             chat.systemMessage("다른 참가자는 준비된 목업입니다. 실제 서버 연결 전입니다.");
         } else {
-            session.setReady(false);
+            session.returnToWaiting();
         }
         updating = true;
         character.setSelectedItem(session.character());
