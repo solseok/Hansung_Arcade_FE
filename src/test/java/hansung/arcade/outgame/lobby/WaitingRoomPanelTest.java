@@ -2,8 +2,12 @@ package hansung.arcade.outgame.lobby;
 
 import hansung.arcade.core.game.SceneManager;
 import hansung.arcade.core.ui.RunOnEdt;
+import hansung.arcade.ingame.entity.CharacterColor;
+import hansung.arcade.ingame.entity.Direction;
 import hansung.arcade.ingame.entity.Mascot;
 import hansung.arcade.ingame.hud.Box;
+import hansung.arcade.ingame.render.CharacterRecolor;
+import hansung.arcade.ingame.render.CharacterSprites;
 import hansung.arcade.outgame.OutgameSession;
 import hansung.arcade.outgame.SwingTree;
 import hansung.arcade.outgame.Team;
@@ -15,6 +19,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import javax.swing.AbstractButton;
+import javax.swing.ImageIcon;
 import javax.swing.JCheckBox;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
@@ -23,6 +28,7 @@ import java.awt.Color;
 import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
@@ -38,6 +44,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 @ExtendWith(RunOnEdt.class)
 class WaitingRoomPanelTest {
+
+    private static final CharacterSprites SPRITES = CharacterSprites.load();
 
     private MockLobbyService service;
     private OutgameSession session;
@@ -260,15 +268,51 @@ class WaitingRoomPanelTest {
         }
     }
 
+    /** 19. 팀 색은 자리의 작은 네모가 아니라, 캐릭터 그림의 고정색(옷·모자 등)을 팀 색으로 다시 칠해 보여 준다 */
     @Test
-    void 팀을_고르면_세션과_내_자리의_팀색이_바뀐다() {
+    void 팀을_고르면_내_자리_캐릭터의_고정색이_팀_색으로_바뀐다() {
         enterAsHost(8);
 
         SwingTree.named(waiting, "team-GREEN", JToggleButton.class).doClick();
 
         assertEquals(Team.GREEN, session.team());
         assertTrue(SwingTree.named(waiting, "team-GREEN", JToggleButton.class).isSelected());
-        assertEquals(Team.GREEN.color(), SwingTree.named(slot(0), "slot-team", JLabel.class).getBackground());
+        assertTrue(SwingTree.find(slot(0), "slot-team").isEmpty(), "팀 색 네모는 두지 않습니다.");
+        assertSameImage(recolored(Mascot.SANGSANGBUGI, CharacterColor.GREEN), shownSprite(0));
+    }
+
+    @Test
+    void 목업_참가자도_자기_팀_색으로_칠한다() {
+        enterAsGuest();
+
+        // 2번 자리는 목업 방장(2번 참가자): 꾸꾸, 파랑 팀
+        assertSameImage(recolored(Mascot.KKUKKU, CharacterColor.BLUE), shownSprite(1));
+    }
+
+    @Test
+    void 팀_8색은_캐릭터_고정색_8색과_짝을_이룬다() {
+        assertEquals(List.of(CharacterColor.RED, CharacterColor.YELLOW, CharacterColor.ORANGE, CharacterColor.GREEN,
+                        CharacterColor.SKY, CharacterColor.BLUE, CharacterColor.PURPLE, CharacterColor.MAGENTA),
+                List.of(Team.values()).stream().map(Team::characterColor).toList());
+    }
+
+    private BufferedImage shownSprite(int index) {
+        JLabel sprite = SwingTree.named(slot(index), "slot-sprite", JLabel.class);
+        return (BufferedImage) ((ImageIcon) sprite.getIcon()).getImage();
+    }
+
+    private static BufferedImage recolored(Mascot mascot, CharacterColor color) {
+        return CharacterRecolor.recolor(SPRITES.frame(mascot, Direction.DOWN, false, 0), mascot, color);
+    }
+
+    private static void assertSameImage(BufferedImage expected, BufferedImage actual) {
+        assertEquals(expected.getWidth(), actual.getWidth());
+        assertEquals(expected.getHeight(), actual.getHeight());
+        for (int y = 0; y < expected.getHeight(); y++) {
+            for (int x = 0; x < expected.getWidth(); x++) {
+                assertEquals(expected.getRGB(x, y), actual.getRGB(x, y), "(" + x + "," + y + ")");
+            }
+        }
     }
 
     @Test
