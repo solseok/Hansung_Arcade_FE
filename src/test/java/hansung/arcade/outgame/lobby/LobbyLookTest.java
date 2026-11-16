@@ -59,7 +59,7 @@ class LobbyLookTest {
     void 로비_색_토큰() {
         assertP3(46, 107, 192, OutgamePalette.LOBBY_BACKGROUND);
         assertP3(88, 192, 242, OutgamePalette.ROOM_LIST);
-        assertEquals(new Color(63, 142, 206), OutgamePalette.ROOM_HEADER);
+        assertP3(67, 148, 216, OutgamePalette.ROOM_HEADER);
         assertP3(103, 219, 251, OutgamePalette.ROOM_ITEM);
         assertP3(82, 168, 233, OutgamePalette.PLAYER_COUNT);
         assertP3(78, 167, 248, OutgamePalette.MAP_PREVIEW);
