@@ -59,7 +59,7 @@ class LobbyLookTest {
         assertP3(88, 192, 242, OutgamePalette.ROOM_LIST);
         assertEquals(new Color(63, 142, 206), OutgamePalette.ROOM_HEADER);
         assertP3(103, 219, 251, OutgamePalette.ROOM_ITEM);
-        assertEquals(new Color(82, 168, 233), OutgamePalette.PLAYER_COUNT);
+        assertP3(82, 168, 233, OutgamePalette.PLAYER_COUNT);
         assertP3(78, 167, 248, OutgamePalette.MAP_PREVIEW);
         assertP3(69, 147, 227, OutgamePalette.MAP_NAME_STRIP);
     }
