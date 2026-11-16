@@ -4,7 +4,7 @@ import hansung.arcade.core.game.SceneManager;
 import hansung.arcade.core.ui.RunOnEdt;
 import hansung.arcade.outgame.OutgameSession;
 import hansung.arcade.outgame.SwingTree;
-import hansung.arcade.outgame.ui.DotPanel;
+import hansung.arcade.outgame.ui.RoundPanel;
 import hansung.arcade.outgame.ui.OutgameFonts;
 import hansung.arcade.outgame.ui.OutgamePalette;
 import org.junit.jupiter.api.BeforeEach;
@@ -67,7 +67,7 @@ class LobbyLookTest {
     @Test
     void 배경_목록_방칸_헤더가_토큰_색으로_칠해진다() {
         BufferedImage screen = SwingTree.render(lobby);
-        DotPanel list = SwingTree.named(lobby, "room-list", DotPanel.class);
+        RoundPanel list = SwingTree.named(lobby, "room-list", RoundPanel.class);
         RoomCard card = SwingTree.named(lobby, "room-card-1", RoomCard.class);
         JLabel header = SwingTree.named(card, "room-header", JLabel.class);
         Rectangle listBox = SwingTree.boundsIn(list, lobby);
