@@ -71,10 +71,12 @@ class LobbyFlowTest {
     void 통합목록_페이지_채팅_입장_퇴장_재입장() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
             MockLobbyService service = new MockLobbyService();
+            OutgameSession session = new OutgameSession(service);
+            session.login("부기");
             AtomicReference<JComponent> displayed = new AtomicReference<>();
             SceneManager scenes = new SceneManager(displayed::set);
-            LobbyPanel lobby = new LobbyPanel(service, scenes);
-            WaitingRoomPanel waiting = new WaitingRoomPanel(service, scenes);
+            LobbyPanel lobby = new LobbyPanel(session, scenes);
+            WaitingRoomPanel waiting = new WaitingRoomPanel(session, scenes);
             scenes.register("lobby", lobby);
             scenes.register("waiting", waiting);
             scenes.show("lobby", null);
@@ -90,7 +92,7 @@ class LobbyFlowTest {
             assertFalse(button(lobby, "다음쪽").isEnabled());
             assertFalse(hasLabel(lobby, "WAITING"));
             assertTrue(hasLabel(lobby, "PLAYING"));
-            assertFalse(button(lobby, "입장").isEnabled());
+            assertEquals(null, button(lobby, "입장"));
             button(lobby, "이전쪽").doClick();
             button(lobby, "이전쪽").doClick();
             assertEquals(null, find(lobby, JTextPane.class));
@@ -100,7 +102,7 @@ class LobbyFlowTest {
             JTextField input = find(waiting, JTextField.class);
             input.setText("안녕하세요");
             input.postActionEvent();
-            assertTrue(find(waiting, JTextPane.class).getText().contains("나: 안녕하세요"));
+            assertTrue(find(waiting, JTextPane.class).getText().contains("부기: 안녕하세요"));
             button(waiting, "로비로 나가기").doClick();
             assertSame(lobby, displayed.get());
             assertEquals(1, service.rooms().getFirst().players());
