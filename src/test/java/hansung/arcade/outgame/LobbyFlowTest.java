@@ -80,9 +80,11 @@ class LobbyFlowTest {
             scenes.register("lobby", lobby);
             scenes.register("waiting", waiting);
             scenes.show("lobby", null);
+            // 탭 없이 22개 방이 한 목록에 나오므로 8개씩 3쪽이다
             assertEquals(null, find(lobby, JTabbedPane.class));
             assertFalse(button(lobby, "이전쪽").isEnabled());
             assertTrue(button(lobby, "다음쪽").isEnabled());
+            button(lobby, "다음쪽").doClick();
             button(lobby, "다음쪽").doClick();
             assertTrue(button(lobby, "이전쪽").isEnabled());
             assertTrue(button(lobby, "다음쪽").isEnabled());
