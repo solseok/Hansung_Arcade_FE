@@ -135,22 +135,23 @@ class LobbyFlowTest {
             AtomicReference<JComponent> displayed = new AtomicReference<>();
             SceneManager scenes = new SceneManager(displayed::set);
             WaitingRoomPanel waiting = new WaitingRoomPanel(session, scenes);
-            ResultPanel result = new ResultPanel(scenes);
             GamePreviewScene game = new GamePreviewScene(scenes,
                     hansung.arcade.ingame.hud.HudSkin.load(hansung.arcade.ingame.hud.HudFonts.load()),
                     hansung.arcade.ingame.render.CharacterSprites.load());
             scenes.register("waiting", waiting);
             scenes.register("game", game);
-            scenes.register("result", result);
             scenes.show("waiting", room);
             session.selectMap("village/village10");
             assertEquals("village/village10", session.mapId());
             assertEquals("전솔", session.players().getFirst().nickname());
             button(waiting, "게임 시작").doClick();
             assertSame(game.view(), displayed.get());
-            button(game.view(), "목업 결과 확인").doClick();
-            assertSame(result, displayed.get());
-            button(result, "대기실로 돌아가기").doClick();
+            // 결과는 화면을 넘기지 않고 게임 화면 위 모달로 뜬 뒤, 검게 어두워지면 대기방으로 돌아간다
+            button(game.view(), "목업 경기 끝내기").doClick();
+            assertSame(game.view(), displayed.get());
+            game.resultOverlay().tick(ResultOverlay.END_MS - 1);
+            assertSame(game.view(), displayed.get());
+            game.resultOverlay().tick(ResultOverlay.END_MS);
             assertSame(waiting, displayed.get());
             assertTrue(service.isHost());
             assertEquals(room.number(), session.room().number());
