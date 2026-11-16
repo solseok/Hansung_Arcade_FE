@@ -8,6 +8,7 @@ import hansung.arcade.ingame.entity.Mascot;
 import hansung.arcade.ingame.hud.Box;
 import hansung.arcade.ingame.render.CharacterRecolor;
 import hansung.arcade.ingame.render.CharacterSprites;
+import hansung.arcade.outgame.GameMaps;
 import hansung.arcade.outgame.OutgameSession;
 import hansung.arcade.outgame.SwingTree;
 import hansung.arcade.outgame.Team;
@@ -35,6 +36,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -132,7 +134,6 @@ class WaitingRoomPanelTest {
         assertEquals(OutgamePalette.WAITING_SECTION, rgb(screen, 23, 200));
         assertEquals(OutgamePalette.WAITING_RIGHT_PANEL, rgb(screen, 470, 266));
         assertEquals(OutgamePalette.WAITING_SECTION, rgb(screen, 482, 300));
-        assertEquals(OutgamePalette.MAP_PREVIEW_BACKGROUND, rgb(screen, 490, 352));
         assertEquals(OutgamePalette.BOTTOM_BAR, rgb(screen, 400, 595));
         assertEquals(OutgamePalette.SLOT_OCCUPIED, rgb(screen, slot0.x() + 4, slot0.y() + 80));
         assertEquals(OutgamePalette.SLOT_NAME, rgb(screen, slot0.x() + 3, slot0.y() + 109));
@@ -366,6 +367,37 @@ class WaitingRoomPanelTest {
         select.doClick();
         assertEquals(8, session.room().capacity());
         assertEquals(SlotState.EMPTY, slot(7).state());
+    }
+
+    /** 20. 보라 액자는 랜덤 맵일 때만 쓰고, 맵을 고르면 그 맵 그림이 미리보기 칸을 꽉 채운다 (참고 화면 8번) */
+    @Test
+    void 맵을_고르면_맵_그림이_미리보기_칸을_꽉_채운다() {
+        enterAsHost(8);
+
+        MapPreview thumbnail = SwingTree.named(waiting, "map-thumbnail", MapPreview.class);
+        BufferedImage screen = SwingTree.render(waiting);
+
+        assertEquals(rect(WaitingRoomLayout.MAP_PREVIEW), SwingTree.boundsIn(thumbnail, waiting));
+        assertNotEquals(OutgamePalette.MAP_PREVIEW_BACKGROUND, rgb(screen, 490, 352), "고른 맵인데 보라 액자가 보입니다.");
+    }
+
+    @Test
+    void 랜덤_맵은_보라_액자_안에_물음표_카드로_보여_주고_시작할_때_맵을_정한다() {
+        enterAsHost(8);
+        pick.set(GameMaps.RANDOM_ID);
+
+        SwingTree.named(waiting, "map-select", AbstractButton.class).doClick();
+        layout();
+        BufferedImage screen = SwingTree.render(waiting);
+
+        assertEquals(GameMaps.RANDOM_ID, session.mapId());
+        assertEquals(OutgamePalette.MAP_PREVIEW_BACKGROUND, rgb(screen, 490, 352));
+        assertEquals(rect(WaitingRoomLayout.MAP_THUMBNAIL),
+                SwingTree.boundsIn(SwingTree.named(waiting, "map-thumbnail", MapPreview.class), waiting));
+        assertEquals("랜덤 맵", SwingTree.named(waiting, "map-name", JLabel.class).getText());
+        assertEquals("랜덤 맵", SwingTree.named(waiting, "map-info-0", JLabel.class).getText());
+        String started = session.start().mapId();
+        assertTrue(GameMaps.ids().contains(started), "시작할 때는 실제 맵이어야 합니다: " + started);
     }
 
     @Test
