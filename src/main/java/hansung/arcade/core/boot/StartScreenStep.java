@@ -3,6 +3,7 @@ package hansung.arcade.core.boot;
 import hansung.arcade.core.game.GameContext;
 import hansung.arcade.core.game.GameProperties;
 import hansung.arcade.core.game.GameWindow;
+import hansung.arcade.core.game.SceneManager;
 import hansung.arcade.core.ui.SwingThread;
 import hansung.arcade.ingame.GameWorld;
 import hansung.arcade.ingame.InGamePanel;
@@ -19,22 +20,31 @@ import hansung.arcade.ingame.render.BalloonSprites;
 import hansung.arcade.ingame.render.CharacterSprites;
 import hansung.arcade.ingame.render.ItemSprites;
 import hansung.arcade.ingame.render.Tileset;
+import hansung.arcade.outgame.GamePreviewScene;
+import hansung.arcade.outgame.LoginPanel;
+import hansung.arcade.outgame.OutgameSession;
+import hansung.arcade.outgame.audio.Sound;
+import hansung.arcade.outgame.lobby.LobbyPanel;
+import hansung.arcade.outgame.lobby.LobbyService;
+import hansung.arcade.outgame.lobby.MockLobbyService;
+import hansung.arcade.outgame.lobby.WaitingRoomPanel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.List;
 
 /**
- * 5단계: 첫 화면을 조립해 창에 띄운다.
- * 아웃게임과 연결되기 전까지는 인게임 화면을 바로 띄운다. 연결 후에는 로비 화면으로 바꾼다.
- * 그때까지 내 닉네임·캐릭터·팀·고정색은 설정값 player.nickname, player.character, player.team, player.color 로,
- * 경기 방식(개인전·팀전)은 game.match-mode 로 정한다.
- * 캐릭터 선택 화면이 없으므로 설정이 없으면 기본 캐릭터({@link Mascot#DEFAULT})를 원래 색 그대로, 1팀, 개인전으로 시작한다.
+ * 5단계: 첫 화면을 조립해 창에 띄운다. 기본 화면은 목업 로그인이고(app.start-screen=login, lobby로 로비부터),
+ * 로그인 → 로비 → 대기실 → 게임 → 결과 모달 → 대기실로 이어진다.
  *
- * <p>설정값 game.local-players=2 로 실행하면 대기방 없이 한 키보드 2인 모드로 바로 시작한다.
+ * <p>app.start-screen=game 으로 실행하면 아웃게임 없이 인게임을 바로 띄운다. 이때 내 닉네임·캐릭터·팀·고정색은
+ * 설정값 player.nickname, player.character, player.team, player.color 로, 경기 방식(개인전·팀전)은 game.match-mode 로 정한다.
+ * 설정이 없으면 기본 캐릭터({@link Mascot#DEFAULT})를 원래 색 그대로, 1팀, 개인전으로 시작한다.</p>
+ *
+ * <p>인게임을 바로 띄울 때 설정값 game.local-players=2 를 주면 한 키보드 2인 모드로 시작한다.
  * 2P는 player2.nickname, player2.character, player2.team, player2.color 로 정한다 (없으면 Player2, 한성냥이, 2팀, 원래 색).</p>
  *
- * <p>설정값 game.test-items=true 로 실행하면 1P 스폰 둘레에 아이템 11종을 한 개씩 깔아 두고 시작한다 ({@link TestItems}).</p>
+ * <p>인게임을 바로 띄울 때 설정값 game.test-items=true 를 주면 1P 스폰 둘레에 아이템 11종을 한 개씩 깔아 두고 시작한다 ({@link TestItems}).</p>
  */
 public final class StartScreenStep implements BootStep {
 
@@ -43,6 +53,8 @@ public final class StartScreenStep implements BootStep {
     static final String LOCAL_PLAYERS = "game.local-players";
     /** 아이템을 시험해 보도록 시작할 때 11종을 깔아 둘지 (true/false) */
     static final String TEST_ITEMS = "game.test-items";
+    /** 첫 화면: login(기본), lobby, game */
+    static final String START_SCREEN = "app.start-screen";
 
     @Override
     public String name() {
@@ -60,6 +72,38 @@ public final class StartScreenStep implements BootStep {
         ItemSprites items = context.get(ItemSprites.class);
         AirplaneSprites airplanes = context.get(AirplaneSprites.class);
         GameProperties properties = context.get(GameProperties.class);
+        String screen = properties.get(START_SCREEN, "login");
+        if (screen.equals("login") || screen.equals("lobby")) {
+            SwingThread.runAndWait(() -> {
+                LobbyService service = new MockLobbyService();
+                SceneManager scenes = new SceneManager(window::show);
+                OutgameSession session = new OutgameSession(service);
+                scenes.register("login", new LoginPanel(session, scenes));
+                scenes.register("lobby", new LobbyPanel(session, scenes));
+                scenes.register("waiting", new WaitingRoomPanel(session, scenes));
+                GamePreviewScene game = new GamePreviewScene(scenes, skin, characters, balloons, items, airplanes);
+                // 결과는 게임 화면 위 모달로 뜨므로, 끝나는 소리는 경기가 끝나는 때 낸다
+                game.setOnGameOver(() -> Sound.play("Ntc_GameEnd"));
+                scenes.register("game", game);
+                scenes.onShow(name -> {
+                    Sound.playBgm(Sound.bgmFor(name));
+                    if (name.equals("game")) {
+                        Sound.play("Ntc_GameStart");
+                    }
+                    if (name.equals("waiting")) {
+                        Sound.play("Ntc_GameReady");
+                    }
+                });
+                context.register(LobbyService.class, service);
+                context.register(SceneManager.class, scenes);
+                scenes.show(screen, null);
+            });
+            return;
+        }
+        if (!screen.equals("game")) {
+            throw new IllegalArgumentException("지원하지 않는 시작 화면: %s=%s (login, lobby, game)".formatted(START_SCREEN, screen));
+        }
+
         List<PlayerProfile> players = localProfiles(properties);
         MatchMode mode = matchMode(properties);
         if (players.size() > 1) {

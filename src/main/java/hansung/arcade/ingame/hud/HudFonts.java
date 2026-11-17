@@ -15,7 +15,10 @@ import java.util.Locale;
 /**
  * HUD 디자인 글꼴. HY견고딕·HY윤고딕은 한컴 오피스 등과 함께 설치되는 글꼴이라 PC마다 있을 수도 없을 수도 있고,
  * Michroma는 resources/fonts/Michroma-Regular.ttf 를 두면 그것을 쓴다.
- * 찾지 못한 글꼴은 Java 기본 산세리프 굵게로 대신하고 {@link #missing()}에 이름을 남긴다.
+ * 찾지 못한 글꼴은 {@link #missing()}에 이름을 남기고 대신할 글꼴을 쓴다. HY견고딕·HY윤고딕은 운영체제의 한글 고딕
+ * (윈도우 맑은 고딕, 맥 Apple SD 산돌고딕 Neo, 리눅스 Noto Sans CJK KR·나눔고딕) 굵게로, 그것도 없거나 Michroma면
+ * Java 기본 산세리프 굵게로 대신한다. 기본 산세리프는 리눅스처럼 영문을 폭 넓은 글꼴(DejaVu)로 그리는 환경이 있어서,
+ * 8자 닉네임을 칸에 맞추면 한글이 7px까지 작아져 읽기 어렵다.
  *
  * <p>채팅에 쓰는 돋움체는 윈도우 기본 글꼴이다. 맥에는 없지만 MS 오피스가 앱 안에 넣어 둔 gulim.ttc
  * (굴림·굴림체·돋움·돋움체가 한 파일에 들어 있다)가 있으면 그것을 읽어 쓴다. 없으면 Java 기본 고정폭 글꼴로 대신한다.</p>
@@ -30,6 +33,9 @@ public final class HudFonts {
             "/Applications/Microsoft Excel.app/Contents/Resources/DFonts/gulim.ttc",
             "/Applications/Microsoft PowerPoint.app/Contents/Resources/DFonts/gulim.ttc");
     public static final String DOTUMCHE = "돋움체";
+    /** HY 고딕이 없을 때 먼저 찾는 한글 고딕 (영문·한글을 한 글꼴로 그려 폭과 높이가 고르다) */
+    private static final List<String> KOREAN_GOTHICS = List.of(
+            "Malgun Gothic", "Apple SD Gothic Neo", "Noto Sans CJK KR", "NanumGothic", "Nanum Gothic");
 
     private final Font gyeonGothic;
     private final Font yunGothic;
@@ -72,7 +78,9 @@ public final class HudFonts {
         if (dotumChe == null) {
             missing.add(DOTUMCHE);
         }
-        return new HudFonts(orFallback(gyeon), orFallback(yun), orFallback(michroma), dotumChe, missing);
+        Font korean = koreanGothic();
+        return new HudFonts(orFallback(gyeon != null ? gyeon : korean), orFallback(yun != null ? yun : korean),
+                orFallback(michroma), dotumChe, missing);
     }
 
     /** 찾지 못해 기본 글꼴로 대신한 디자인 글꼴 이름들 */
@@ -184,6 +192,20 @@ public final class HudFonts {
         } catch (IOException e) {
             throw new UncheckedIOException("글꼴 파일을 읽지 못했습니다: " + resource, e);
         }
+    }
+
+    /** 설치된 한글 고딕 중 처음 찾은 것의 굵은 꼴. 없으면 null */
+    private static Font koreanGothic() {
+        List<String> families = List.of(GraphicsEnvironment.getLocalGraphicsEnvironment()
+                .getAvailableFontFamilyNames(Locale.ENGLISH));
+        for (String wanted : KOREAN_GOTHICS) {
+            for (String family : families) {
+                if (normalize(family).equals(normalize(wanted))) {
+                    return new Font(family, Font.BOLD, 12);
+                }
+            }
+        }
+        return null;
     }
 
     private static Font orFallback(Font font) {

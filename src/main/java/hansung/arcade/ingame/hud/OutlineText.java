@@ -174,7 +174,15 @@ public final class OutlineText {
         Graphics2D g = dotGraphics(image);
         g.setFont(font);
         g.setColor(Color.WHITE);
-        g.drawString(text, x, baselineY);
+        // Windows의 작은 크기 돋움체 비트맵은 영문 꼬리를 한 줄 짧게 그린다.
+        // 윤곽선을 같은 기준선에 래스터화한 뒤 아래에서 흑백 픽셀로 변환한다.
+        // 글자 폭은 기존 FontMetrics를 사용하므로 고정폭 칸과 커서는 유지된다.
+        if (font.getFamily(java.util.Locale.ENGLISH).equalsIgnoreCase("DotumChe")) {
+            g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g.fill(font.createGlyphVector(g.getFontRenderContext(), text).getOutline(x, baselineY));
+        } else {
+            g.drawString(text, x, baselineY);
+        }
         g.dispose();
         for (int py = 0; py < image.getHeight(); py++) {
             for (int px = 0; px < image.getWidth(); px++) {
