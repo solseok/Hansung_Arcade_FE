@@ -44,11 +44,13 @@ jobs:
 
       # 아웃게임·HUD 테스트는 한글 글자를 그려 픽셀을 확인한다. 윈도우·맥에는 한글 글꼴이 기본으로 있지만
       # ubuntu 러너에는 없어서, Java 기본 글꼴(SansSerif·Monospaced)이 한글을 거의 그리지 못하고 테스트가 실패한다.
-      # 나눔글꼴을 깔아 기본 글꼴이 한글을 대신 그리게 한다.
+      # - 나눔글꼴: 기본 글꼴이 한글을 대신 그리게 한다 (아웃게임 글자 테스트)
+      # - Noto Sans CJK: HY 고딕 대신 쓰는 한글 고딕(HudFonts). 나눔고딕은 영문 W가 넓어 8자 닉네임을 칸에 맞추면
+      #   '가'가 7px로 줄어 NicknameFitTest(8px 이상)에 걸리고, Noto Sans CJK KR 굵게는 9px로 들어간다
       - name: Install Korean fonts
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq --no-install-recommends fonts-nanum
+          sudo apt-get install -y -qq --no-install-recommends fonts-nanum fonts-noto-cjk
           fc-cache -f
 
       - name: Build and test

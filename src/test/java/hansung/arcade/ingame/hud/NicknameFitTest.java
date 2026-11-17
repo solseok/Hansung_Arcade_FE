@@ -14,7 +14,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * 10. 인게임 오른쪽 플레이어 목록에서 닉네임이 잘리지 않게, 가장 넓은 8자 닉네임이 닉네임 칸 안에 들어가는 크기로 글꼴을 맞춘다.
- * 닉네임 글꼴은 HY견고딕이고, 없으면 Java 기본 산세리프 굵게로 대신한다 ({@link HudFonts}).
+ * 닉네임 글꼴은 HY견고딕이고, 없으면 운영체제의 한글 고딕 굵게, 그것도 없으면 Java 기본 산세리프 굵게로 대신한다
+ * ({@link HudFonts}).
  */
 class NicknameFitTest {
 
@@ -69,7 +70,7 @@ class NicknameFitTest {
     }
 
     @Test
-    void 닉네임_글꼴은_HY견고딕_없으면_기본_산세리프() {
+    void 닉네임_글꼴은_HY견고딕_없으면_대신하는_글꼴() {
         String expected = fonts.gyeonGothic(12).getFamily(Locale.ENGLISH);
 
         assertEquals(expected, nicknameFont().font().getFamily(Locale.ENGLISH));
