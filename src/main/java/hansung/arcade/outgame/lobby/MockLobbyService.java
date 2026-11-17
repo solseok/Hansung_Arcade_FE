@@ -18,7 +18,8 @@ public final class MockLobbyService implements LobbyService {
         add(new Room(3, "마지막 자리까지 완료", 8, 8, "패트릿 14", Room.Status.WAITING));
         add(new Room(4, "신나는 캠프", 6, 8, "캠프 08", Room.Status.PLAYING));
         add(new Room(5, "친구들과 대결", 6, 6, "빌리지 10", Room.Status.PLAYING));
-        for (int number = 6; number <= 22; number++) {
+        // 8개씩 네 페이지: 대기방 페이지, 혼합 페이지, 마지막 게임중 페이지를 제공한다.
+        for (int number = 6; number <= 30; number++) {
             add(
                     new Room(
                             number,
