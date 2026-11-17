@@ -28,6 +28,7 @@ import java.awt.event.KeyListener;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import static hansung.arcade.ingame.hud.HudLayout.CHAT_BAR;
 import static hansung.arcade.ingame.hud.HudLayout.CHAT_LINE_PITCH;
@@ -333,7 +334,7 @@ class InGamePanelTest {
         // 안쪽은 맵이 비치되 검은색 20%만큼 어두워진다
         assertDarkenedByFifth(before.getRGB(centerX, bubbleTop + 2), after.getRGB(centerX, bubbleTop + 2));
 
-        world.update(hansung.arcade.ingame.chat.SpeechBubbles.VISIBLE_SECONDS, null);
+        world.update(hansung.arcade.ingame.chat.SpeechBubbles.VISIBLE_SECONDS, Map.of());
         BufferedImage later = paint(panel);
         assertEquals(before.getRGB(centerX, bubbleTop), later.getRGB(centerX, bubbleTop));
         assertEquals(before.getRGB(centerX, bubbleTop + 2), later.getRGB(centerX, bubbleTop + 2));
@@ -395,7 +396,7 @@ class InGamePanelTest {
     }
 
     private static InGamePanel panel(GameWorld world) {
-        InGamePanel panel = new InGamePanel(world, Tileset.forTheme("fixture"), skin);
+        InGamePanel panel = TestPanels.panel(world, Tileset.forTheme("fixture"), skin);
         panel.setSize(HudLayout.WIDTH, HudLayout.HEIGHT);
         // 언제 그려도 입력칸의 커서가 켜진 그림이 나오게 깜빡임 시계를 멈춘다
         panel.chatField().setBlinkClock(() -> 0L);

@@ -1,10 +1,12 @@
 package hansung.arcade.ingame.render;
 
 import hansung.arcade.ingame.GameWorld;
+import hansung.arcade.ingame.entity.CharacterColor;
 import hansung.arcade.ingame.entity.Direction;
 import hansung.arcade.ingame.entity.Mascot;
 import hansung.arcade.ingame.entity.Player;
 import hansung.arcade.ingame.entity.PlayerProfile;
+import hansung.arcade.ingame.input.PlayerCommand;
 import hansung.arcade.ingame.map.MapLoader;
 import hansung.arcade.ingame.map.TileMap;
 import org.junit.jupiter.api.Test;
@@ -13,6 +15,7 @@ import java.awt.Graphics2D;
 import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
@@ -114,11 +117,106 @@ class CharacterSpritesTest {
 
         // 왼쪽으로 7프레임 걸으면 왼쪽을 보는 걷는 그림의 둘째 장이다
         for (int i = 0; i < 7; i++) {
-            world.update(1.0 / 60, Direction.LEFT);
+            world.update(1.0 / 60, Map.of(player.id(), PlayerCommand.moving(Direction.LEFT)));
         }
         BufferedImage walkingLeft = SPRITES.frame(Mascot.KKUKKU, Direction.LEFT, true, player.walkTime());
         assertNotSame(SPRITES.frame(Mascot.KKUKKU, Direction.LEFT, true, 0), walkingLeft);
         assertDrawn(walkingLeft, world);
+    }
+
+    @Test
+    void 고정색을_고르지_않으면_원래_그림을_쓴다() {
+        assertSame(SPRITES.frame(Mascot.KKOKKO, Direction.UP, false, 0),
+                SPRITES.frame(Mascot.KKOKKO, null, Direction.UP, false, 0));
+    }
+
+    @Test
+    void 고정색을_칠한_그림은_캐릭터와_색마다_한_번만_만들어_둔다() {
+        BufferedImage red = SPRITES.frame(Mascot.SANGZZI, CharacterColor.RED, Direction.LEFT, true, 0.15);
+
+        assertSame(red, SPRITES.frame(Mascot.SANGZZI, CharacterColor.RED, Direction.LEFT, true, 0.15));
+        assertNotSame(red, SPRITES.frame(Mascot.SANGZZI, CharacterColor.BLUE, Direction.LEFT, true, 0.15));
+        assertNotSame(red, SPRITES.frame(Mascot.SANGZZI, Direction.LEFT, true, 0.15));
+        // 같은 걷는 장을 원래 그림에서 다시 칠한 것과 픽셀이 같다
+        BufferedImage original = SPRITES.frame(Mascot.SANGZZI, Direction.LEFT, true, 0.15);
+        assertSamePixels(CharacterRecolor.recolor(original, Mascot.SANGZZI, CharacterColor.RED), red);
+    }
+
+    @Test
+    void 고정색을_칠한_그림도_서기_걷기_규칙이_같다() {
+        BufferedImage first = SPRITES.frame(Mascot.KKUKKU, CharacterColor.SKY, Direction.DOWN, true, 0.0);
+
+        assertSame(first, SPRITES.frame(Mascot.KKUKKU, CharacterColor.SKY, Direction.DOWN, true, 0.09));
+        assertNotSame(first, SPRITES.frame(Mascot.KKUKKU, CharacterColor.SKY, Direction.DOWN, true, 0.11));
+        assertSame(first, SPRITES.frame(Mascot.KKUKKU, CharacterColor.SKY, Direction.DOWN, true, 0.41));
+        assertSame(SPRITES.frame(Mascot.KKUKKU, CharacterColor.SKY, Direction.DOWN, false, 0),
+                SPRITES.frame(Mascot.KKUKKU, CharacterColor.SKY, Direction.DOWN, false, 0.35));
+    }
+
+    @Test
+    void 맵에는_플레이어가_고른_고정색으로_칠한_그림을_그린다() {
+        TileMap map = MapLoader.parse("fixture/character", List.of("...", "...", ".1."));
+        GameWorld world = new GameWorld(map, new PlayerProfile("tester", Mascot.HANSUNGNYANGI, CharacterColor.GREEN));
+
+        assertDrawn(SPRITES.frame(Mascot.HANSUNGNYANGI, CharacterColor.GREEN, Direction.DOWN, false, 0), world);
+    }
+
+    /** 캐릭터 그림 파일 하나를 바로 읽은 프레임들 (비교용) */
+    private static List<BufferedImage> fileFrames(String fileName) {
+        return SpriteSheet.find(CharacterSprites.DIRECTORY + fileName).orElseThrow().frames(CharacterSprites.FRAME_SIZE);
+    }
+
+    @Test
+    void 갇힌_그림은_5초를_셋으로_나눠_bubble_1_2_3을_쓰고_각각_네_장을_0_2초씩_되풀이한다() {
+        assertSamePixels(fileFrames("kkokko_bubble_1.bmp").get(0), SPRITES.trapped(Mascot.KKOKKO, null, 0));
+        assertSamePixels(fileFrames("kkokko_bubble_1.bmp").get(1), SPRITES.trapped(Mascot.KKOKKO, null, 0.3));
+        assertSame(SPRITES.trapped(Mascot.KKOKKO, null, 0), SPRITES.trapped(Mascot.KKOKKO, null, 0.8));
+        // 5/3초가 지나면 bubble_2, 10/3초가 지나면 bubble_3
+        assertSamePixels(fileFrames("kkokko_bubble_1.bmp").get(0), SPRITES.trapped(Mascot.KKOKKO, null, 1.6));
+        assertSamePixels(fileFrames("kkokko_bubble_2.bmp").get(2), SPRITES.trapped(Mascot.KKOKKO, null, 2.0));
+        assertSamePixels(fileFrames("kkokko_bubble_3.bmp").get(0), SPRITES.trapped(Mascot.KKOKKO, null, 4.0));
+        assertSamePixels(fileFrames("kkokko_bubble_3.bmp").get(1), SPRITES.trapped(Mascot.KKOKKO, null, 4.3));
+    }
+
+    @Test
+    void 빠져나오는_그림은_needle_다섯_장을_0_1초씩_한_번_보여_주고_마지막_장에서_멈춘다() {
+        List<BufferedImage> needle = fileFrames("sangzzi_needle.bmp");
+        assertEquals(5, needle.size());
+        assertSamePixels(needle.get(0), SPRITES.escaping(Mascot.SANGZZI, null, 0.05));
+        assertSamePixels(needle.get(1), SPRITES.escaping(Mascot.SANGZZI, null, 0.15));
+        assertSamePixels(needle.get(4), SPRITES.escaping(Mascot.SANGZZI, null, 0.45));
+        assertSamePixels(needle.get(4), SPRITES.escaping(Mascot.SANGZZI, null, 0.7));
+    }
+
+    @Test
+    void 쓰러진_그림은_die_2_세_장을_0_15초씩_되풀이한다() {
+        List<BufferedImage> dizzy = fileFrames("kkukku_die_2.bmp");
+        assertSamePixels(dizzy.get(0), SPRITES.dying(Mascot.KKUKKU, null, 0));
+        assertSamePixels(dizzy.get(1), SPRITES.dying(Mascot.KKUKKU, null, 0.15));
+        assertSamePixels(dizzy.get(2), SPRITES.dying(Mascot.KKUKKU, null, 0.3));
+        assertSame(SPRITES.dying(Mascot.KKUKKU, null, 0), SPRITES.dying(Mascot.KKUKKU, null, 0.45));
+    }
+
+    @Test
+    void 갇힘_빠져나옴_쓰러짐_그림도_고정색으로_칠해_캐릭터와_색마다_한_번만_만든다() {
+        BufferedImage trapped = SPRITES.trapped(Mascot.SANGZZI, CharacterColor.RED, 0);
+        assertSame(trapped, SPRITES.trapped(Mascot.SANGZZI, CharacterColor.RED, 0));
+        assertSamePixels(CharacterRecolor.recolor(SPRITES.trapped(Mascot.SANGZZI, null, 0), Mascot.SANGZZI,
+                CharacterColor.RED), trapped);
+        assertSamePixels(CharacterRecolor.recolor(SPRITES.escaping(Mascot.SANGZZI, null, 0.25), Mascot.SANGZZI,
+                CharacterColor.RED), SPRITES.escaping(Mascot.SANGZZI, CharacterColor.RED, 0.25));
+        assertSamePixels(CharacterRecolor.recolor(SPRITES.dying(Mascot.SANGZZI, null, 0), Mascot.SANGZZI,
+                CharacterColor.RED), SPRITES.dying(Mascot.SANGZZI, CharacterColor.RED, 0));
+    }
+
+    private static void assertSamePixels(BufferedImage expected, BufferedImage actual) {
+        assertEquals(expected.getWidth(), actual.getWidth());
+        assertEquals(expected.getHeight(), actual.getHeight());
+        for (int y = 0; y < expected.getHeight(); y++) {
+            for (int x = 0; x < expected.getWidth(); x++) {
+                assertEquals(expected.getRGB(x, y), actual.getRGB(x, y), "(%d, %d)".formatted(x, y));
+            }
+        }
     }
 
     /** world를 그린 그림에서 캐릭터 자리의 픽셀이 expected와 같은지 본다. 그림을 놓은 위쪽 좌표를 돌려준다. */
@@ -127,7 +225,7 @@ class CharacterSpritesTest {
         Player player = world.localPlayer();
         BufferedImage canvas = new BufferedImage(map.pixelWidth(), map.pixelHeight(), BufferedImage.TYPE_INT_ARGB);
         Graphics2D g = canvas.createGraphics();
-        new WorldRenderer(Tileset.forTheme("fixture"), SPRITES).drawObjects(g, world);
+        TestRenderers.worldRenderer(Tileset.forTheme("fixture"), SPRITES).drawObjects(g, world);
         g.dispose();
 
         int left = (int) Math.round(player.x()) - CharacterSprites.FRAME_SIZE / 2;

@@ -1,10 +1,18 @@
 package hansung.arcade.ingame.map;
 
+import hansung.arcade.ingame.entity.Direction;
+
 /**
  * 맵 한 칸의 종류. 맵 파일에서는 {@link #symbol} 한 글자로 표기한다.
  * 기호의 뜻은 테마와 상관없이 같고, 어떤 그림으로 보일지는 테마별 타일셋이 정한다.
  *
- * <p>파괴·밀기·숨기·방향 제한 같은 동작은 이후 티켓에서 구현한다. 지금은 충돌 여부만 쓴다.</p>
+ * <ul>
+ *   <li>바닥 타일({@link #isGround()})은 아무것도 막지 않고 그 위에 블럭·덤불이 놓일 수 있다.</li>
+ *   <li>부서지는 블럭({@link #isDestructible()})은 물줄기에 맞으면 {@link #afterHit()}로 바뀌거나 부서진다.</li>
+ *   <li>밀리는 블럭({@link #isPushable()})은 몸으로 밀면 한 칸 밀린다.</li>
+ *   <li>덤불({@link #BUSH})은 지나갈 수 있고, 물줄기도 지나가며 부서지지 않는다. 안에 든 것을 가린다.</li>
+ *   <li>가시 블럭({@link #thornSide()})은 가시 난 면에 밀려 온 물풍선을 바로 터뜨린다.</li>
+ * </ul>
  */
 public enum Tile {
     /** 바닥 (풀, 흙) */
@@ -19,7 +27,7 @@ public enum Tile {
     BLOCK('B', true, true),
     /** 일반 블록의 두 번째 모양 (빌리지: 주황 레고) */
     BLOCK_2('O', true, true),
-    /** 좌우 양방향에서만 상호작용하는 블록 */
+    /** 일반 블록의 또 다른 모양 (캠프: 얼룩무늬 블럭). 일반 블록처럼 한 번에 부서지고 밀리지 않는다 */
     SIDE_BLOCK('-', true, true),
     /** 덤불. 지나갈 수 있고 안에 들어간 엔터티를 가린다 */
     BUSH('T', false, false),
@@ -31,13 +39,13 @@ public enum Tile {
     HARD_BLOCK_2('b', true, true),
     /** 한 번 더 맞으면 부서지는 블록 */
     HARD_BLOCK_1('a', true, true),
-    /** 오른쪽에서만 상호작용하는 블록 */
+    /** 오른쪽 면에 가시가 난 블록. 왼쪽으로 밀려 와 오른쪽 면에 닿은 물풍선은 바로 터진다 */
     ONE_WAY_RIGHT('>', true, true),
-    /** 왼쪽에서만 상호작용하는 블록 */
+    /** 왼쪽 면에 가시가 난 블록. 오른쪽으로 밀려 와 왼쪽 면에 닿은 물풍선은 바로 터진다 */
     ONE_WAY_LEFT('<', true, true),
-    /** 위쪽에서만 상호작용하는 블록 */
+    /** 위쪽 면에 가시가 난 블록. 아래로 밀려 와 위쪽 면에 닿은 물풍선은 바로 터진다 */
     ONE_WAY_UP('^', true, true),
-    /** 아래쪽에서만 상호작용하는 블록 */
+    /** 아래쪽 면에 가시가 난 블록. 위로 밀려 와 아래쪽 면에 닿은 물풍선은 바로 터진다 */
     ONE_WAY_DOWN('v', true, true),
     /** 부서지지 않는 석상 */
     STATUE('#', true, false),
@@ -87,6 +95,58 @@ public enum Tile {
     /** 가로로 차지하는 칸 수. 2 이상이면 맵에서 같은 글자를 그 수만큼 이어 쓴다. */
     public int width() {
         return width;
+    }
+
+    /**
+     * 바닥에 붙은 타일인지 (바닥, 길, 차선, 횡단보도, 바닥 가시). 아무것도 막거나 가리지 않고,
+     * 그 위에 블럭이 놓였다가 치워지면 다시 드러난다.
+     */
+    public boolean isGround() {
+        return switch (this) {
+            case FLOOR, ROAD, ROAD_LANE, CROSSWALK, SPIKE -> true;
+            default -> false;
+        };
+    }
+
+    /** 몸으로 밀어 한 칸씩 옮길 수 있는 블럭인지 */
+    public boolean isPushable() {
+        return this == PUSH_BOX;
+    }
+
+    /**
+     * 물줄기에 한 번 맞은 뒤 남는 블럭. 여러 번 맞아야 하는 블럭은 한 단계 약해진 블럭이고,
+     * 이번에 부서지면 null이다. 부서지지 않는 칸은 그대로 자기 자신이다.
+     */
+    public Tile afterHit() {
+        if (!destructible) {
+            return this;
+        }
+        return switch (this) {
+            case HARD_BLOCK_3 -> HARD_BLOCK_2;
+            case HARD_BLOCK_2 -> HARD_BLOCK_1;
+            default -> null;
+        };
+    }
+
+    /** 가시가 난 면의 방향 (예: {@link #ONE_WAY_LEFT}면 왼쪽). 가시 블럭이 아니면 null */
+    public Direction thornSide() {
+        return switch (this) {
+            case ONE_WAY_LEFT -> Direction.LEFT;
+            case ONE_WAY_RIGHT -> Direction.RIGHT;
+            case ONE_WAY_UP -> Direction.UP;
+            case ONE_WAY_DOWN -> Direction.DOWN;
+            default -> null;
+        };
+    }
+
+    /**
+     * travel 방향으로 밀려 오던 물풍선이 이 블럭에 닿았을 때 바로 터지는지. 가시 난 면에 닿았을 때만 터진다.
+     * 예를 들어 {@link #ONE_WAY_LEFT}는 오른쪽으로 밀려 와 왼쪽 면에 닿은 물풍선을 터뜨린다.
+     * 물풍선을 미끄러뜨리는 쪽(신발 아이템 등)이 블럭 앞에 멈출 때 이 블럭에 묻는다.
+     */
+    public boolean popsBalloonMoving(Direction travel) {
+        Direction thorn = thornSide();
+        return thorn != null && thorn == travel.opposite();
     }
 
     /** 맵 파일 글자에 해당하는 타일. 없으면 null. */

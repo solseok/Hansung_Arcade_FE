@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
+import java.util.ArrayList;
 import java.util.List;
 
 import static hansung.arcade.ingame.hud.HudLayout.*;
@@ -27,13 +28,14 @@ class InGameHudTest {
     private static final Color ITEM_PICTURE = new Color(0xFF00AA);
 
     private static HudSkin skin;
+    private static TileMap map;
     private static GameWorld world;
     private static InGameHud hud;
 
     @BeforeAll
     static void setUp() {
         skin = HudSkin.load(HudFonts.load());
-        TileMap map = MapLoader.parse("fixture/test01", List.of("1BB..", "....."));
+        map = MapLoader.parse("fixture/test01", List.of("1BB..", "....."));
         world = new GameWorld(map, new PlayerProfile("tester", Mascot.KKUKKU));
         hud = new InGameHud(skin, map, Tileset.forTheme("fixture"));
     }
@@ -138,6 +140,25 @@ class InGameHudTest {
         assertTrue(countChanged(screen, filled, HudPalette.PLAYER_SLOT) > countChanged(screen, empty, HudPalette.PLAYER_SLOT) + 50);
     }
 
+    @Test
+    void 한_키보드_2인_모드면_플레이어_목록_두_칸에_1P와_2P가_나온다() {
+        TileMap map = MapLoader.parse("fixture/test01", List.of("1BB..", "....2"));
+        GameWorld duo = new GameWorld(map, List.of(new PlayerProfile("one", Mascot.KKUKKU),
+                new PlayerProfile("two", Mascot.HANSUNGNYANGI)));
+        InGameHud duoHud = new InGameHud(skin, map, Tileset.forTheme("fixture"));
+        BufferedImage screen = new BufferedImage(WIDTH, HEIGHT, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g = screen.createGraphics();
+        duoHud.paintBelowWorld(g);
+        duoHud.paintAboveWorld(g, duo);
+        g.dispose();
+
+        int empty = countChanged(screen, playerSlot(2), HudPalette.PLAYER_SLOT);
+        assertTrue(countChanged(screen, playerSlot(0), HudPalette.PLAYER_SLOT) > empty + 50);
+        assertTrue(countChanged(screen, playerSlot(1), HudPalette.PLAYER_SLOT) > empty + 50);
+        // 1P와 2P는 다른 캐릭터라 얼굴 틀 안 그림이 다르다
+        assertNotEquals(pixels(screen, portraitBox(0)), pixels(screen, portraitBox(1)));
+    }
+
     /** @param fakeWorld 맵과 아이템 자리에 맵·아이템 대신 단색을 칠할지 */
     private static BufferedImage render(boolean fakeWorld) {
         BufferedImage screen = new BufferedImage(WIDTH, HEIGHT, BufferedImage.TYPE_INT_RGB);
@@ -165,6 +186,16 @@ class InGameHudTest {
             }
         }
         return count;
+    }
+
+    private static List<Integer> pixels(BufferedImage screen, Box box) {
+        List<Integer> result = new ArrayList<>();
+        for (int y = box.y(); y < box.bottom(); y++) {
+            for (int x = box.x(); x < box.right(); x++) {
+                result.add(screen.getRGB(x, y));
+            }
+        }
+        return result;
     }
 
     private static int brightness(int rgb) {

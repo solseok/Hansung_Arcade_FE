@@ -234,4 +234,148 @@ class MapLoaderTest {
         assertThrows(IllegalArgumentException.class,
                 () -> MapLoader.parse("test", List.of("1.2", "..2")));
     }
+
+    private static IllegalArgumentException failure(String... lines) {
+        return assertThrows(IllegalArgumentException.class, () -> MapLoader.parse("test", List.of(lines)));
+    }
+
+    private static void assertMentions(IllegalArgumentException e, String... parts) {
+        for (String part : parts) {
+            assertTrue(e.getMessage().contains(part), e.getMessage());
+        }
+    }
+
+    @Test
+    void 층_형식은_블럭_밑_바닥을_바닥_층에서_읽는다() {
+        TileMap map = MapLoader.parse("test", List.of(
+                "name=층 맵",
+                "[floor]",
+                "._|=",
+                "..!.",
+                "[block]",
+                ".PBT",
+                "..#.",
+                "[spawn]",
+                "1...",
+                "...2"));
+
+        assertEquals("층 맵", map.name());
+        assertEquals(Tile.FLOOR, map.tileAt(0, 0));
+        assertEquals(Tile.PUSH_BOX, map.tileAt(1, 0));
+        assertEquals(Tile.ROAD, map.groundAt(1, 0));
+        assertEquals(Tile.BLOCK, map.tileAt(2, 0));
+        assertEquals(Tile.ROAD_LANE, map.groundAt(2, 0));
+        assertEquals(Tile.BUSH, map.tileAt(3, 0));
+        assertEquals(Tile.CROSSWALK, map.groundAt(3, 0));
+        assertEquals(Tile.STATUE, map.tileAt(2, 1));
+        assertEquals(Tile.SPIKE, map.groundAt(2, 1));
+        assertEquals(Tile.FLOOR, map.groundAt(3, 1));
+        assertEquals(List.of(new Point(0, 0), new Point(3, 1)), map.spawnPoints());
+    }
+
+    @Test
+    void 층_순서는_상관없다() {
+        TileMap map = MapLoader.parse("test", List.of("[spawn]", "1.", "[block]", ".B", "[floor]", "._"));
+
+        assertEquals(Tile.BLOCK, map.tileAt(1, 0));
+        assertEquals(Tile.ROAD, map.groundAt(1, 0));
+    }
+
+    @Test
+    void 바닥_층에_블럭이나_스폰_글자를_적으면_어느_층에_적을지_알려_준다() {
+        assertMentions(failure("[floor]", ".B", "[block]", "..", "[spawn]", "1."),
+                "[floor] 층 (1, 0)", "'B'", "[block] 층에 적으세요");
+        assertMentions(failure("[floor]", "1.", "[block]", "..", "[spawn]", "1."),
+                "[floor] 층 (0, 0)", "[spawn] 층에 적으세요");
+        assertMentions(failure("[floor]", ".?", "[block]", "..", "[spawn]", "1."),
+                "[floor] 층 (1, 0)", "알 수 없는 글자");
+    }
+
+    @Test
+    void 블럭_층에_바닥이나_스폰_글자를_적으면_어느_층에_적을지_알려_준다() {
+        assertMentions(failure("[floor]", "..", "[block]", "._", "[spawn]", "1."),
+                "[block] 층 (1, 0)", "'_'", "[floor] 층에 적고");
+        assertMentions(failure("[floor]", "..", "[block]", ".1", "[spawn]", "1."),
+                "[block] 층 (1, 0)", "[spawn] 층에 적으세요");
+    }
+
+    @Test
+    void 층마다_크기가_바닥_층과_다르면_어느_층인지_알려_준다() {
+        assertMentions(failure("[floor]", "..", "..", "[block]", "..", "[spawn]", "1.", ".."),
+                "[block] 층이 1줄", "2줄");
+        assertMentions(failure("[floor]", "..", "[block]", "...", "[spawn]", "1."),
+                "[block] 층 1번째 줄 길이가 3");
+        assertMentions(failure("[floor]", "..", "[block]", "..", "[spawn]", "1.", ".."),
+                "[spawn] 층이 2줄", "[floor] 층과 같은 1줄");
+        assertMentions(failure("[floor]", "..", ".", "[block]", "..", "..", "[spawn]", "1.", ".."),
+                "[floor] 층 2번째 줄 길이가 1");
+    }
+
+    @Test
+    void 층_형식에서_층이_하나라도_빠지면_실패한다() {
+        assertMentions(failure("[floor]", "..", "[spawn]", "1."), "[block] 층이 없습니다");
+        assertMentions(failure("[block]", "..", "[spawn]", "1."), "[floor] 층이 없습니다");
+        assertMentions(failure("[floor]", "..", "[block]", ".."), "[spawn] 층이 없습니다");
+    }
+
+    @Test
+    void 층_이름_없는_줄과_바닥_블럭_층을_섞어_쓰면_실패한다() {
+        assertMentions(failure("1.", "[floor]", "..", "[block]", "..", "[spawn]", ".1"),
+                "층 이름 없이 적은 줄 '1.'");
+    }
+
+    @Test
+    void 모르는_층_이름이나_두_번_나온_층은_실패한다() {
+        assertMentions(failure("[floors]", "..", "[block]", "..", "[spawn]", "1."), "[floors]");
+        assertMentions(failure("[floor]", "..", "[floor]", "..", "[block]", "..", "[spawn]", "1."),
+                "[floor] 줄이 두 번");
+    }
+
+    @Test
+    void 층_형식에서도_스폰은_지나갈_수_없는_블럭_위에_둘_수_없고_덤불_위에는_둘_수_있다() {
+        assertMentions(failure("[floor]", "._", "[block]", ".B", "[spawn]", "21"), "(1, 0)", "'B'");
+
+        TileMap map = MapLoader.parse("test", List.of("[floor]", "._", "[block]", ".T", "[spawn]", ".1"));
+
+        assertEquals(List.of(new Point(1, 0)), map.spawnPoints());
+        assertEquals(Tile.ROAD, map.groundAt(1, 0));
+    }
+
+    @Test
+    void 층_형식의_블럭_층에서도_미사일은_두_칸씩_붙여_쓴다() {
+        failure("[floor]", "...", "[block]", ".M.", "[spawn]", "1..");
+
+        TileMap map = MapLoader.parse("test", List.of("[floor]", "...", "[block]", ".MM", "[spawn]", "1.."));
+
+        assertTrue(map.isTileOrigin(1, 0));
+        assertFalse(map.isTileOrigin(2, 0));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"camp/camp08", "patrit/patrit14", "village/village10"})
+    void 리소스_맵은_바닥_블럭_스폰_세_층으로_적는다(String id) throws java.io.IOException {
+        try (var in = MapLoader.class.getResourceAsStream("/maps/" + id + ".txt")) {
+            List<String> lines = new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8).lines()
+                    .map(String::strip).toList();
+
+            assertTrue(lines.containsAll(List.of("[floor]", "[block]", "[spawn]")), id);
+        }
+    }
+
+    @Test
+    void 빌리지_맵의_도로_위_상자_밑은_도로_차선_횡단보도다() {
+        TileMap map = MapLoader.loadResource("village/village10");
+
+        assertEquals(Tile.PUSH_BOX, map.tileAt(8, 0));
+        assertEquals(Tile.ROAD, map.groundAt(8, 0));
+        assertEquals(Tile.PUSH_BOX, map.tileAt(7, 5));
+        assertEquals(Tile.ROAD_LANE, map.groundAt(7, 5));
+        assertEquals(Tile.PUSH_BOX, map.tileAt(7, 2));
+        assertEquals(Tile.CROSSWALK, map.groundAt(7, 2));
+        assertEquals(Tile.PUSH_BOX, map.tileAt(8, 10));
+        assertEquals(Tile.CROSSWALK, map.groundAt(8, 10));
+        // 레고 바닥 구역의 상자 밑은 일반 바닥이다
+        assertEquals(Tile.PUSH_BOX, map.tileAt(2, 1));
+        assertEquals(Tile.FLOOR, map.groundAt(2, 1));
+    }
 }

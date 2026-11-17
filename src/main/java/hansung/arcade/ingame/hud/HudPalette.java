@@ -34,6 +34,13 @@ public final class HudPalette {
     public static final Color ITEM_INNER = new Color(0x0070CA);
     public static final Color ITEM_VIEW = new Color(0x8B8B8B);
     public static final Color ITEM_LABEL = Color.WHITE;
+    /** 2인 모드 아이템 칸 위 1P·2P 글씨 */
+    public static final Color ITEM_SLOT_LABEL = Color.WHITE;
+    /** 아이템 칸 안 위쪽에 흐리게 적은 아이템 키 이름. 칸 회색보다 조금 밝다 */
+    public static final Color ITEM_KEY = new Color(0xB2B2B2);
+    /** 아이템 칸 오른쪽 아래 개수 글씨와 그 테두리 */
+    public static final Color ITEM_COUNT = new Color(0xFFE234);
+    public static final Color ITEM_COUNT_OUTLINE = new Color(0x2A1E00);
 
     public static final Color EXIT = new Color(0x0754BB);
     public static final Color EXIT_EDGE = new Color(0x004AA8);

@@ -7,6 +7,7 @@ import hansung.arcade.ingame.entity.PlayerProfile;
 import hansung.arcade.ingame.hud.HudFonts;
 import hansung.arcade.ingame.hud.HudLayout;
 import hansung.arcade.ingame.hud.HudSkin;
+import hansung.arcade.ingame.input.PlayerCommand;
 import hansung.arcade.ingame.map.MapLoader;
 import hansung.arcade.ingame.render.CharacterSprites;
 import hansung.arcade.ingame.render.Tileset;
@@ -17,6 +18,7 @@ import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import static hansung.arcade.ingame.hud.HudLayout.FIELD;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -52,14 +54,14 @@ class InGamePanelCharacterTest {
         }
         GameWorld world = new GameWorld(MapLoader.parse("fixture/edge", rows),
                 new PlayerProfile("tester", Mascot.KKOKKO));
-        for (int tick = 0; tick < 30; tick++) {
-            world.update(TICK, toward);
-        }
         Player player = world.localPlayer();
+        for (int tick = 0; tick < 30; tick++) {
+            world.update(TICK, Map.of(player.id(), PlayerCommand.moving(toward)));
+        }
         // 맵 끝에 막혀 멈췄으므로 그쪽을 보고 서 있는 그림이 나온다
         assertFalse(player.isMoving());
 
-        InGamePanel panel = new InGamePanel(world, Tileset.forTheme("fixture"),
+        InGamePanel panel = TestPanels.panel(world, Tileset.forTheme("fixture"),
                 HudSkin.load(HudFonts.load()), SPRITES);
         panel.setSize(HudLayout.WIDTH, HudLayout.HEIGHT);
         BufferedImage screen = new BufferedImage(HudLayout.WIDTH, HudLayout.HEIGHT, BufferedImage.TYPE_INT_RGB);

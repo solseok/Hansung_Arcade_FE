@@ -10,7 +10,9 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * 같은 폭의 프레임이 가로 한 줄로 이어 붙은 BMP. 마젠타(255, 0, 255) 배경은 투명하게 바꿔 둔다.
+ * 같은 폭의 프레임이 가로 한 줄로 이어 붙은 그림.
+ * BMP처럼 알파가 없는 그림은 마젠타(255, 0, 255) 배경을 투명하게 바꿔 두고,
+ * PNG처럼 알파가 있는 그림은 반투명 그림자 같은 알파를 그대로 쓴다 (마젠타도 색 그대로 둔다).
  */
 public final class SpriteSheet {
 
@@ -32,7 +34,8 @@ public final class SpriteSheet {
             if (raw == null) {
                 throw new IllegalArgumentException("이미지 형식을 읽을 수 없습니다: " + resourcePath);
             }
-            return Optional.of(new SpriteSheet(resourcePath, withTransparentKey(raw)));
+            BufferedImage image = raw.getColorModel().hasAlpha() ? withAlpha(raw) : withTransparentKey(raw);
+            return Optional.of(new SpriteSheet(resourcePath, image));
         } catch (IOException e) {
             throw new UncheckedIOException("이미지 파일을 읽지 못했습니다: " + resourcePath, e);
         }
@@ -49,6 +52,19 @@ public final class SpriteSheet {
             frames.add(image.getSubimage(x, 0, frameWidth, image.getHeight()));
         }
         return frames;
+    }
+
+    /** 알파가 있는 그림을 픽셀마다 알파를 지킨 채 ARGB로 옮긴다 */
+    private static BufferedImage withAlpha(BufferedImage raw) {
+        int w = raw.getWidth();
+        int h = raw.getHeight();
+        BufferedImage out = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                out.setRGB(x, y, raw.getRGB(x, y));
+            }
+        }
+        return out;
     }
 
     private static BufferedImage withTransparentKey(BufferedImage raw) {

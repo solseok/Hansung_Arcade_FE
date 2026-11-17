@@ -4,7 +4,10 @@ import hansung.arcade.core.game.GameContext;
 import hansung.arcade.core.game.GameProperties;
 import hansung.arcade.ingame.hud.HudSkin;
 import hansung.arcade.ingame.map.TileMap;
+import hansung.arcade.ingame.render.AirplaneSprites;
+import hansung.arcade.ingame.render.BalloonSprites;
 import hansung.arcade.ingame.render.CharacterSprites;
+import hansung.arcade.ingame.render.ItemSprites;
 import hansung.arcade.ingame.render.Tileset;
 import org.junit.jupiter.api.Test;
 
@@ -28,6 +31,9 @@ class ResourceStepTest {
         assertTrue(context.contains(Tileset.class));
         // 캐릭터 그림은 화면을 조립하는 단계가 아니라 이 단계에서 읽는다
         assertTrue(context.contains(CharacterSprites.class));
+        assertTrue(context.contains(BalloonSprites.class));
+        assertTrue(context.contains(ItemSprites.class));
+        assertTrue(context.contains(AirplaneSprites.class));
         assertTrue(context.contains(HudSkin.class));
     }
 }
