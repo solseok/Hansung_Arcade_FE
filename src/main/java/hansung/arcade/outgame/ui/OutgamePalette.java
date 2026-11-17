@@ -114,8 +114,8 @@ public final class OutgamePalette {
     public static final Color LOBBY_TEXT = new Color(16, 64, 128);
     /** 로비 아래 줄 */
     public static final Color LOBBY_FOOTER = p3(36, 82, 160);
-    /** 로그인·로비 안내 중 잘못된 입력 */
-    public static final Color ERROR_TEXT = new Color(196, 30, 40);
+    /** 잘못된 입력 안내. 주황 입력 영역 위에서도 읽히는 진한 빨강 */
+    public static final Color ERROR_TEXT = new Color(140, 20, 20);
     /** 글자 테두리(검정) */
     public static final Color TEXT_OUTLINE = Color.BLACK;
 
@@ -126,19 +126,15 @@ public final class OutgamePalette {
     public static final Color BUTTON_GOLD_TOP = new Color(255, 236, 140);
     public static final Color BUTTON_GOLD_BOTTOM = new Color(236, 150, 22);
     public static final Color BUTTON_GOLD_EDGE = new Color(150, 70, 0);
-    public static final Color BUTTON_GOLD_TEXT = new Color(110, 48, 0);
 
     // ── 로그인 (참고 화면 1번에서 잰 Display P3) ────────────────────
     public static final Color LOGIN_BACKGROUND = p3(62, 135, 235);
     /** 주황 입력 영역: 위 → 아래 그러데이션과 테두리 */
     public static final Color LOGIN_PANEL_TOP = p3(248, 215, 113);
-    public static final Color LOGIN_PANEL_UPPER = p3(244, 186, 64);
-    public static final Color LOGIN_PANEL_LOWER = p3(240, 150, 55);
     public static final Color LOGIN_PANEL_BOTTOM = p3(238, 127, 49);
     public static final Color LOGIN_PANEL_EDGE = p3(183, 90, 34);
-    /** 노란 탭: 위 밝은 빛 → 노랑 → 아래 형광 노랑, 테두리, 빨간 글자 */
+    /** 노란 탭: 위 밝은 빛 → 아래 형광 노랑 그러데이션, 테두리, 빨간 글자 */
     public static final Color LOGIN_TAB_TOP = p3(251, 232, 174);
-    public static final Color LOGIN_TAB_MIDDLE = p3(244, 192, 66);
     public static final Color LOGIN_TAB_BOTTOM = p3(255, 255, 84);
     public static final Color LOGIN_TAB_EDGE = p3(205, 121, 45);
     public static final Color LOGIN_TAB_TEXT = p3(209, 86, 38);

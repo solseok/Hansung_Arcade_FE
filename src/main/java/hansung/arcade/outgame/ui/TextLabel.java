@@ -24,6 +24,8 @@ public class TextLabel extends JLabel {
     private float gloss;
     private Color outline;
     private int outlineWidth;
+    /** 칸을 넘는 글자를 "…"로 줄일지. 방 제목처럼 길이가 정해지지 않은 글자에 켠다 */
+    private boolean ellipsis;
     private Color textBottom;
     private Color shadow;
     private BufferedImage background;
@@ -153,7 +155,18 @@ public class TextLabel extends JLabel {
     protected void paintText(Graphics2D g, int w, int h) {
         Insets in = getInsets();
         Color color = isEnabled() ? getForeground() : OutgamePalette.DISABLED_TEXT;
-        Shapes.text(g, getText(), getFont(), color, isEnabled() ? textBottom : null, outline, outlineWidth, shadow,
-                in.left, in.top, w - in.left - in.right, h - in.top - in.bottom, getHorizontalAlignment());
+        int width = w - in.left - in.right;
+        String text = ellipsis
+                ? Shapes.fit(getText(), getFont(), g.getFontRenderContext(), width - 2f * outlineWidth)
+                : getText();
+        Shapes.text(g, text, getFont(), color, isEnabled() ? textBottom : null, outline, outlineWidth, shadow,
+                in.left, in.top, width, h - in.top - in.bottom, getHorizontalAlignment());
+    }
+
+    /** 칸을 넘는 글자를 뒤에서 줄이고 "…"를 붙여 그린다. 글자 자체(getText)는 그대로 둔다 */
+    public TextLabel ellipsis() {
+        ellipsis = true;
+        repaint();
+        return this;
     }
 }

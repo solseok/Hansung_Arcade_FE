@@ -140,6 +140,24 @@ public final class Shapes {
      * @param outlineWidth 테두리 두께(px)
      * @param shadow       1px 아래에 깔 그림자 색. 없으면 null
      */
+    /**
+     * 칸 폭(available)을 넘는 글자는 뒤를 줄이고 "…"를 붙인다. 긴 방 제목이 칸 경계에서 글자 중간이 잘려 보이지 않게 한다.
+     */
+    public static String fit(String text, Font font, FontRenderContext frc, float available) {
+        if (text == null || text.isEmpty() || available <= 0
+                || font.getStringBounds(text, frc).getWidth() <= available + 0.5f) {
+            return text;
+        }
+        int[] points = text.codePoints().toArray();
+        for (int keep = points.length - 1; keep > 0; keep--) {
+            String shorter = new String(points, 0, keep).stripTrailing() + "…";
+            if (font.getStringBounds(shorter, frc).getWidth() <= available + 0.5f) {
+                return shorter;
+            }
+        }
+        return "…";
+    }
+
     public static void text(Graphics2D g, String text, Font font, Color fill, Color fillBottom, Color outline,
                             int outlineWidth, Color shadow, int x, int y, int width, int height, int align) {
         if (text == null || text.isEmpty()) {

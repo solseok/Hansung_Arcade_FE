@@ -28,7 +28,7 @@ public final class RoomCard extends JButton {
 
     private final Room room;
 
-    private RoomCard(Room room, String name) {
+    private RoomCard(Room room, String name, int seats) {
         this.room = room;
         setName(name);
         setLayout(null);
@@ -60,6 +60,7 @@ public final class RoomCard extends JButton {
         place(header, number, LobbyLayout.CARD_NUMBER);
         TextLabel title = new TextLabel(room == null ? "" : room.title());
         title.setName("room-title");
+        title.ellipsis();
         title.setFont(OutgameFonts.gulimCheBold(14));
         title.setForeground(OutgamePalette.ROOM_TITLE_TEXT);
         title.setOutline(OutgamePalette.TEXT_OUTLINE, 1);
@@ -82,7 +83,8 @@ public final class RoomCard extends JButton {
         count.setFill(OutgamePalette.PLAYER_COUNT, LobbyLayout.CARD_PART_RADIUS);
         place(this, count, LobbyLayout.CARD_COUNT);
 
-        place(this, new EntryBadge(room != null && room.canJoin()), LobbyLayout.CARD_ENTRY);
+        // 2P면 두 자리가 함께 남아야 들어갈 수 있는 방으로 표시한다
+        place(this, new EntryBadge(room != null && room.hasSeats(seats)), LobbyLayout.CARD_ENTRY);
 
         if (room == null) {
             setEnabled(false);
@@ -94,12 +96,17 @@ public final class RoomCard extends JButton {
     }
 
     public static RoomCard of(Room room) {
-        return new RoomCard(room, "room-card-" + room.number());
+        return of(room, 1);
+    }
+
+    /** seats는 이 컴퓨터에서 함께 들어가는 사람 수(1P면 1, 2P면 2) */
+    public static RoomCard of(Room room, int seats) {
+        return new RoomCard(room, "room-card-" + room.number(), seats);
     }
 
     /** 방이 없는 자리. index는 쪽 안 순서 */
     public static RoomCard skeleton(int index) {
-        return new RoomCard(null, "room-skeleton-" + index);
+        return new RoomCard(null, "room-skeleton-" + index, 1);
     }
 
     public Optional<Room> room() {

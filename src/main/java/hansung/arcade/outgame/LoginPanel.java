@@ -99,8 +99,8 @@ public final class LoginPanel extends JPanel implements Scene {
             .edge(OutgamePalette.LOGIN_PANEL_EDGE, 2);
     private final GlossButton enter = new GlossButton("시작하기", GlossButton.GOLD);
     private final GlossButton exit = new GlossButton("종   료", GlossButton.BLUE);
-    private final RoundPanel socketOne = socket();
-    private final RoundPanel socketTwo = socket();
+    private final RoundPanel socketOne = socket("mode-socket-1p");
+    private final RoundPanel socketTwo = socket("mode-socket-2p");
 
     public LoginPanel(OutgameSession session, SceneManager scenes) {
         super(null);
@@ -118,7 +118,7 @@ public final class LoginPanel extends JPanel implements Scene {
         first.addTo(form);
         second.addTo(form);
         message.setName("login-message");
-        message.setForeground(new Color(140, 20, 20));
+        message.setForeground(OutgamePalette.ERROR_TEXT);
         form.add(message);
 
         enter.setFont(OutgameFonts.label(16));
@@ -201,9 +201,9 @@ public final class LoginPanel extends JPanel implements Scene {
         repaint();
     }
 
-    private static RoundPanel socket() {
+    private static RoundPanel socket(String name) {
         RoundPanel socket = new RoundPanel(OutgamePalette.LOGIN_SOCKET, 26).edge(OutgamePalette.LOGIN_SOCKET_EDGE, 2);
-        socket.setName("mode-socket");
+        socket.setName(name);
         return socket;
     }
 
@@ -410,7 +410,8 @@ public final class LoginPanel extends JPanel implements Scene {
     @Override
     public void enter(Object data) {
         message.setText(" ");
-        first.field.requestFocusInWindow();
+        // 창이 막 뜬 때는 아직 포커스를 받기 전일 수 있어, 화면이 다 붙은 뒤에 닉네임 칸으로 커서를 옮긴다
+        SwingUtilities.invokeLater(first.field::requestFocusInWindow);
     }
 
     @Override

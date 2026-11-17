@@ -11,16 +11,26 @@ import java.util.List;
  */
 public final class RoomOrder {
 
-    public static final Comparator<Room> ORDER = Comparator
-            .comparing((Room room) -> !room.canJoin())
-            .thenComparing(room -> room.status() == Room.Status.PLAYING)
-            .thenComparingInt(Room::number);
+    public static final Comparator<Room> ORDER = order(1);
 
     private RoomOrder() {
     }
 
-    /** 정렬한 새 목록. 원래 목록은 그대로 둔다. */
+    /** seats명(1P면 1, 2P면 2)이 함께 들어갈 수 있는 방을 앞에 두는 순서 */
+    public static Comparator<Room> order(int seats) {
+        return Comparator
+                .comparing((Room room) -> !room.hasSeats(seats))
+                .thenComparing(room -> room.status() == Room.Status.PLAYING)
+                .thenComparingInt(Room::number);
+    }
+
+    /** 1P 기준으로 정렬한 새 목록. 원래 목록은 그대로 둔다. */
     public static List<Room> sort(Collection<Room> rooms) {
-        return rooms.stream().sorted(ORDER).toList();
+        return sort(rooms, 1);
+    }
+
+    /** seats명 기준으로 정렬한 새 목록. 원래 목록은 그대로 둔다. */
+    public static List<Room> sort(Collection<Room> rooms, int seats) {
+        return rooms.stream().sorted(order(seats)).toList();
     }
 }

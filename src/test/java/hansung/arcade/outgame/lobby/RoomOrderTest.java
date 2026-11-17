@@ -94,4 +94,13 @@ class RoomOrderTest {
         scenes.show("lobby", null);
         return lobby;
     }
+
+    @Test
+    void 둘이_들어가면_두_자리가_남은_방을_앞에_둔다() {
+        Room oneLeft = new Room(5, "한 자리 남음", 7, 8, "캠프 08", Room.Status.WAITING);
+        Room twoLeft = new Room(6, "두 자리 남음", 6, 8, "캠프 08", Room.Status.WAITING);
+
+        assertEquals(List.of(5, 6), RoomOrder.sort(List.of(twoLeft, oneLeft), 1).stream().map(Room::number).toList());
+        assertEquals(List.of(6, 5), RoomOrder.sort(List.of(oneLeft, twoLeft), 2).stream().map(Room::number).toList());
+    }
 }

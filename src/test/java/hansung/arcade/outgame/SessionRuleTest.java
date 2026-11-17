@@ -73,4 +73,20 @@ class SessionRuleTest {
         assertTrue(maps.size() >= 2, "랜덤 맵이 늘 같은 맵입니다: " + maps);
         assertTrue(characters.size() >= 2, "랜덤 캐릭터가 늘 같은 캐릭터입니다: " + characters);
     }
+
+    @Test
+    void 둘이_랜덤_캐릭터를_고르면_각자_따로_뽑는다() {
+        OutgameSession session = new OutgameSession(new MockLobbyService());
+        session.login("부기", "꾸꾸");
+        session.create("둘이서", 8);
+        session.selectRandomCharacter();
+
+        boolean differed = false;
+        for (int i = 0; i < 60 && !differed; i++) {
+            GameStartInfo start = session.start();
+            differed = start.players().get(0).character() != start.players().get(1).character();
+            session.returnToWaiting();
+        }
+        assertTrue(differed, "60번 시작하는 동안 1P와 2P가 늘 같은 캐릭터였습니다.");
+    }
 }

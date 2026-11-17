@@ -70,7 +70,7 @@ public final class GamePreviewScene implements Scene {
 
     /** 마지막 플레이어가 죽어 경기가 끝났다. 지금부터 결과 연출 시계를 잰다. */
     public void endGame(GameResult result) {
-        if (overlay.isRunning()) {
+        if (game == null || start == null || overlay.isRunning()) {
             return;
         }
         endedAt = System.nanoTime();

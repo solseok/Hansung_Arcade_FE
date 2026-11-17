@@ -43,6 +43,7 @@ public final class ChatPanel extends JPanel {
         this.sender = sender;
         setOpaque(false);
         setPreferredSize(new Dimension(427, 160));
+        tab.setName("chat-tab");
         tab.setFont(OutgameFonts.label(13));
         tab.setForeground(Color.WHITE);
         tab.setOutline(OutgamePalette.WAITING_SECTION, 1);

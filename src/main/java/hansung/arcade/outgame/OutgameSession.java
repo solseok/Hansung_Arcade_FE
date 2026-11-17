@@ -198,8 +198,9 @@ public final class OutgameSession {
         }
         List<GameStartInfo.PlayerInfo> players = new ArrayList<>(players());
         if (randomCharacter) {
-            Mascot picked = Mascot.values()[random.nextInt(Mascot.values().length)];
+            // 2P면 두 사람이 각자 따로 뽑는다
             for (int i = 0; i < localPlayers(); i++) {
+                Mascot picked = Mascot.values()[random.nextInt(Mascot.values().length)];
                 GameStartInfo.PlayerInfo local = players.get(i);
                 players.set(i, new GameStartInfo.PlayerInfo(local.id(), local.nickname(), picked, local.team()));
             }

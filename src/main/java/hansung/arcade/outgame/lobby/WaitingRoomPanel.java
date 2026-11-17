@@ -120,6 +120,7 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
         roomNumber.setFill(OutgamePalette.ROOM_NUMBER_BADGE, ROW_RADIUS);
         place(header, ROOM_HEADER, roomNumber, ROOM_NUMBER);
         roomTitle.setName("room-title");
+        roomTitle.ellipsis();
         roomTitle.setFont(OutgameFonts.gulimCheBold(14));
         roomTitle.setForeground(Color.WHITE);
         roomTitle.setOutline(OutgamePalette.WAITING_SECTION, 1);
@@ -180,6 +181,7 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
         }
 
         TextLabel teamLabel = new TextLabel("팀선택");
+        teamLabel.setName("team-label");
         teamLabel.setForeground(OutgamePalette.SECTION_LABEL);
         place(right, RIGHT_PANEL, teamLabel, TEAM_LABEL);
         RoundPanel teams = section("team-section", OutgamePalette.WAITING_SECTION, SECTION_RADIUS);
@@ -199,6 +201,7 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
         }
 
         TextLabel mapLabel = new TextLabel("맵");
+        mapLabel.setName("map-label");
         mapLabel.setForeground(OutgamePalette.SECTION_LABEL);
         place(right, RIGHT_PANEL, mapLabel, MAP_LABEL);
         mapSection.setName("map-section");
@@ -395,10 +398,11 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
             chat.clear();
             chat.systemMessage("다른 참가자는 준비된 목업입니다. 실제 서버 연결 전입니다.");
         } else {
-            // 경기를 마치고 돌아왔다: 방을 다시 대기 중으로 돌리고, 자동 준비면 바로 준비한다
+            // 경기를 마치고 돌아왔다: 방을 다시 대기 중으로 돌린다
             session.returnToWaiting();
-            session.setReady(autoReady.isSelected() && !session.isHost());
         }
+        // 새 방에 들어왔든 경기를 마치고 돌아왔든, 자동 준비면 바로 준비한다
+        session.setReady(autoReady.isSelected() && !session.isHost());
         refresh();
     }
 

@@ -45,7 +45,7 @@ public final class LobbyArtwork {
     /** 맵 화면 이름(캠프 08 등)의 맵 전체 그림 (타일 원본 크기, 1칸 40px). 랜덤 맵은 물음표 그림 */
     static BufferedImage map(String name) {
         return MAPS.computeIfAbsent(name, key -> {
-            GameMaps.GameMap game = GameMaps.byName(key);
+            GameMaps.GameMap game = GameMaps.byNameOrDefault(key);
             if (game.isRandom()) {
                 return randomArt();
             }
@@ -90,11 +90,6 @@ public final class LobbyArtwork {
                 0, 0, w, h - 20, javax.swing.SwingConstants.CENTER);
         g.dispose();
         return image;
-    }
-
-    /** 맵 최대 인원 (랜덤은 가장 큰 맵) */
-    static int maxPlayers(String name) {
-        return GameMaps.byName(name).maxPlayers();
     }
 
     /** 광택 버튼. 방만들기·바로시작은 그림 버튼이고, gold면 금색, 아니면 파란색이다. */

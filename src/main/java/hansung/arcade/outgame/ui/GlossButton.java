@@ -1,5 +1,7 @@
 package hansung.arcade.outgame.ui;
 
+import hansung.arcade.outgame.audio.Sound;
+
 import javax.swing.JButton;
 import java.awt.AlphaComposite;
 import java.awt.Color;
@@ -57,6 +59,8 @@ public class GlossButton extends JButton {
         setFocusPainted(false);
         setOpaque(false);
         setRolloverEnabled(true);
+        // 아웃게임 버튼은 누를 때 짧은 클릭음을 낸다 (음소거면 나지 않는다)
+        addActionListener(event -> Sound.click());
     }
 
     public Style style() {

@@ -103,4 +103,13 @@ class MapCapacityTest {
             throw new AssertionError("6명이 넘는 방은 빌리지로 바꾸라고 요청하면 안 됩니다.");
         }
     }
+
+    @Test
+    void 모르는_맵_이름은_기본_맵으로_넘기지_않고_거절한다() {
+        assertThrows(IllegalArgumentException.class, () -> GameMaps.byName("없는 맵"));
+
+        MockLobbyService service = new MockLobbyService();
+        service.create("맵 이름 검사", 8, 1);
+        assertThrows(IllegalArgumentException.class, () -> service.updateRoom("없는 맵", Room.Status.WAITING));
+    }
 }

@@ -152,7 +152,7 @@ public final class LobbyPanel extends JPanel implements Scene {
     }
 
     private void refresh() {
-        List<Room> rooms = RoomOrder.sort(session.service.rooms());
+        List<Room> rooms = RoomOrder.sort(session.service.rooms(), session.localPlayers());
         int pages = Math.max(1, (rooms.size() + LobbyLayout.PAGE_SIZE - 1) / LobbyLayout.PAGE_SIZE);
         page = Math.max(0, Math.min(page, pages - 1));
         cards.forEach(list::remove);
@@ -162,7 +162,7 @@ public final class LobbyPanel extends JPanel implements Scene {
             RoomCard card;
             if (index < rooms.size()) {
                 Room room = rooms.get(index);
-                card = RoomCard.of(room);
+                card = RoomCard.of(room, session.localPlayers());
                 card.addActionListener(event -> onCardClicked(room));
             } else {
                 card = RoomCard.skeleton(slot);

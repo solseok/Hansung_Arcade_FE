@@ -44,8 +44,18 @@ public final class GameMaps {
                 .orElseThrow(() -> new IllegalArgumentException("지원하지 않는 맵입니다: " + id));
     }
 
-    /** 화면 이름(캠프 08 등)의 맵. 모르는 이름이면 기본 맵 */
+    /**
+     * 화면 이름(캠프 08 등, 랜덤 맵 포함)의 맵.
+     *
+     * @throws IllegalArgumentException 모르는 이름이면. 정원 계산이 엉뚱한 맵으로 조용히 넘어가지 않게 막는다
+     */
     public static GameMap byName(String name) {
+        return choices().stream().filter(map -> map.name().equals(name)).findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("지원하지 않는 맵입니다: " + name));
+    }
+
+    /** 그림만 그릴 때 쓴다: 화면 이름의 맵, 모르는 이름이면 기본 맵 */
+    public static GameMap byNameOrDefault(String name) {
         return choices().stream().filter(map -> map.name().equals(name)).findFirst().orElse(byId(DEFAULT_ID));
     }
 

@@ -40,6 +40,7 @@ public interface LobbyService {
      * @param status 게임을 시작하면 PLAYING, 대기방으로 돌아오면 WAITING
      * @return 바뀐 방
      * @throws IllegalStateException 방장이 아니거나, 지금 인원이 그 맵 최대 인원보다 많으면
+     * @throws IllegalArgumentException 모르는 맵 이름이면
      */
     Room updateRoom(String map, Room.Status status);
 

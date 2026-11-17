@@ -244,6 +244,21 @@ class WaitingRoomDetailTest {
         assertEquals("patrit/patrit14", session.mapId());
     }
 
+    @Test
+    void 자동_준비를_켜_두면_다른_방에_새로_들어가도_준비한_채로_들어간다() {
+        scenes.show("waiting", session.join(1));
+        layout();
+        button("auto-ready").doClick();
+        assertTrue(session.ready(), "자동 준비를 켜면 바로 준비해야 합니다.");
+        session.leave();
+
+        scenes.show("waiting", session.join(2));
+        layout();
+
+        assertTrue(button("auto-ready").isSelected());
+        assertTrue(session.ready(), "자동 준비가 켜져 있으면 새로 들어간 방에서도 준비해야 합니다.");
+    }
+
     private AbstractButton button(String name) {
         return SwingTree.named(waiting, name, AbstractButton.class);
     }
