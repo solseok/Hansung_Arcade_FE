@@ -17,6 +17,16 @@ public final class Sound {
 
     private Sound() { }
 
+    public static String bgmFor(String screen) {
+        return switch (screen) {
+            case "login" -> "01. login";
+            case "lobby" -> "02. lobby";
+            case "waiting" -> "03. room";
+            case "game", "result" -> "Village";
+            default -> throw new IllegalArgumentException("Unknown screen: " + screen);
+        };
+    }
+
     public static synchronized void playBgm(String key) {
         if (key.equals(bgm)) {
             return;

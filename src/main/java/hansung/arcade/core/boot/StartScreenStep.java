@@ -57,11 +57,7 @@ public final class StartScreenStep implements BootStep {
                 scenes.register("game", new GamePreviewScene(scenes, skin, characters));
                 scenes.register("result", new ResultPanel(scenes));
                 scenes.onShow(name -> {
-                    Sound.playBgm(switch (name) {
-                        case "login", "lobby" -> "Camp";
-                        case "waiting" -> "Patrit";
-                        default -> "Village";
-                    });
+                    Sound.playBgm(Sound.bgmFor(name));
                     if (name.equals("game")) {
                         Sound.play("Ntc_GameStart");
                     }
