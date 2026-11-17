@@ -17,12 +17,17 @@ public final class Sound {
 
     private Sound() { }
 
+    /**
+     * 화면 이름(SceneManager에 등록한 이름)에 맞는 BGM 곡 이름. 결과는 게임 화면 위 모달이라 게임 곡을 그대로 쓴다.
+     *
+     * @throws IllegalArgumentException 곡을 정하지 않은 화면이면
+     */
     public static String bgmFor(String screen) {
         return switch (screen) {
             case "login" -> "01. login";
             case "lobby" -> "02. lobby";
             case "waiting" -> "03. room";
-            case "game", "result" -> "Village";
+            case "game" -> "Village";
             default -> throw new IllegalArgumentException("Unknown screen: " + screen);
         };
     }
