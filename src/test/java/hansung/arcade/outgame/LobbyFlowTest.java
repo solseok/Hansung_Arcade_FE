@@ -137,7 +137,9 @@ class LobbyFlowTest {
             WaitingRoomPanel waiting = new WaitingRoomPanel(session, scenes);
             GamePreviewScene game = new GamePreviewScene(scenes,
                     hansung.arcade.ingame.hud.HudSkin.load(hansung.arcade.ingame.hud.HudFonts.load()),
-                    hansung.arcade.ingame.render.CharacterSprites.load());
+                    hansung.arcade.ingame.render.CharacterSprites.load(),
+                hansung.arcade.ingame.render.BalloonSprites.load(), hansung.arcade.ingame.render.ItemSprites.load(),
+                hansung.arcade.ingame.render.AirplaneSprites.load());
             scenes.register("waiting", waiting);
             scenes.register("game", game);
             scenes.show("waiting", room);

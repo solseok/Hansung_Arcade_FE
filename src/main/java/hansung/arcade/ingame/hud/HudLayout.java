@@ -87,11 +87,24 @@ public final class HudLayout {
             BUBBLE_MAX_WIDTH - BUBBLE_PADDING_LEFT - BUBBLE_PADDING_RIGHT;
 
     /**
-     * 말풍선 바닥은 캐릭터 위치(충돌 박스 중심)에서 이만큼 위다. 캐릭터 스프라이트 그림(70 x 70)을 놓았을 때 그림 위쪽 끝이 오는 자리로, 머리 꼭대기보다
-     * 2~6px 높다: 발이 중심에서 14 아래, 그림 위쪽 끝이 발에서 65 위 (65 - 14). 캐릭터를 그리는 쪽에서 이 두 수치가 바뀌면 같이 고친다. 캐릭터를
-     * 도형으로 그리는 동안에는 이름표보다 14px쯤 위에 뜬다.
+     * 말풍선 바닥은 캐릭터 위치(충돌 박스 중심)에서 이만큼 위다. 캐릭터 스프라이트 그림(70 x 70)을 놓았을 때
+     * 그림 위쪽 끝이 오는 자리로, 머리 꼭대기보다 2~6px 높다: 발이 중심에서 14 아래, 그림 위쪽 끝이 발에서 65 위 (65 - 14).
+     * 캐릭터를 그리는 쪽에서 이 두 수치가 바뀌면 같이 고친다. 캐릭터를 도형으로 그리는 동안에는 이름표보다 14px쯤 위에 뜬다.
+     * 뛰거나 탱크에 타서 그림이 솟으면 그만큼 더 올린다.
      */
     public static final int BUBBLE_ABOVE_PLAYER = 51;
+
+    // ── 한 키보드 2인 모드에서 캐릭터 머리 위 "1P"·"2P" 표시 (채팅과 같은 도트 글자) ──────────
+    /**
+     * 표시 글자 칸 아래 끝은 캐릭터 위치(충돌 박스 중심)에서 이만큼 위다. 머리가 가장 높이 솟는 꼬꼬의 머리 꼭대기
+     * (50 위)와 글자 테두리 사이를 1px 띄운다. 뛰거나 탱크에 타서 그림이 솟으면 그만큼 더 올린다.
+     */
+    public static final int PLAYER_TAG_ABOVE_PLAYER = 52;
+    /**
+     * 머리 위에 자리가 없어(맨 윗줄) 발 아래로 옮길 때, 글자 칸 위 끝은 캐릭터 위치에서 이만큼 아래다:
+     * 발끝 14 + 발밑 그림자 3 + 1px 띄움 + 테두리 1. 캐릭터를 그리는 쪽에서 발끝·그림자 수치가 바뀌면 같이 고친다.
+     */
+    public static final int PLAYER_TAG_BELOW_PLAYER = 19;
 
     // ── 오른쪽 열: 플레이어 목록 → 아이템 상자 → 나가기 ──────────────────────
     // 세 상자는 크기와 간격을 그대로 둔 채 한 덩어리로, 나가기 받침이 창 바닥에서 9 (10) 위에 오도록 놓는다.
@@ -200,7 +213,26 @@ public final class HudLayout {
     public static final Box ITEM_VIEW = ITEM_INNER.child(15, 13, 61, 50);
 
     public static final int ITEM_VIEW_RADIUS = 3;
-
+    /**
+     * 2인 모드에서는 A 안에 1P·2P 아이템 칸 두 개를 나란히 두고 칸 위 띠에 "1P"·"2P"를 쓴다 (참고 이미지의 구조).
+     * 칸 하나 54 x 50 (혼자일 때 칸과 같은 높이), 사이 11, A 위쪽에서 13 아래. 두 칸이 A 가로 가운데에 온다
+     */
+    public static final int DUO_ITEM_VIEW_WIDTH = 54;
+    public static final int DUO_ITEM_VIEW_HEIGHT = 50;
+    public static final int DUO_ITEM_VIEW_GAP = 11;
+    public static final int DUO_ITEM_VIEW_TOP = 13;
+    /** 1P·2P 글씨 높이와, 글씨 아래 끝과 칸 사이 */
+    public static final int ITEM_SLOT_LABEL_HEIGHT = 7;
+    public static final int ITEM_SLOT_LABEL_GAP = 3;
+    /** 칸 안 위쪽에 흐리게 적는 아이템 키 이름의 글자 높이와, 칸 안쪽 끝에서 띄운 거리 */
+    public static final int ITEM_KEY_HEIGHT = 6;
+    public static final int ITEM_KEY_INSET = 3;
+    /** 아이템 그림 위쪽 끝과 칸 위쪽 끝 사이. 그림이 키 이름 아래에 온다 */
+    public static final int ITEM_IMAGE_TOP = 9;
+    /** 칸 오른쪽 아래 개수 글씨 높이. 글씨 세로 가운데가 칸 아래 테두리에 걸친다 */
+    public static final int ITEM_COUNT_HEIGHT = 8;
+    /** 개수 글씨 오른쪽 끝과 칸 오른쪽 끝 사이 */
+    public static final int ITEM_COUNT_RIGHT = 3;
     /** ITEM 글씨 아래 끝과 상자 A 사이 (참고 화면 3.5) */
     public static final int ITEM_LABEL_GAP = 3;
 
@@ -280,6 +312,31 @@ public final class HudLayout {
         int right = FRAME.x() + Math.round(FRAME.width() / 3f);
         return new Box(
                 left, FIELD.bottom() - 17 - CHAT_TEXT_HEIGHT, right - left, CHAT_TEXT_HEIGHT);
+    }
+
+    /** 2인 모드의 index번째(0이 1P) 아이템 칸 */
+    public static Box duoItemView(int index) {
+        int left = ITEM_INNER.x() + (ITEM_INNER.width() - 2 * DUO_ITEM_VIEW_WIDTH - DUO_ITEM_VIEW_GAP) / 2;
+        return new Box(left + index * (DUO_ITEM_VIEW_WIDTH + DUO_ITEM_VIEW_GAP), ITEM_INNER.y() + DUO_ITEM_VIEW_TOP,
+                DUO_ITEM_VIEW_WIDTH, DUO_ITEM_VIEW_HEIGHT);
+    }
+
+    /** 아이템 칸 view 위 "1P"·"2P" 글씨 자리. 칸과 폭이 같고, 글씨 아래 끝을 칸에서 {@link #ITEM_SLOT_LABEL_GAP} 위에 붙인다 */
+    public static Box itemSlotLabel(Box view) {
+        int bottom = view.y() - ITEM_SLOT_LABEL_GAP;
+        return new Box(view.x(), bottom - ITEM_SLOT_LABEL_HEIGHT, view.width(), ITEM_SLOT_LABEL_HEIGHT);
+    }
+
+    /** 아이템 칸 view 안 위쪽의 아이템 키 이름 자리. 테두리 안쪽에서 {@link #ITEM_KEY_INSET}만큼 띄운다 */
+    public static Box itemKey(Box view) {
+        Box inside = view.inset(EDGE + ITEM_KEY_INSET - 1, EDGE + ITEM_KEY_INSET, 0, EDGE + ITEM_KEY_INSET);
+        return new Box(inside.x(), inside.y(), inside.width(), ITEM_KEY_HEIGHT);
+    }
+
+    /** 아이템 칸 view 오른쪽 아래 개수 글씨 자리. 글씨 세로 가운데가 칸 아래 테두리에 온다 */
+    public static Box itemCount(Box view) {
+        return new Box(view.x(), view.bottom() - ITEM_COUNT_HEIGHT / 2 - 1, view.width() - ITEM_COUNT_RIGHT,
+                ITEM_COUNT_HEIGHT);
     }
 
     /** index번째(0부터) 플레이어 슬롯 */

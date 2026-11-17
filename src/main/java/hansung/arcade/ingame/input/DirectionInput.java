@@ -2,27 +2,16 @@ package hansung.arcade.ingame.input;
 
 import hansung.arcade.ingame.entity.Direction;
 
-import java.awt.event.KeyEvent;
 import java.util.ArrayDeque;
 import java.util.Deque;
 
 /**
- * 방향키 입력 상태. 여러 키를 동시에 누르고 있으면 가장 마지막에 누른 방향을 쓴다.
+ * 이동 키 입력 상태. 여러 키를 동시에 누르고 있으면 가장 마지막에 누른 방향을 쓴다.
+ * 어느 키가 어느 방향인지는 {@link KeyBindings}가 정한다.
  */
 public final class DirectionInput {
 
     private final Deque<Direction> pressed = new ArrayDeque<>();
-
-    /** 방향키 코드({@link KeyEvent#VK_UP} 등)에 해당하는 방향. 방향키가 아니면 null. */
-    public static Direction directionOf(int keyCode) {
-        return switch (keyCode) {
-            case KeyEvent.VK_UP -> Direction.UP;
-            case KeyEvent.VK_DOWN -> Direction.DOWN;
-            case KeyEvent.VK_LEFT -> Direction.LEFT;
-            case KeyEvent.VK_RIGHT -> Direction.RIGHT;
-            default -> null;
-        };
-    }
 
     public void press(Direction direction) {
         pressed.remove(direction);

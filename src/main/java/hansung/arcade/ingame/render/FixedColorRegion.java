@@ -5,7 +5,6 @@ import hansung.arcade.ingame.entity.Mascot;
 
 import java.util.List;
 
-
 /**
  * 캐릭터 그림에서 고정색으로 칠해진 부분을 고르는 기준. 그림이 8비트 팔레트 BMP라 쓰인 색이 몇십 개뿐이어서,
  * 캐릭터·포즈별 색 목록을 OKLCH로 늘어놓고 고정색 부분의 색만 들어가는 밝기·채도·색상각 범위를 정했다.
@@ -21,9 +20,17 @@ import java.util.List;
  *
  */
 final class FixedColorRegion {
-    /** 대표색과 일반/옅은 고정색 범위. Eclipse 증분 컴파일에서도 명시적인 필드를 사용한다. */
+    // Eclipse 증분 컴파일이 이 record에서 멈춰서, 같은 모양의 불변 클래스로 둔다
+
+    /**
+     * 고정색 부분을 대표하는 원래 색. 다시 칠하면 이 색이 고른 색과 똑같아지고, 나머지 색은 이 색과의
+     * 밝기·채도 차이를 지킨다. 정면 그림의 고정색 부분에서 가장 넓게 칠해진 색인데, 꼭꼬만은 나비넥타이 테두리
+     * #102468 보다 나비넥타이·공의 바탕색 #4078E0 을 골랐다
+     */
     private final int anchorRgb;
+    /** 고정색 부분의 색 범위들 */
     private final List<OklchRange> ranges;
+    /** 옅어진 물풍선 속(bubble_2) 고정색의 색 범위들. 다시 칠한 뒤 원래 색과 섞는다 */
     private final List<OklchRange> fadedRanges;
 
     private FixedColorRegion(int anchorRgb, List<OklchRange> ranges, List<OklchRange> fadedRanges) {

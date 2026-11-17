@@ -37,7 +37,9 @@ class ResultDetailTest {
         AtomicReference<GamePreviewScene> game = new AtomicReference<>();
         SwingUtilities.invokeAndWait(() -> {
             GamePreviewScene scene = new GamePreviewScene(new SceneManager(view -> { }),
-                    HudSkin.load(HudFonts.load()), CharacterSprites.load());
+                    HudSkin.load(HudFonts.load()), CharacterSprites.load(),
+                hansung.arcade.ingame.render.BalloonSprites.load(), hansung.arcade.ingame.render.ItemSprites.load(),
+                hansung.arcade.ingame.render.AirplaneSprites.load());
             scene.enter(new GameStartInfo("camp/camp08", List.of(
                     new GameStartInfo.PlayerInfo(1, "부기", Mascot.SANGSANGBUGI, "빨강"),
                     new GameStartInfo.PlayerInfo(2, "꾸꾸", Mascot.KKUKKU, "파랑")), 1));

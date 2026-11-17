@@ -8,7 +8,11 @@ import hansung.arcade.ingame.entity.PlayerProfile;
 import hansung.arcade.ingame.hud.HudLayout;
 import hansung.arcade.ingame.hud.HudSkin;
 import hansung.arcade.ingame.map.MapLoader;
+import hansung.arcade.ingame.match.MatchMode;
+import hansung.arcade.ingame.render.AirplaneSprites;
+import hansung.arcade.ingame.render.BalloonSprites;
 import hansung.arcade.ingame.render.CharacterSprites;
+import hansung.arcade.ingame.render.ItemSprites;
 import hansung.arcade.ingame.render.Tileset;
 import hansung.arcade.outgame.ui.GlossButton;
 import javax.swing.JButton;
@@ -24,7 +28,8 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * 인게임 공개 API를 이용한 아웃게임 흐름 확인용 연결. 아직 승패 판정이 이 브랜치에 없어서
+ * 인게임 공개 API를 이용한 아웃게임 흐름 확인용 연결. 이 컴퓨터의 플레이어(1P, 2P면 2P까지)를 대기실에서 고른
+ * 캐릭터·팀 색으로 인게임에 넣는다. 인게임의 실제 승패(MatchResult)는 아직 결과 모달에 잇지 않아서
  * "목업 경기 끝내기"로 마지막 플레이어가 죽은 상황을 흉내 낸다.
  * 경기가 끝나면 게임 화면 위에 결과 모달({@link ResultOverlay})을 띄우고, 화면이 검어지면 원래 대기방으로 돌아간다.
  */
@@ -37,14 +42,22 @@ public final class GamePreviewScene implements Scene {
     private final Timer clock = new Timer(FRAME_MS, event -> tickOverlay());
     private final HudSkin skin;
     private final CharacterSprites sprites;
+    private final BalloonSprites balloons;
+    private final ItemSprites items;
+    private final AirplaneSprites airplanes;
     private InGamePanel game;
     private GameStartInfo start;
     private long endedAt;
     private Runnable onGameOver = () -> { };
 
-    public GamePreviewScene(SceneManager scenes, HudSkin skin, CharacterSprites sprites) {
+    /** 그림은 부팅 때 한 번 읽어 둔 것을 받는다 (ResourceStep) */
+    public GamePreviewScene(SceneManager scenes, HudSkin skin, CharacterSprites sprites, BalloonSprites balloons,
+                            ItemSprites items, AirplaneSprites airplanes) {
         this.skin = skin;
         this.sprites = sprites;
+        this.balloons = balloons;
+        this.items = items;
+        this.airplanes = airplanes;
         layers.setPreferredSize(new Dimension(HudLayout.WIDTH, HudLayout.HEIGHT));
         overlay.setBounds(0, 0, HudLayout.WIDTH, HudLayout.HEIGHT);
         layers.add(overlay, JLayeredPane.MODAL_LAYER);
@@ -107,9 +120,8 @@ public final class GamePreviewScene implements Scene {
         start = (GameStartInfo) data;
         overlay.reset();
         var map = MapLoader.loadResource(start.mapId());
-        var local = start.players().getFirst();
-        game = new InGamePanel(new GameWorld(map, new PlayerProfile(local.nickname(), local.character())),
-                Tileset.forTheme(map.theme()), skin, sprites);
+        game = new InGamePanel(new GameWorld(map, localProfiles(start), MatchMode.SOLO),
+                Tileset.forTheme(map.theme()), skin, sprites, balloons, items, airplanes);
         game.setBounds(0, 0, HudLayout.WIDTH, HudLayout.HEIGHT);
         layers.add(game, JLayeredPane.DEFAULT_LAYER);
         view.revalidate();
@@ -119,6 +131,14 @@ public final class GamePreviewScene implements Scene {
         }
         game.start();
         game.requestFocusInWindow();
+    }
+
+    /** 이 컴퓨터의 플레이어(players 앞쪽 localPlayers명). 팀 번호는 팀 순서(빨강 1)이고, 캐릭터 고정색은 팀 색으로 칠한다 */
+    private static List<PlayerProfile> localProfiles(GameStartInfo start) {
+        return start.players().stream().limit(start.localPlayers()).map(player -> {
+            Team team = Team.fromLabel(player.team());
+            return new PlayerProfile(player.nickname(), player.character(), team.ordinal() + 1, team.characterColor());
+        }).toList();
     }
 
     @Override

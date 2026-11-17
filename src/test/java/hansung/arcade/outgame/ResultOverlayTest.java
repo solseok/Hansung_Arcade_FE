@@ -226,7 +226,9 @@ class ResultOverlayTest {
     @Test
     void 게임_화면은_이_컴퓨터의_플레이어를_모두_내_플레이어로_넘긴다() {
         GamePreviewScene game = new GamePreviewScene(new SceneManager(view -> { }),
-                HudSkin.load(HudFonts.load()), CharacterSprites.load());
+                HudSkin.load(HudFonts.load()), CharacterSprites.load(),
+                hansung.arcade.ingame.render.BalloonSprites.load(), hansung.arcade.ingame.render.ItemSprites.load(),
+                hansung.arcade.ingame.render.AirplaneSprites.load());
         game.enter(new GameStartInfo("camp/camp08", List.of(
                 new GameStartInfo.PlayerInfo(1, "부기", Mascot.SANGSANGBUGI, "빨강"),
                 new GameStartInfo.PlayerInfo(2, "꾸꾸", Mascot.KKUKKU, "빨강"),

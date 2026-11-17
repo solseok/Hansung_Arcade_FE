@@ -1,39 +1,241 @@
 package hansung.arcade.ingame;
 
+import hansung.arcade.ingame.airplane.AirDrop;
+import hansung.arcade.ingame.airplane.DropZone;
+import hansung.arcade.ingame.balloon.BalloonField;
+import hansung.arcade.ingame.balloon.Explosion;
+import hansung.arcade.ingame.block.BoxPusher;
 import hansung.arcade.ingame.chat.ChatLog;
 import hansung.arcade.ingame.chat.ChatMessage;
 import hansung.arcade.ingame.chat.SpeechBubbles;
 import hansung.arcade.ingame.entity.Direction;
+import hansung.arcade.ingame.entity.Obstacles;
 import hansung.arcade.ingame.entity.Player;
 import hansung.arcade.ingame.entity.PlayerProfile;
+import hansung.arcade.ingame.entity.PlayerState;
+import hansung.arcade.ingame.input.PlayerCommand;
+import hansung.arcade.ingame.item.CellOccupancy;
+import hansung.arcade.ingame.item.CellOccupancy.Occupant;
+import hansung.arcade.ingame.item.FieldItems;
+import hansung.arcade.ingame.item.ItemActions;
+import hansung.arcade.ingame.item.ItemDrops;
+import hansung.arcade.ingame.item.ItemEffects;
+import hansung.arcade.ingame.item.ItemType;
+import hansung.arcade.ingame.item.PlayerGear;
 import hansung.arcade.ingame.map.TileMap;
+import hansung.arcade.ingame.match.Match;
+import hansung.arcade.ingame.match.MatchClock;
+import hansung.arcade.ingame.match.MatchMode;
 
 import java.awt.Point;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.EnumSet;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.random.RandomGenerator;
 
 /**
- * 인게임 상태(맵 + 플레이어 + 올라온 채팅). Swing에 의존하지 않아서 테스트와 이후 네트워크 동기화에 그대로 쓸 수 있다.
+ * 인게임 상태(맵 + 플레이어 + 물풍선 + 바닥 아이템 + 올라온 채팅 + 경기 진행). Swing에 의존하지 않아서 테스트와 이후 네트워크 동기화에 그대로 쓸 수 있다.
+ *
+ * <p>물풍선 싸움 규칙은 {@link #update} 한 틱 안에서 이 순서로 처리한다.</p>
+ * <ol>
+ *   <li>스프링 신발로 뛰는 중인 플레이어가 공중을 지나간다. 공중에서는 이동 입력을 받지 않는다 ({@link PlayerGear}).</li>
+ *   <li>플레이어가 움직인다. 놓인 물풍선은 막힌 칸이다 (놓는 순간 그 칸에 있던 사람은 빠져나갈 수 있다).
+ *       상자에 막힌 채 계속 밀면 상자가 한 칸 밀린다 ({@link BoxPusher}). 신발이 있으면 막힌 앞 칸의 물풍선을 민다.</li>
+ *   <li>밀린 물풍선이 미끄러지고 던진 물풍선이 날아가며, 때가 된 물풍선이 터지고, 다 보인 물줄기가 사라진다 ({@link BalloonField}).</li>
+ *   <li>물풍선 키를 막 누른 플레이어가 선 칸에 물풍선을 놓는다. 장갑이 있으면 선 칸이나 앞 칸의 물풍선을 던진다.
+ *       아이템 키를 막 누른 플레이어는 아이템 칸의 액티브 아이템을 쓴다 ({@link ItemActions}).</li>
+ *   <li>이번 틱에 터진 물줄기가 막혀 멈춘 블럭을 맞힌다. 한 틱에 여럿이 같은 블럭을 맞혀도 한 번만 맞는다.
+ *       다 부서진 블럭 자리에는 {@link ItemDrops} 확률로 아이템이 나온다.</li>
+ *   <li>물줄기가 덮은 칸의 아이템은 사라진다. 블럭 자리는 물줄기가 들어가지 않은 칸이라 방금 나온 아이템은 남는다.</li>
+ *   <li>물줄기 싸움을 가린다 ({@link BattleRules}). 물줄기가 덮은 칸에 선 플레이어를 가두고, 갇힌 사람에게 닿은 플레이어가
+ *       같은 편이면 구하고(save) 상대면 터뜨리며(kill, 탈락), 갇힌 채 5초가 지난 사람을 탈락시킨다.</li>
+ *   <li>보통 상태인 플레이어가 선 칸의 아이템을 먹는다 ({@link ItemEffects}). 갇히거나 탈락한 사람은 먹지 못한다.</li>
+ *   <li>이 틱의 탈락·kill·save를 모두 반영한 뒤 경기 시계를 흘리고 승패를 가린다.</li>
+ *   <li>남은 시간이 출현 시각이 됐으면 비행기가 나오고, 날고 있는 비행기가 아이템을 떨어뜨린다 ({@link AirDrop}).</li>
+ * </ol>
+ *
+ * <p>경기({@link Match})가 끝나면 이동 입력과 물풍선 놓기는 더 받지 않고, 물줄기도 보이기만 할 뿐 아무도 가두지 않는다.
+ * 그래도 시간({@link #elapsedSeconds()})은 계속 흘러서 채팅이 사라지고, 이미 놓인 물풍선이 터지고, 탈락 연출도 끝까지 이어진다.
+ * 끝날 때 갇혀 있던 사람은 결과가 바뀌지 않도록 갇힌 채로 남는다.</p>
  */
 public final class GameWorld {
 
+    /**
+     * 밀린 블럭이 들어갈 수 없게 하는 것: 물풍선(미끄러져 들어오거나 던져져 내려앉을 칸 포함), 아이템,
+     * 몸이 조금이라도 걸친 플레이어(사라진 사람 빼고), 점프해 내려앉을 칸, 물줄기. 물줄기가 남은 칸에 들어간 블럭은 바로 부서질 수 있는데,
+     * 거기서 나온 아이템은 그 물줄기에 바로 사라지므로 밀지 않는다.
+     */
+    private static final Set<Occupant> BOX_BLOCKERS = Collections.unmodifiableSet(EnumSet.allOf(Occupant.class));
+
     private final TileMap map;
+    private final BalloonField balloonField;
+    private final FieldItems items = new FieldItems();
+    private final CellOccupancy occupancy;
+    private final ItemDrops itemDrops;
+    private final BoxPusher boxPusher;
+    private final ItemActions itemActions;
+    /** 플레이어 번호 → 아이템으로 얻은 능력과 아이템 칸 */
+    private final Map<Integer, PlayerGear> gears = new HashMap<>();
+    private final AirDrop airDrop;
+    private final DropZone dropZone = new WorldDropZone();
+    /** 이 컴퓨터의 첫 플레이어(1P). 채팅은 이 플레이어가 친 것으로 올라간다 */
     private final Player localPlayer;
+    /** 이 컴퓨터에서 조작하는 플레이어들. 1P, 2P 순서 */
+    private final List<Player> localPlayers;
     private final ChatLog chatLog = new ChatLog();
     private final SpeechBubbles speechBubbles = new SpeechBubbles();
+    private final Match match;
+    private final BattleRules battleRules;
     private double elapsedSeconds;
 
-    /** @param localProfile 이 컴퓨터에서 조작하는 플레이어의 닉네임·캐릭터 */
+    /** 개인전으로 시작한다. */
     public GameWorld(TileMap map, PlayerProfile localProfile) {
-        this.map = map;
-        Point spawn = map.spawnPoints().get(0);
-        this.localPlayer = new Player(1, localProfile, spawn.x, spawn.y);
+        this(map, List.of(localProfile), MatchMode.SOLO);
     }
 
-    public void update(double dt, Direction localInput) {
+    /** @param localProfile 이 컴퓨터에서 조작하는 플레이어의 닉네임·캐릭터·팀 */
+    public GameWorld(TileMap map, PlayerProfile localProfile, MatchMode mode) {
+        this(map, List.of(localProfile), mode);
+    }
+
+    /** 한 컴퓨터에서 여럿이 하는 개인전. */
+    public GameWorld(TileMap map, List<PlayerProfile> localProfiles) {
+        this(map, localProfiles, MatchMode.SOLO);
+    }
+
+    /**
+     * 한 컴퓨터에서 여럿이 하는 게임(한 키보드 2인 모드).
+     *
+     * @param localProfiles 이 컴퓨터에서 조작하는 플레이어들의 닉네임·캐릭터·팀. 1P, 2P 순서이고,
+     *                      n번째(1부터) 플레이어는 번호 n을 받아 맵의 n번 스폰에서 시작한다
+     * @param mode          개인전·팀전
+     */
+    public GameWorld(TileMap map, List<PlayerProfile> localProfiles, MatchMode mode) {
+        this(map, localProfiles, mode, RandomGenerator.getDefault());
+    }
+
+    /**
+     * 난수를 정해 둔 게임. 블럭에서 아이템이 나오는지·무엇인지와 비행기가 떨어뜨릴 칸·아이템을 이 난수로 정하므로,
+     * 테스트에서 결과를 고정할 때 쓴다.
+     *
+     * @param random 아이템 드롭과 비행기에 쓸 난수
+     */
+    public GameWorld(TileMap map, List<PlayerProfile> localProfiles, MatchMode mode, RandomGenerator random) {
+        List<Point> spawns = map.spawnPoints();
+        if (localProfiles.isEmpty()) {
+            throw new IllegalArgumentException("플레이어가 한 명은 있어야 합니다.");
+        }
+        if (localProfiles.size() > spawns.size()) {
+            throw new IllegalArgumentException("맵 %s에는 스폰이 %d곳뿐이라 %d명이 시작할 수 없습니다."
+                    .formatted(map.name(), spawns.size(), localProfiles.size()));
+        }
+        this.map = map;
+        this.balloonField = new BalloonField(map);
+        this.itemDrops = new ItemDrops(random);
+        this.boxPusher = new BoxPusher(map);
+        this.itemActions = new ItemActions(map, balloonField);
+        this.airDrop = new AirDrop(map, random);
+        List<Player> players = new ArrayList<>();
+        for (int i = 0; i < localProfiles.size(); i++) {
+            Point spawn = spawns.get(i);
+            players.add(new Player(i + 1, localProfiles.get(i), spawn.x, spawn.y));
+            gears.put(i + 1, new PlayerGear());
+        }
+        this.localPlayers = List.copyOf(players);
+        this.localPlayer = localPlayers.get(0);
+        this.occupancy = new CellOccupancy(balloonField, items, localPlayers, this::gear);
+        // 플레이어를 모두 만든 뒤에 경기를 연다 (경기 중에 플레이어를 더하지 않는다)
+        this.match = new Match(mode, players());
+        this.battleRules = new BattleRules(localPlayers, match, this::gear, balloonField::wetOwnersAt);
+    }
+
+    /**
+     * 게임을 dt초(한 틱) 진행한다.
+     *
+     * @param commands 플레이어 번호마다 이번 틱에 할 일. 없는 플레이어는 아무것도 하지 않는다 ({@link PlayerCommand#IDLE})
+     */
+    public void update(double dt, Map<Integer, PlayerCommand> commands) {
         elapsedSeconds += dt;
-        localPlayer.update(localInput, dt, map);
+        boolean playing = !match.isOver();
+        List<Player> players = players();
+        for (Player player : players) {
+            PlayerGear gear = gear(player);
+            if (gear.advance(dt, player)) {
+                // 물풍선이 놓인 칸에 내려앉았으면 갇히지 않고 걸어 나갈 수 있다
+                balloonField.letLeave(player);
+            }
+            // 경기가 끝나면 누르고 있어도 멈춰 서고, 점프해 공중에 있는 동안에도 걷지 않는다
+            PlayerCommand command = playing ? commands.getOrDefault(player.id(), PlayerCommand.IDLE) : PlayerCommand.IDLE;
+            Direction move = gear.isAirborne() ? null : command.move();
+            player.update(move, dt, obstaclesFor(player));
+            boxPusher.push(player, move, dt, (col, row) -> occupancy.hasAny(col, row, BOX_BLOCKERS));
+            if (playing) {
+                itemActions.kick(player, gear, move);
+            }
+        }
+        balloonField.update(dt, players);
+        if (playing) {
+            for (Player player : players) {
+                PlayerCommand command = commands.getOrDefault(player.id(), PlayerCommand.IDLE);
+                if (command.placeBalloon()) {
+                    itemActions.pressBalloonKey(player, gear(player), players);
+                }
+                if (command.useItem()) {
+                    itemActions.useItem(player, gear(player));
+                }
+            }
+        }
+        // 경기가 끝나도 이미 놓인 물풍선은 터지므로 블럭도 계속 부서진다
+        breakBlocks(balloonField.takeNewExplosions());
+        items.removeWhere(balloonField::isWet);
+        boxPusher.advance(dt);
+        if (playing) {
+            battleRules.settle();
+            pickUpItems();
+        }
+        // 이 틱의 탈락·kill·save를 모두 반영한 뒤에 시계를 흘리고 승패를 가린다
+        match.update(dt);
+        // 시계를 흘린 뒤라야 이번 틱에 출현 시각이 됐는지 안다
+        airDrop.update(dt, dropZone);
         chatLog.expire(elapsedSeconds);
         speechBubbles.expire(elapsedSeconds);
+    }
+
+    /** player가 들어갈 수 없는 칸: 맵의 막힌 칸과, player가 지나갈 수 없는 물풍선 칸 */
+    private Obstacles obstaclesFor(Player player) {
+        return (col, row) -> map.isSolid(col, row) || balloonField.blocks(player, col, row);
+    }
+
+    /**
+     * 이번 틱에 터진 물줄기들이 막혀 멈춘 칸의 블럭을 한 번씩 맞힌다. 물줄기는 처음 만난 막힌 칸에서 멈추므로
+     * 블럭이 여럿 이어져 있어도 맨 앞 하나만 맞는다. 같은 틱의 연쇄 폭발은 모두 이 틱이 시작될 때의 맵으로 물줄기를 뻗었으므로,
+     * 여럿이 같은 블럭을 맞혀도 한 번만 맞는다. 다 부서진 블럭 자리에는 아이템이 나올 수 있다.
+     */
+    private void breakBlocks(List<Explosion> explosions) {
+        Set<Point> hit = new LinkedHashSet<>();
+        for (Explosion explosion : explosions) {
+            hit.addAll(explosion.blockedCells());
+        }
+        for (Point cell : hit) {
+            if (map.hitBlock(cell.x, cell.y)) {
+                itemDrops.rollForBrokenBlock().ifPresent(item -> items.place(cell.x, cell.y, item));
+            }
+        }
+    }
+
+    /** 보통 상태인 플레이어가 선(충돌 박스 가운데가 있는) 칸의 아이템을 먹는다. 점프해 공중에 있으면 먹지 않는다 */
+    private void pickUpItems() {
+        for (Player player : players()) {
+            PlayerGear gear = gear(player);
+            if (player.state() == PlayerState.NORMAL && !gear.isAirborne()) {
+                items.take(player.col(), player.row()).ifPresent(item -> ItemEffects.apply(player, gear, item));
+            }
+        }
     }
 
     /**
@@ -71,19 +273,85 @@ public final class GameWorld {
         return speechBubbles;
     }
 
+    /** 이번 판의 경기 시계·kill·save·승패 */
+    public Match match() {
+        return match;
+    }
+
     public TileMap map() {
         return map;
     }
 
+    /** 맵 위의 물풍선과 물줄기 */
+    public BalloonField balloonField() {
+        return balloonField;
+    }
+
+    /** 몸으로 미는 블럭과, 밀려 미끄러지는 중인 블럭 */
+    public BoxPusher boxPusher() {
+        return boxPusher;
+    }
+
+    /** player가 아이템으로 얻은 능력과 액티브 아이템 칸 */
+    public PlayerGear gear(Player player) {
+        PlayerGear gear = gears.get(player.id());
+        if (gear == null) {
+            throw new IllegalArgumentException("이 게임의 플레이어가 아닙니다: " + player.id());
+        }
+        return gear;
+    }
+
+    /** 맵 위를 나는 비행기와 비행기에서 떨어지는 중인 아이템 */
+    public AirDrop airDrop() {
+        return airDrop;
+    }
+
+    /** 맵 바닥에 놓인 아이템. 비행기처럼 아이템을 떨어뜨리는 쪽은 여기에 {@link FieldItems#place 놓는다} */
+    public FieldItems items() {
+        return items;
+    }
+
+    /** 이 컴퓨터의 첫 플레이어(1P). 한 키보드 2인 모드에서도 채팅은 1P가 친 것으로 올라간다. */
     public Player localPlayer() {
         return localPlayer;
     }
 
-    public List<Player> players() {
-        return List.of(localPlayer);
+    /** 이 컴퓨터에서 조작하는 플레이어들. 1P, 2P 순서. 혼자 하면 1P 한 명이다. */
+    public List<Player> localPlayers() {
+        return localPlayers;
     }
 
+    /** 맵 위의 모든 플레이어. 지금은 이 컴퓨터의 플레이어뿐이다. */
+    public List<Player> players() {
+        return localPlayers;
+    }
+
+    /** 게임을 시작한 뒤 흐른 시간(초). 경기가 끝나도 계속 흐른다. 경기의 남은 시간은 {@link Match#clock()}을 본다 */
     public double elapsedSeconds() {
         return elapsedSeconds;
+    }
+
+    /** 비행기에게 넘기는 창구. 이 게임의 경기 시계·끝났는지, 칸 점유, 바닥 아이템만 이어 준다 */
+    private final class WorldDropZone implements DropZone {
+
+        @Override
+        public MatchClock clock() {
+            return match.clock();
+        }
+
+        @Override
+        public boolean isMatchOver() {
+            return match.isOver();
+        }
+
+        @Override
+        public boolean holdsAny(int col, int row, Set<Occupant> occupants) {
+            return occupancy.hasAny(col, row, occupants);
+        }
+
+        @Override
+        public void placeItem(int col, int row, ItemType item) {
+            items.place(col, row, item);
+        }
     }
 }
