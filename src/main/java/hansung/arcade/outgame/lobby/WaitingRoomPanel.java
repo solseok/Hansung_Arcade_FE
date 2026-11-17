@@ -61,7 +61,7 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
         this.session = session;
         this.scenes = scenes;
         this.picker = picker;
-        setPreferredSize(new Dimension(WIDTH, HEIGHT));
+        setPreferredSize(new Dimension(WaitingRoomLayout.WIDTH, WaitingRoomLayout.HEIGHT));
         setBackground(OutgamePalette.WAITING_FRAME);
         messages.setEditable(false);
         messages.setBackground(OutgamePalette.CHAT_BACKGROUND);
