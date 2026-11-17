@@ -1,5 +1,7 @@
 package hansung.arcade.outgame.lobby;
 
+import hansung.arcade.outgame.GameMaps;
+
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -10,6 +12,7 @@ public final class MockLobbyService implements LobbyService {
     private Integer joinedRoom;
     private boolean host;
     private int localSeats;
+    /** 방을 만들거나 들어갈 때의 정원. 맵 최대 인원 때문에 줄었다가 다른 맵으로 바꾸면 이 값으로 돌아온다 */
     private int configuredCapacity;
 
     public MockLobbyService() {
@@ -118,12 +121,10 @@ public final class MockLobbyService implements LobbyService {
             throw new IllegalArgumentException("올바르지 않은 방 설정입니다.");
         }
         Room old = rooms.get(joinedRoom);
-        int capacity =
-                Math.min(
-                        configuredCapacity,
-                        hansung.arcade.outgame.GameMaps.byLabel(map).maxPlayers());
-        if (old.players() > capacity)
+        int capacity = Math.min(configuredCapacity, GameMaps.byName(map).maxPlayers());
+        if (old.players() > capacity) {
             throw new IllegalStateException("이 맵은 " + capacity + "명까지 입장할 수 있습니다.");
+        }
         Room updated = new Room(old.number(), old.title(), old.players(), capacity, map, status);
         add(updated);
         return updated;

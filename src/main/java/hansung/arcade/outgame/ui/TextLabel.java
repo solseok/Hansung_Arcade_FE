@@ -1,33 +1,83 @@
 package hansung.arcade.outgame.ui;
 
-import java.awt.*;
-import java.awt.geom.*;
+import javax.swing.JLabel;
+import javax.swing.SwingConstants;
+import java.awt.Color;
+import java.awt.Dimension;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
+import java.awt.Insets;
+import java.awt.image.BufferedImage;
 
-import javax.swing.*;
-
+/**
+ * 매끈하게(안티앨리어싱) 그리는 라벨. 둥근 바탕({@link #setFill}), 바탕 테두리·광택, 글자 테두리({@link #setOutline}),
+ * 글자 위아래 그러데이션({@link #setGradient}), 그림자를 줄 수 있다. 기본 글꼴은 굵은 게임 글꼴이다.
+ * 글자는 세로 가운데, 가로는 {@link #getHorizontalAlignment}를 따른다. 아이콘은 쓰지 않는다 (그림은 일반 JLabel로).
+ */
 public class TextLabel extends JLabel {
+
+    private Color fill;
+    private Color fillBottom;
     private int radius;
+    private Color edge;
+    private float edgeWidth;
+    private float gloss;
     private Color outline;
     private int outlineWidth;
+    private Color textBottom;
+    private Color shadow;
+    private BufferedImage background;
+
+    public TextLabel() {
+        this("");
+    }
 
     public TextLabel(String text) {
-        super(text);
+        this(text, SwingConstants.LEFT);
+    }
+
+    public TextLabel(String text, int horizontalAlignment) {
+        super(text, horizontalAlignment);
         setFont(OutgameFonts.label(12));
-        setForeground(Color.WHITE);
+        setOpaque(false);
     }
 
-    public void setOutline(Color color, int width) {
-        outlined(color, width);
+    /** 반지름 radius로 모서리를 깎은 fill 바탕을 깐다. */
+    public void setFill(Color fill, int radius) {
+        this.fill = fill;
+        this.radius = radius;
+        setBackground(fill);
+        invalidateBackground();
     }
 
-    public void setName(String name) {
-        super.setName(name);
-        if (java.util.Set.of("room-title", "lobby-nickname", "slot-name").contains(name))
-            setFont(OutgameFonts.gulimChe(12));
+    /** 바탕을 위(fill) → 아래(bottom) 그러데이션으로 */
+    public void setFillBottom(Color bottom) {
+        this.fillBottom = bottom;
+        invalidateBackground();
+    }
+
+    /** 바탕 안쪽 가장자리에 thickness 두께 테두리 */
+    public void setEdge(Color edge, float thickness) {
+        this.edge = edge;
+        this.edgeWidth = thickness;
+        invalidateBackground();
+    }
+
+    /** 바탕 위쪽 절반에 흰 광택 (strength: 가장 밝은 곳의 흰색 알파, 0~1) */
+    public void setGloss(float strength) {
+        this.gloss = strength;
+        invalidateBackground();
     }
 
     public int radius() {
         return radius;
+    }
+
+    /** 글자 둘레에 width px 테두리. 없애려면 null */
+    public void setOutline(Color outline, int width) {
+        this.outline = outline;
+        this.outlineWidth = outline == null ? 0 : width;
+        repaint();
     }
 
     public Color outline() {
@@ -38,55 +88,72 @@ public class TextLabel extends JLabel {
         return outlineWidth;
     }
 
-    public TextLabel rounded(int r, Color bg) {
-        radius = r;
-        setBackground(bg);
-        return this;
+    /** 글자를 위(전경색) → 아래(bottom) 그러데이션으로 칠한다 */
+    public void setGradient(Color bottom) {
+        this.textBottom = bottom;
+        repaint();
     }
 
-    public TextLabel outlined(Color color, int width) {
-        outline = color;
-        outlineWidth = width;
-        return this;
+    /** 글자 1px 아래에 깔 그림자 색. 없으면 null */
+    public void setShadow(Color shadow) {
+        this.shadow = shadow;
+        repaint();
+    }
+
+    private void invalidateBackground() {
+        background = null;
+        repaint();
+    }
+
+    @Override
+    public Dimension getPreferredSize() {
+        if (isPreferredSizeSet()) {
+            return super.getPreferredSize();
+        }
+        Insets insets = getInsets();
+        int[] size = Shapes.textSize(getText() == null ? "" : getText(), getFont(), outlineWidth);
+        return new Dimension(size[0] + insets.left + insets.right, size[1] + insets.top + insets.bottom);
     }
 
     @Override
     protected void paintComponent(Graphics graphics) {
+        int w = getWidth();
+        int h = getHeight();
+        if (w <= 0 || h <= 0) {
+            return;
+        }
         Graphics2D g = (Graphics2D) graphics.create();
-        Shapes.hints(g);
-        if (radius > 0) {
-            g.setPaint(
-                    new GradientPaint(
-                            0, 0, new Color(195, 240, 255), 0, getHeight() / 2f, getBackground()));
-            g.fill(
-                    new RoundRectangle2D.Double(
-                            0, 0, getWidth(), getHeight(), radius * 2, radius * 2));
-        } else if (isOpaque()) {
-            g.setColor(getBackground());
-            g.fillRect(0, 0, getWidth(), getHeight());
+        try {
+            Shapes.hints(g);
+            paintBackground(g, w, h);
+            paintText(g, w, h);
+        } finally {
+            g.dispose();
         }
-        if (getText() != null && !getText().isEmpty()) {
-            g.setFont(getFont());
-            var fm = g.getFontMetrics();
-            float x =
-                    getHorizontalAlignment() == CENTER
-                            ? (getWidth() - fm.stringWidth(getText())) / 2f
-                            : 3;
-            float y = (getHeight() - fm.getHeight()) / 2f + fm.getAscent();
-            var shape =
-                    getFont()
-                            .createGlyphVector(g.getFontRenderContext(), getText())
-                            .getOutline(x, y);
-            if (outline != null) {
-                g.setColor(outline);
-                g.setStroke(
-                        new BasicStroke(
-                                outlineWidth * 2, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-                g.draw(shape);
-            }
-            g.setColor(getForeground());
-            g.fill(shape);
+    }
+
+    /** 둥근 바탕(있으면) */
+    protected void paintBackground(Graphics2D g, int w, int h) {
+        if (fill == null) {
+            return;
         }
-        g.dispose();
+        if (background == null || background.getWidth() != w || background.getHeight() != h) {
+            background = Shapes.paint(w, h, m -> m.fill(Shapes.round(0, 0, w, h, radius)),
+                    fillBottom == null ? fill : Shapes.vertical(h, fill, fillBottom), d -> {
+                        if (gloss > 0) {
+                            Shapes.gloss(d, w, h, gloss);
+                        }
+                        Shapes.edge(d, w, h, radius, edge, edgeWidth);
+                    });
+        }
+        g.drawImage(background, 0, 0, null);
+    }
+
+    /** 글자 */
+    protected void paintText(Graphics2D g, int w, int h) {
+        Insets in = getInsets();
+        Color color = isEnabled() ? getForeground() : OutgamePalette.DISABLED_TEXT;
+        Shapes.text(g, getText(), getFont(), color, isEnabled() ? textBottom : null, outline, outlineWidth, shadow,
+                in.left, in.top, w - in.left - in.right, h - in.top - in.bottom, getHorizontalAlignment());
     }
 }

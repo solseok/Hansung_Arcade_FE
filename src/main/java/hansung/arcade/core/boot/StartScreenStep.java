@@ -16,7 +16,6 @@ import hansung.arcade.ingame.render.Tileset;
 import hansung.arcade.outgame.GamePreviewScene;
 import hansung.arcade.outgame.LoginPanel;
 import hansung.arcade.outgame.OutgameSession;
-import hansung.arcade.outgame.ResultPanel;
 import hansung.arcade.outgame.audio.Sound;
 import hansung.arcade.outgame.lobby.LobbyPanel;
 import hansung.arcade.outgame.lobby.LobbyService;
@@ -51,21 +50,18 @@ public final class StartScreenStep implements BootStep {
                         LobbyService service = new MockLobbyService();
                         SceneManager scenes = new SceneManager(window::show);
                         OutgameSession session = new OutgameSession(service);
-                        LobbyPanel lobby = new LobbyPanel(session, scenes);
-                        scenes.register(
-                                "login", new LoginPanel(session, scenes, lobby::setNickname));
-                        scenes.register("lobby", lobby);
+                        scenes.register("login", new LoginPanel(session, scenes));
+                        scenes.register("lobby", new LobbyPanel(session, scenes));
                         scenes.register("waiting", new WaitingRoomPanel(session, scenes));
-                        scenes.register("game", new GamePreviewScene(scenes, skin, characters));
-                        scenes.register("result", new ResultPanel(scenes));
+                        GamePreviewScene game = new GamePreviewScene(scenes, skin, characters);
+                        // 결과는 게임 화면 위 모달로 뜨므로, 끝나는 소리는 경기가 끝나는 때 낸다
+                        game.setOnGameOver(() -> Sound.play("Ntc_GameEnd"));
+                        scenes.register("game", game);
                         scenes.onShow(
                                 name -> {
                                     Sound.playBgm(Sound.bgmFor(name));
                                     if (name.equals("game")) {
                                         Sound.play("Ntc_GameStart");
-                                    }
-                                    if (name.equals("result")) {
-                                        Sound.play("Ntc_GameEnd");
                                     }
                                     if (name.equals("waiting")) {
                                         Sound.play("Ntc_GameReady");

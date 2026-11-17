@@ -1,64 +1,102 @@
 package hansung.arcade.outgame.lobby;
 
-import hansung.arcade.outgame.*;
-import hansung.arcade.outgame.ui.*;
+import hansung.arcade.outgame.ui.LobbyLayout;
+import hansung.arcade.outgame.ui.OutgameFonts;
+import hansung.arcade.outgame.ui.OutgamePalette;
+import hansung.arcade.outgame.ui.Shapes;
+import hansung.arcade.outgame.ui.TextLabel;
+import javax.swing.JComponent;
+import javax.swing.SwingConstants;
+import java.awt.Color;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
+import java.awt.image.BufferedImage;
 
-import java.awt.*;
+/**
+ * 맵 미리보기. 맵 그림을 꽉 채워 부드럽게 줄여 그리고, 아래 띠(높이의 22%)에 맵 이름을 쓴다.
+ * 그림이 없는 스켈레톤은 미리보기 색과 띠 색만 칠한다. 모서리는 매끈하게 깎고 가장자리에 얇은 테두리를 두른다.
+ */
+public final class MapPreview extends JComponent {
 
-import javax.swing.*;
+    private final BufferedImage source;
+    private final int radius;
+    private final TextLabel name;
+    private BufferedImage thumbnail;
+    private BufferedImage rendered;
 
-public class MapPreview extends RoundPanel {
-    private final String map;
-    private final JLabel name;
-
-    public MapPreview(String map) {
-        super(OutgamePalette.MAP_PREVIEW, 4);
-        this.map = map;
-        name = new TextLabel(map == null ? "" : map);
+    /** @param source 맵 그림. 스켈레톤이면 null */
+    public MapPreview(String mapName, BufferedImage source, int radius) {
+        this.source = source;
+        this.radius = radius;
+        setName("map-preview");
+        setLayout(null);
+        name = new TextLabel(mapName == null ? "" : mapName, SwingConstants.CENTER);
         name.setName("map-name");
-        name.setHorizontalAlignment(JLabel.CENTER);
-        name.setFont(OutgameFonts.label(10));
+        name.setFont(OutgameFonts.label(11));
+        name.setForeground(Color.WHITE);
+        name.setOutline(OutgamePalette.MAP_PREVIEW_EDGE, 1);
         add(name);
     }
 
+    public static MapPreview skeleton(int radius) {
+        return new MapPreview(null, null, radius);
+    }
+
+    public int radius() {
+        return radius;
+    }
+
     public int stripHeight() {
-        return Math.max(16, (int) (getHeight() * .22));
+        return LobbyLayout.stripHeight(getHeight());
+    }
+
+    /** 미리보기 크기로 맞춘 맵 그림(띠·모서리 전). 스켈레톤이거나 크기가 없으면 null */
+    public BufferedImage thumbnail() {
+        if (source == null || getWidth() <= 0 || getHeight() <= 0) {
+            return null;
+        }
+        if (thumbnail == null || thumbnail.getWidth() != getWidth() || thumbnail.getHeight() != getHeight()) {
+            thumbnail = Shapes.cover(source, getWidth(), getHeight());
+            rendered = null;
+        }
+        return thumbnail;
     }
 
     @Override
-    public void doLayout() {
-        name.setBounds(0, getHeight() - stripHeight(), getWidth(), stripHeight());
+    public void setBounds(int x, int y, int width, int height) {
+        super.setBounds(x, y, width, height);
+        int strip = LobbyLayout.stripHeight(height);
+        name.setBounds(0, height - strip, width, strip);
+        rendered = null;
     }
 
     @Override
     protected void paintComponent(Graphics graphics) {
-        int w = getWidth(), h = getHeight();
-        if (w <= 0 || h <= 0) return;
-        java.awt.image.BufferedImage image =
-                new java.awt.image.BufferedImage(w, h, java.awt.image.BufferedImage.TYPE_INT_ARGB);
-        Graphics2D g = image.createGraphics();
-        g.setColor(getBackground());
-        g.fillRect(0, 0, w, h);
-        if (map != null && !map.equals("랜덤 맵"))
-            g.drawImage(LobbyArtwork.map(map), 0, 0, w, h - stripHeight(), null);
-        else if (map != null) {
-            g.setColor(Color.WHITE);
-            g.setFont(OutgameFonts.label(40));
-            g.drawString("?", w / 2 - 12, h / 2);
+        int w = getWidth();
+        int h = getHeight();
+        if (w <= 0 || h <= 0) {
+            return;
         }
-        g.setColor(OutgamePalette.MAP_NAME_STRIP);
-        g.fillRect(0, h - stripHeight(), w, stripHeight());
-        g.setComposite(AlphaComposite.DstIn);
-        Shapes.hints(g);
-        java.awt.image.BufferedImage mask =
-                new java.awt.image.BufferedImage(w, h, java.awt.image.BufferedImage.TYPE_INT_ARGB);
-        Graphics2D m = mask.createGraphics();
-        Shapes.hints(m);
-        m.setColor(Color.WHITE);
-        m.fill(new java.awt.geom.RoundRectangle2D.Double(0, 0, w, h, 8, 8));
-        m.dispose();
-        g.drawImage(mask, 0, 0, null);
-        g.dispose();
-        graphics.drawImage(image, 0, 0, null);
+        if (rendered == null || rendered.getWidth() != w || rendered.getHeight() != h) {
+            BufferedImage map = thumbnail();
+            int strip = LobbyLayout.stripHeight(h);
+            rendered = Shapes.paint(w, h, m -> m.fill(Shapes.round(0, 0, w, h, radius)),
+                    OutgamePalette.MAP_PREVIEW, d -> {
+                        if (map != null) {
+                            d.drawImage(map, 0, 0, null);
+                            d.setColor(OutgamePalette.MAP_NAME_STRIP_OVERLAY);
+                        } else {
+                            d.setColor(OutgamePalette.MAP_NAME_STRIP);
+                        }
+                        d.fillRect(0, h - strip, w, strip);
+                        Shapes.edge(d, w, h, radius, OutgamePalette.MAP_PREVIEW_EDGE, 1f);
+                    });
+        }
+        Graphics2D g = (Graphics2D) graphics.create();
+        try {
+            g.drawImage(rendered, 0, 0, null);
+        } finally {
+            g.dispose();
+        }
     }
 }

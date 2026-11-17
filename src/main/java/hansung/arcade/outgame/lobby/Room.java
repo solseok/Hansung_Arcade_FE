@@ -16,7 +16,13 @@ public record Room(int number, String title, int players, int capacity, String m
         }
     }
 
+    /** 한 명이 바로 들어갈 수 있는지 */
     public boolean canJoin() {
-        return status == Status.WAITING && players < capacity;
+        return hasSeats(1);
+    }
+
+    /** seats명이 함께 바로 들어갈 수 있는지: 대기 중이고 자리가 남았다 */
+    public boolean hasSeats(int seats) {
+        return status == Status.WAITING && players + seats <= capacity;
     }
 }
