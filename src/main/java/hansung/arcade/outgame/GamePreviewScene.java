@@ -29,8 +29,8 @@ import java.util.stream.Collectors;
 
 /**
  * 인게임 공개 API를 이용한 아웃게임 흐름 확인용 연결. 이 컴퓨터의 플레이어(1P, 2P면 2P까지)를 대기실에서 고른
- * 캐릭터·팀 색으로 인게임에 넣는다. 인게임의 실제 승패(MatchResult)는 아직 결과 모달에 잇지 않아서
- * "목업 경기 끝내기"로 마지막 플레이어가 죽은 상황을 흉내 낸다.
+ * 캐릭터·팀 색으로 인게임에 넣고 실제 승패(MatchResult)를 결과 모달로 전달한다.
+ * "목업 경기 끝내기" 버튼으로 결과 연출을 직접 확인할 수도 있다.
  * 경기가 끝나면 게임 화면 위에 결과 모달({@link ResultOverlay})을 띄우고, 화면이 검어지면 원래 대기방으로 돌아간다.
  */
 public final class GamePreviewScene implements Scene {
@@ -46,6 +46,7 @@ public final class GamePreviewScene implements Scene {
     private final ItemSprites items;
     private final AirplaneSprites airplanes;
     private InGamePanel game;
+    private GameWorld world;
     private GameStartInfo start;
     private long endedAt;
     private Runnable onGameOver = () -> { };
@@ -98,7 +99,29 @@ public final class GamePreviewScene implements Scene {
     }
 
     private void tickOverlay() {
-        overlay.tick((System.nanoTime() - endedAt) / 1_000_000);
+        if (overlay.isRunning()) {
+            overlay.tick((System.nanoTime() - endedAt) / 1_000_000);
+        } else if (world != null) {
+            var result = world.match().result();
+            if (result.isEmpty() && world.players().stream().allMatch(player -> !player.isAlive())) {
+                List<GameResult.Standing> standings = world.players().stream().map(player -> {
+                    GameStartInfo.PlayerInfo info = start.players().get(player.id() - 1);
+                    return new GameResult.Standing(info.id(), info.nickname(), GameResult.Outcome.DRAW,
+                            world.match().kills(player.id()), world.match().saves(player.id()));
+                }).toList();
+                endGame(new GameResult(standings));
+                return;
+            }
+            result.ifPresent(matchResult -> {
+                List<GameResult.Standing> standings = matchResult.players().stream().map(record -> {
+                    GameStartInfo.PlayerInfo player = start.players().get(record.playerId() - 1);
+                    return new GameResult.Standing(player.id(), player.nickname(),
+                            GameResult.Outcome.valueOf(record.outcome().name()),
+                            record.kills(), record.saves());
+                }).toList();
+                endGame(new GameResult(standings));
+            });
+        }
     }
 
     /** 이 컴퓨터의 플레이어가 이기고, 1P가 다른 사람을 모두 터뜨린 것으로 친 목업 결과 */
@@ -120,7 +143,8 @@ public final class GamePreviewScene implements Scene {
         start = (GameStartInfo) data;
         overlay.reset();
         var map = MapLoader.loadResource(start.mapId());
-        game = new InGamePanel(new GameWorld(map, localProfiles(start), MatchMode.SOLO),
+        world = new GameWorld(map, localProfiles(start), MatchMode.SOLO);
+        game = new InGamePanel(world,
                 Tileset.forTheme(map.theme()), skin, sprites, balloons, items, airplanes);
         game.setBounds(0, 0, HudLayout.WIDTH, HudLayout.HEIGHT);
         layers.add(game, JLayeredPane.DEFAULT_LAYER);
@@ -130,6 +154,7 @@ public final class GamePreviewScene implements Scene {
             window.pack();
         }
         game.start();
+        clock.start();
         game.requestFocusInWindow();
     }
 
@@ -149,6 +174,7 @@ public final class GamePreviewScene implements Scene {
             game.stop();
             layers.remove(game);
             game = null;
+            world = null;
         }
     }
 
