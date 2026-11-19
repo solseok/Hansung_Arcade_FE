@@ -14,6 +14,7 @@ import hansung.arcade.outgame.GameStartInfo;
 import hansung.arcade.outgame.OutgameSession;
 import hansung.arcade.outgame.Team;
 import hansung.arcade.outgame.chat.ChatPanel;
+import hansung.arcade.outgame.audio.Sound;
 import hansung.arcade.outgame.ui.GlossButton;
 import hansung.arcade.outgame.ui.OutgameFonts;
 import hansung.arcade.outgame.ui.OutgamePalette;
@@ -141,6 +142,7 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
                     if (!javax.swing.SwingUtilities.isLeftMouseButton(event)) return;
                     try {
                         session.toggleSlot(slotIndex);
+                        Sound.click();
                         refresh();
                     } catch (IllegalStateException exception) {
                         chat.systemMessage(exception.getMessage());
