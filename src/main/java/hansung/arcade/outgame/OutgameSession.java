@@ -17,11 +17,11 @@ public final class OutgameSession {
     public final LobbyService service;
     private List<String> nicknames = List.of("나");
     private Room room;
-    private Mascot character = Mascot.DEFAULT;
+    private final Mascot[] characters = {Mascot.DEFAULT, Mascot.DEFAULT};
     /** ?(랜덤)를 골랐으면 true. 실제 캐릭터는 게임을 시작할 때 정한다 */
-    private boolean randomCharacter;
+    private final boolean[] randomCharacters = new boolean[2];
     private final Random random = new Random();
-    private Team team = Team.RED;
+    private final Team[] teams = {Team.RED, Team.RED};
     private String mapId = GameMaps.DEFAULT_ID;
     private boolean ready;
     /** 목업 참가자(이 컴퓨터 밖의 사람)의 준비 상태. 서버가 붙으면 서버에서 받은 값으로 바꾼다 */
@@ -99,30 +99,53 @@ public final class OutgameSession {
         room = service.toggleSlot(index);
     }
     /** 고른 캐릭터. 랜덤을 골랐으면 마지막으로 고른 캐릭터이고, 실제 캐릭터는 {@link #start}에서 정한다 */
-    public Mascot character() { return character; }
-    public boolean randomCharacter() { return randomCharacter; }
-    public Team team() { return team; }
+    public Mascot character() { return character(0); }
+    public Mascot character(int index) { return characters[localIndex(index)]; }
+    public boolean randomCharacter() { return randomCharacter(0); }
+    public boolean randomCharacter(int index) { return randomCharacters[localIndex(index)]; }
+    public Team team() { return team(0); }
+    public Team team(int index) { return teams[localIndex(index)]; }
     public String mapId() { return mapId; }
     public boolean ready() { return ready; }
     public void setReady(boolean value) { ready = value; }
 
     /** 캐릭터를 바꾼다. 바꾸면 준비가 풀리고 랜덤도 풀린다. */
     public void select(Mascot character) {
-        this.character = character;
-        randomCharacter = false;
+        select(0, character);
+    }
+
+    public void select(int index, Mascot character) {
+        index = localIndex(index);
+        characters[index] = java.util.Objects.requireNonNull(character);
+        randomCharacters[index] = false;
         ready = false;
     }
 
     /** ?(랜덤 캐릭터)를 고른다. 게임을 시작할 때 다섯 캐릭터 중 하나로 정한다 */
     public void selectRandomCharacter() {
-        randomCharacter = true;
+        selectRandomCharacter(0);
+    }
+
+    public void selectRandomCharacter(int index) {
+        randomCharacters[localIndex(index)] = true;
         ready = false;
     }
 
     /** 팀을 바꾼다. 바꾸면 준비가 풀린다. */
     public void selectTeam(Team team) {
-        this.team = team;
+        selectTeam(0, team);
+    }
+
+    public void selectTeam(int index, Team team) {
+        teams[localIndex(index)] = java.util.Objects.requireNonNull(team);
         ready = false;
+    }
+
+    private int localIndex(int index) {
+        if (index < 0 || index >= localPlayers()) {
+            throw new IllegalArgumentException("이 컴퓨터의 참가자가 아닙니다.");
+        }
+        return index;
     }
 
     /**
@@ -157,7 +180,7 @@ public final class OutgameSession {
     public List<GameStartInfo.PlayerInfo> players() {
         List<GameStartInfo.PlayerInfo> players = new ArrayList<>();
         for (int i = 0; i < nicknames.size(); i++) {
-            players.add(new GameStartInfo.PlayerInfo(i + 1, nicknames.get(i), character, team.label()));
+            players.add(new GameStartInfo.PlayerInfo(i + 1, nicknames.get(i), characters[i], teams[i].label()));
         }
         for (int id = nicknames.size() + 1; id <= room.players(); id++) {
             players.add(new GameStartInfo.PlayerInfo(id, "목업 " + id,
@@ -205,9 +228,8 @@ public final class OutgameSession {
             throw new IllegalStateException("모든 참가자가 준비해야 시작할 수 있습니다.");
         }
         List<GameStartInfo.PlayerInfo> players = new ArrayList<>(players());
-        if (randomCharacter) {
-            // 2P면 두 사람이 각자 따로 뽑는다
-            for (int i = 0; i < localPlayers(); i++) {
+        for (int i = 0; i < localPlayers(); i++) {
+            if (randomCharacters[i]) {
                 Mascot picked = Mascot.values()[random.nextInt(Mascot.values().length)];
                 GameStartInfo.PlayerInfo local = players.get(i);
                 players.set(i, new GameStartInfo.PlayerInfo(local.id(), local.nickname(), picked, local.team()));

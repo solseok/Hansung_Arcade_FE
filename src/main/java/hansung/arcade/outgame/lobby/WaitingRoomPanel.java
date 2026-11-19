@@ -54,6 +54,7 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
     private static final String NOTICE_TEXT = "모두 준비되면 방장이 게임을 시작할 수 있어요.";
     private static final String RANDOM_NAME = "랜덤";
 
+    private int selectionPlayer;
     private final OutgameSession session;
     private final SceneManager scenes;
     private final MapPicker picker;
@@ -176,19 +177,13 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
                 cell = new CharacterCell(head(mascot), null);
                 cell.setName("character-" + mascot.id());
                 cell.setToolTipText(CharacterProfiles.name(mascot));
-                cell.addActionListener(event -> {
-                    session.select(mascot);
-                    refresh();
-                });
+                bindSelection(cell, player -> session.select(player, mascot));
                 characterCells.put(mascot, cell);
             } else if (i == mascots.length) {
                 cell = new CharacterCell(null, "?");
                 cell.setName("character-random");
                 cell.setToolTipText("랜덤 캐릭터");
-                cell.addActionListener(event -> {
-                    session.selectRandomCharacter();
-                    refresh();
-                });
+                bindSelection(cell, session::selectRandomCharacter);
                 randomCell = cell;
             } else {
                 cell = new CharacterCell(null, "X");
@@ -210,10 +205,7 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
             JToggleButton swatch = new TeamSwatch(team);
             swatch.setName("team-" + team.name());
             swatch.setToolTipText(team.label());
-            swatch.addActionListener(event -> {
-                session.selectTeam(team);
-                refresh();
-            });
+            bindSelection(swatch, player -> session.selectTeam(player, team));
             teamGroup.add(swatch);
             teamSwatches.put(team, swatch);
             place(teams, TEAM_SECTION, swatch, teamSwatch(team.ordinal()));
@@ -265,6 +257,48 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
         place(readyBox, READY_SECTION, autoReady, AUTO_READY);
     }
 
+    /** 키보드와 좌클릭은 1P, 우클릭은 2P를 설정한다. */
+    private void bindSelection(JToggleButton button, java.util.function.IntConsumer selection) {
+        button.addActionListener(event -> applySelection(0, selection));
+        button.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override
+            public void mouseClicked(java.awt.event.MouseEvent event) {
+                if (javax.swing.SwingUtilities.isRightMouseButton(event)
+                        && button.isEnabled() && session.localPlayers() == 2) {
+                    applySelection(1, selection);
+                }
+            }
+        });
+        button.setToolTipText(button.getToolTipText() + " · 1P 좌클릭 / 2P 우클릭");
+    }
+
+    private void applySelection(int player, java.util.function.IntConsumer selection) {
+        selection.accept(player);
+        selectionPlayer = player;
+        Sound.click();
+        refresh();
+    }
+
+    private void showPlayerMarks(JToggleButton button, java.util.function.IntPredicate selected) {
+        String marks = "";
+        if (session.localPlayers() == 2) {
+            if (selected.test(0)) marks = "1P";
+            if (selected.test(1)) marks += marks.isEmpty() ? "2P" : " 2P";
+        }
+        button.putClientProperty("player-marks", marks);
+    }
+
+    private static void drawPlayerMarks(Graphics2D g, JToggleButton button) {
+        Object value = button.getClientProperty("player-marks");
+        if (value instanceof String marks && !marks.isEmpty()) {
+            g.setFont(OutgameFonts.label(10));
+            g.setColor(new Color(0, 35, 75, 220));
+            g.fillRoundRect(2, 2, g.getFontMetrics().stringWidth(marks) + 6, 14, 4, 4);
+            g.setColor(Color.WHITE);
+            g.drawString(marks, 5, 13);
+        }
+    }
+
     private void buildBottomBar() {
         RoundPanel bottom = section("bottom-bar", OutgamePalette.BOTTOM_BAR, 0);
         place(this, null, bottom, BOTTOM_BAR);
@@ -309,7 +343,7 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
             if (i < players.size()) {
                 GameStartInfo.PlayerInfo player = players.get(i);
                 boolean local = i < session.localPlayers();
-                BufferedImage figure = local && session.randomCharacter()
+                BufferedImage figure = local && session.randomCharacter(i)
                         ? randomFigure()
                         : figure(player.character(), Team.fromLabel(player.team()).characterColor());
                 slots[i].display(stateOf(i, host, meHost), player.nickname(), figure);
@@ -329,7 +363,15 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
             characterCells.get(session.character()).setSelected(true);
         }
         teamSwatches.get(session.team()).setSelected(true);
-        banner.display(session.randomCharacter() ? null : session.character());
+        if (selectionPlayer >= session.localPlayers()) selectionPlayer = 0;
+        characterCells.forEach((mascot, cell) -> showPlayerMarks(cell,
+                player -> !session.randomCharacter(player) && session.character(player) == mascot));
+        showPlayerMarks(randomCell, session::randomCharacter);
+        teamSwatches.forEach((team, cell) -> showPlayerMarks(cell, player -> session.team(player) == team));
+        banner.display(session.randomCharacter(selectionPlayer) ? null : session.character(selectionPlayer));
+        if (session.localPlayers() == 2) {
+            banner.name.setText((selectionPlayer + 1) + "P " + banner.name.getText());
+        }
         showMap();
         repaint();
     }
@@ -526,6 +568,7 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
                 if (on) {
                     drawCheck(g, w - 17, 3);
                 }
+                drawPlayerMarks(g, this);
             } finally {
                 g.dispose();
             }
@@ -562,6 +605,7 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
                 if (on) {
                     drawCheck(g, w - 15, 1);
                 }
+                drawPlayerMarks(g, this);
             } finally {
                 g.dispose();
             }
