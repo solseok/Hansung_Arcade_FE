@@ -134,6 +134,23 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
         place(left, LEFT_PANEL, grid, SLOT_GRID);
         for (int i = 0; i < SLOTS; i++) {
             slots[i] = new PlayerSlot(i);
+            final int slotIndex = i;
+            java.awt.event.MouseAdapter click = new java.awt.event.MouseAdapter() {
+                @Override
+                public void mouseClicked(java.awt.event.MouseEvent event) {
+                    if (!javax.swing.SwingUtilities.isLeftMouseButton(event)) return;
+                    try {
+                        session.toggleSlot(slotIndex);
+                        refresh();
+                    } catch (IllegalStateException exception) {
+                        chat.systemMessage(exception.getMessage());
+                    }
+                }
+            };
+            slots[i].addMouseListener(click);
+            for (java.awt.Component child : slots[i].getComponents()) {
+                child.addMouseListener(click);
+            }
             place(grid, SLOT_GRID, slots[i], slot(i));
         }
 
@@ -295,7 +312,7 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
                         : figure(player.character(), Team.fromLabel(player.team()).characterColor());
                 slots[i].display(stateOf(i, host, meHost), player.nickname(), figure);
             } else {
-                slots[i].display(i < room.capacity() ? SlotState.EMPTY : SlotState.CLOSED, "", null);
+                slots[i].display(session.isSlotClosed(i) ? SlotState.CLOSED : SlotState.EMPTY, "", null);
             }
         }
 

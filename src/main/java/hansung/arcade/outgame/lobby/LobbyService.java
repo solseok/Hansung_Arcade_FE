@@ -44,5 +44,13 @@ public interface LobbyService {
      */
     Room updateRoom(String map, Room.Status status);
 
+    default boolean isSlotClosed(int index, Room room) {
+        return index >= room.capacity();
+    }
+
+    default Room toggleSlot(int index) {
+        throw new IllegalStateException("자리 변경을 지원하지 않습니다.");
+    }
+
     void leave();
 }

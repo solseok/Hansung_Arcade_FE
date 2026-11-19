@@ -90,6 +90,14 @@ public final class OutgameSession {
     }
 
     public Room room() { return room; }
+
+    public boolean isSlotClosed(int index) {
+        return service.isSlotClosed(index, room);
+    }
+
+    public void toggleSlot(int index) {
+        room = service.toggleSlot(index);
+    }
     /** 고른 캐릭터. 랜덤을 골랐으면 마지막으로 고른 캐릭터이고, 실제 캐릭터는 {@link #start}에서 정한다 */
     public Mascot character() { return character; }
     public boolean randomCharacter() { return randomCharacter; }

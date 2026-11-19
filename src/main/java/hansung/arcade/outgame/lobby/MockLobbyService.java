@@ -14,6 +14,7 @@ public final class MockLobbyService implements LobbyService {
     private int localSeats;
     /** 방을 만들거나 들어갈 때의 정원. 맵 최대 인원 때문에 줄었다가 다른 맵으로 바꾸면 이 값으로 돌아온다 */
     private int configuredCapacity;
+    private final java.util.Set<Integer> closedSlots = new java.util.HashSet<>();
 
     public MockLobbyService() {
         add(new Room(1, "함께 한 판 해요", 1, 8, "캠프 08", Room.Status.WAITING));
@@ -58,6 +59,7 @@ public final class MockLobbyService implements LobbyService {
         joinedRoom = roomNumber;
         localSeats = seats;
         configuredCapacity = room.capacity();
+        closedSlots.clear();
         return joined;
     }
 
@@ -78,6 +80,7 @@ public final class MockLobbyService implements LobbyService {
         joinedRoom = number;
         localSeats = seats;
         configuredCapacity = capacity;
+        closedSlots.clear();
         host = true;
         return room;
     }
@@ -121,13 +124,39 @@ public final class MockLobbyService implements LobbyService {
             throw new IllegalArgumentException("올바르지 않은 방 설정입니다.");
         }
         Room old = rooms.get(joinedRoom);
-        int capacity = Math.min(configuredCapacity, GameMaps.byName(map).maxPlayers());
-        if (old.players() > capacity) {
+        int limit = Math.min(configuredCapacity, GameMaps.byName(map).maxPlayers());
+        int capacity = limit - (int) closedSlots.stream().filter(index -> index < limit).count();
+        if (capacity < 2 || old.players() > capacity) {
             throw new IllegalStateException("이 맵은 " + capacity + "명까지 입장할 수 있습니다.");
         }
         Room updated = new Room(old.number(), old.title(), old.players(), capacity, map, status);
         add(updated);
         return updated;
+    }
+
+    @Override
+    public synchronized boolean isSlotClosed(int index, Room room) {
+        return index >= Math.min(configuredCapacity, GameMaps.byName(room.map()).maxPlayers())
+                || closedSlots.contains(index);
+    }
+
+    @Override
+    public synchronized Room toggleSlot(int index) {
+        if (joinedRoom == null || !host) {
+            throw new IllegalStateException("방장만 빈 자리를 열고 닫을 수 있습니다.");
+        }
+        Room room = rooms.get(joinedRoom);
+        int limit = Math.min(configuredCapacity, GameMaps.byName(room.map()).maxPlayers());
+        if (room.status() != Room.Status.WAITING || index < room.players() || index >= limit) {
+            throw new IllegalStateException("참가자가 있는 자리나 맵 제한 자리는 변경할 수 없습니다.");
+        }
+        boolean opening = closedSlots.contains(index);
+        if (!opening && room.capacity() <= 2) {
+            throw new IllegalStateException("최소 두 자리는 열어 두어야 합니다.");
+        }
+        if (opening) closedSlots.remove(index);
+        else closedSlots.add(index);
+        return updateRoom(room.map(), room.status());
     }
 
     private Room withPlayers(Room room, int players) {
