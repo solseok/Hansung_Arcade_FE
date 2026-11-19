@@ -45,6 +45,7 @@ public final class InGameHud {
                 new ExitButton(skin),
                 new ItemBar(skin),
                 new ChatLogView(skin.chatText(), skin.myChatText()),
+                new AllyArrowView(),
                 new PlayerTagView(skin.chatText()),
                 new SpeechBubbleView(skin.chatText()));
 
