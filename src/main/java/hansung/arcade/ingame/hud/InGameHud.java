@@ -24,6 +24,7 @@ public final class InGameHud {
 
     private final MapFrame frame = new MapFrame();
     private final List<HudPart> parts;
+    private final AllyArrowView allyArrows = new AllyArrowView();
     private final BufferedImage base;
     private final BufferedImage overlay;
 
@@ -45,7 +46,6 @@ public final class InGameHud {
                 new ExitButton(skin),
                 new ItemBar(skin),
                 new ChatLogView(skin.chatText(), skin.myChatText()),
-                new AllyArrowView(),
                 new PlayerTagView(skin.chatText()),
                 new SpeechBubbleView(skin.chatText()));
 
@@ -75,8 +75,12 @@ public final class InGameHud {
     /** 맵을 그린 뒤 그 위에 그리는 HUD 내용 */
     public void paintAboveWorld(Graphics2D g, GameWorld world) {
         for (HudPart part : parts) {
-            part.paint(g, world);
+            if (!(part instanceof SpeechBubbleView)) part.paint(g, world);
         }
         g.drawImage(overlay, 0, 0, null);
+        allyArrows.paint(g, world);
+        for (HudPart part : parts) {
+            if (part instanceof SpeechBubbleView) part.paint(g, world);
+        }
     }
 }
