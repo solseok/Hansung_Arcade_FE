@@ -143,7 +143,7 @@ public final class GamePreviewScene implements Scene {
         start = (GameStartInfo) data;
         overlay.reset();
         var map = MapLoader.loadResource(start.mapId());
-        world = new GameWorld(map, localProfiles(start), MatchMode.SOLO);
+        world = new GameWorld(map, localProfiles(start), MatchMode.TEAM);
         game = new InGamePanel(world,
                 Tileset.forTheme(map.theme()), skin, sprites, balloons, items, airplanes);
         game.setBounds(0, 0, HudLayout.WIDTH, HudLayout.HEIGHT);
