@@ -18,14 +18,17 @@ import hansung.arcade.ingame.item.CellOccupancy;
 import hansung.arcade.ingame.item.CellOccupancy.Occupant;
 import hansung.arcade.ingame.item.FieldItems;
 import hansung.arcade.ingame.item.ItemActions;
+import hansung.arcade.ingame.item.ItemActions.BalloonKeyResult;
 import hansung.arcade.ingame.item.ItemDrops;
 import hansung.arcade.ingame.item.ItemEffects;
 import hansung.arcade.ingame.item.ItemType;
 import hansung.arcade.ingame.item.PlayerGear;
+import hansung.arcade.ingame.map.Tile;
 import hansung.arcade.ingame.map.TileMap;
 import hansung.arcade.ingame.match.Match;
 import hansung.arcade.ingame.match.MatchClock;
 import hansung.arcade.ingame.match.MatchMode;
+import hansung.arcade.ingame.match.StartIntro;
 
 import java.awt.Point;
 import java.util.ArrayList;
@@ -35,6 +38,7 @@ import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.random.RandomGenerator;
 
@@ -58,6 +62,13 @@ import java.util.random.RandomGenerator;
  *   <li>이 틱의 탈락·kill·save를 모두 반영한 뒤 경기 시계를 흘리고 승패를 가린다.</li>
  *   <li>남은 시간이 출현 시각이 됐으면 비행기가 나오고, 날고 있는 비행기가 아이템을 떨어뜨린다 ({@link AirDrop}).</li>
  * </ol>
+ *
+ * <p>시작 연출({@link #beginIntro()}, "Ready... Start!")을 켰으면 START!! 글자가 다 사라질 때까지는 위 규칙을 하나도 돌리지 않는다.
+ * 키를 눌러도 움직이거나 물풍선을 놓지 않는다. 경기 시계는 START!! 글자가 뜬 뒤부터 흐른다 ({@link StartIntro}).
+ * 채팅은 그대로 올라가고 사라진다.</p>
+ *
+ * <p>한 틱에 일어난 일 가운데 소리를 낼 일(물풍선 놓기·터짐, 갇힘, 탈락, 아이템 나옴·먹음 등)은 {@link GameSound}로 모아 두고,
+ * 화면이 {@link #takeSounds()}로 꺼내 소리를 낸다.</p>
  *
  * <p>경기({@link Match})가 끝나면 이동 입력과 물풍선 놓기는 더 받지 않고, 물줄기도 보이기만 할 뿐 아무도 가두지 않는다.
  * 그래도 시간({@link #elapsedSeconds()})은 계속 흘러서 채팅이 사라지고, 이미 놓인 물풍선이 터지고, 탈락 연출도 끝까지 이어진다.
@@ -91,6 +102,9 @@ public final class GameWorld {
     private final SpeechBubbles speechBubbles = new SpeechBubbles();
     private final Match match;
     private final BattleRules battleRules;
+    private final StartIntro intro = new StartIntro();
+    /** 아직 화면이 꺼내 가지 않은 소리. 같은 소리는 한 번만 담는다 */
+    private final EnumSet<GameSound> sounds = EnumSet.noneOf(GameSound.class);
     private double elapsedSeconds;
 
     /** 개인전으로 시작한다. */
@@ -161,8 +175,19 @@ public final class GameWorld {
      */
     public void update(double dt, Map<Integer, PlayerCommand> commands) {
         elapsedSeconds += dt;
+        StartIntro.Phase introPhase = advanceIntro(dt);
+        if (introPhase != StartIntro.Phase.DONE) {
+            // 연출 중에는 아무도 조작하지 못한다. START!! 글자가 뜬 뒤부터는 경기 시계만 흐른다
+            if (introPhase == StartIntro.Phase.START) {
+                match.update(dt);
+            }
+            chatLog.expire(elapsedSeconds);
+            speechBubbles.expire(elapsedSeconds);
+            return;
+        }
         boolean playing = !match.isOver();
         List<Player> players = players();
+        Map<Integer, PlayerSnapshot> before = snapshots(players);
         for (Player player : players) {
             PlayerGear gear = gear(player);
             if (gear.advance(dt, player)) {
@@ -174,8 +199,8 @@ public final class GameWorld {
             Direction move = gear.isAirborne() ? null : command.move();
             player.update(move, dt, obstaclesFor(player));
             boxPusher.push(player, move, dt, (col, row) -> occupancy.hasAny(col, row, BOX_BLOCKERS));
-            if (playing) {
-                itemActions.kick(player, gear, move);
+            if (playing && itemActions.kick(player, gear, move)) {
+                sounds.add(GameSound.KICK);
             }
         }
         balloonField.update(dt, players);
@@ -183,27 +208,133 @@ public final class GameWorld {
             for (Player player : players) {
                 PlayerCommand command = commands.getOrDefault(player.id(), PlayerCommand.IDLE);
                 if (command.placeBalloon()) {
-                    itemActions.pressBalloonKey(player, gear(player), players);
+                    BalloonKeyResult result = itemActions.pressBalloonKey(player, gear(player), players);
+                    if (result == BalloonKeyResult.PLACED) {
+                        sounds.add(GameSound.BALLOON_PLACED);
+                    } else if (result == BalloonKeyResult.THROWN) {
+                        sounds.add(GameSound.KICK);
+                    }
                 }
                 if (command.useItem()) {
-                    itemActions.useItem(player, gear(player));
+                    useItem(player);
                 }
             }
         }
         // 경기가 끝나도 이미 놓인 물풍선은 터지므로 블럭도 계속 부서진다
-        breakBlocks(balloonField.takeNewExplosions());
+        List<Explosion> explosions = balloonField.takeNewExplosions();
+        if (explosions.size() == 1) {
+            sounds.add(GameSound.EXPLODE);
+        } else if (explosions.size() > 1) {
+            sounds.add(GameSound.EXPLODE_MULTI);
+        }
+        breakBlocks(explosions);
         items.removeWhere(balloonField::isWet);
         boxPusher.advance(dt);
         if (playing) {
             battleRules.settle();
             pickUpItems();
         }
+        collectPlayerSounds(players, before);
         // 이 틱의 탈락·kill·save를 모두 반영한 뒤에 시계를 흘리고 승패를 가린다
         match.update(dt);
         // 시계를 흘린 뒤라야 이번 틱에 출현 시각이 됐는지 안다
+        int flights = airDrop.flights().size();
+        int falling = airDrop.fallingItems().size();
         airDrop.update(dt, dropZone);
+        if (airDrop.flights().size() > flights) {
+            sounds.add(GameSound.AIRPLANE);
+        }
+        if (airDrop.fallingItems().size() > falling) {
+            sounds.add(GameSound.AIR_DROP);
+        }
         chatLog.expire(elapsedSeconds);
         speechBubbles.expire(elapsedSeconds);
+    }
+
+    /**
+     * 경기 시작 연출("Ready... Start!")을 처음부터 시작한다. READY 소리를 내고, START!! 글자가 다 사라질 때까지
+     * 아무도 조작할 수 없다. 화면에 띄우기 전에 한 번 부른다.
+     */
+    public void beginIntro() {
+        intro.begin();
+        sounds.add(GameSound.READY);
+    }
+
+    /** 경기 시작 연출. 부르지 않았으면 처음부터 끝난 상태다 */
+    public StartIntro intro() {
+        return intro;
+    }
+
+    /**
+     * 지난번 꺼낸 뒤 모인 소리를 꺼내고 비운다. 한 프레임에 같은 소리가 여러 번 일어나도 한 번만 담긴다.
+     * 화면이 프레임마다 부른다.
+     */
+    public List<GameSound> takeSounds() {
+        List<GameSound> taken = List.copyOf(sounds);
+        sounds.clear();
+        return taken;
+    }
+
+    /**
+     * 연출 시간을 흘린다 (연출이 끝나도 화살표가 사라질 때까지 센다). START!! 글자가 뜨는 틱에 START 소리를 낸다.
+     *
+     * @return 이번 틱이 시작될 때의 단계. DONE이 아니면 이번 틱은 아직 연출이다
+     */
+    private StartIntro.Phase advanceIntro(double dt) {
+        StartIntro.Phase phase = intro.phase();
+        intro.advance(dt);
+        if (phase == StartIntro.Phase.READY && intro.phase() != StartIntro.Phase.READY) {
+            sounds.add(GameSound.START);
+        }
+        return phase;
+    }
+
+    /** 아이템 키를 막 누른 player가 칸의 액티브 아이템을 쓴다. 쓰면 아이템에 맞는 소리를 낸다 */
+    private void useItem(Player player) {
+        PlayerGear gear = gear(player);
+        Optional<ItemType> item = gear.activeItem();
+        if (item.isEmpty() || !itemActions.useItem(player, gear)) {
+            return;
+        }
+        switch (item.get()) {
+            case SHIELD -> sounds.add(GameSound.SHIELD);
+            case SPRING_SHOE -> sounds.add(GameSound.SPRING);
+            default -> { }
+        }
+    }
+
+    /** 틱이 시작될 때 플레이어마다의 상태. 틱이 끝난 뒤와 견줘 갇힘·탈락·탱크 부서짐·덤불 들어감 소리를 고른다 */
+    private record PlayerSnapshot(PlayerState state, boolean alive, boolean tank, int col, int row) {
+    }
+
+    private Map<Integer, PlayerSnapshot> snapshots(List<Player> players) {
+        Map<Integer, PlayerSnapshot> snapshots = new HashMap<>();
+        for (Player player : players) {
+            snapshots.put(player.id(), new PlayerSnapshot(player.state(), player.isAlive(), gear(player).hasTank(),
+                    player.col(), player.row()));
+        }
+        return snapshots;
+    }
+
+    private void collectPlayerSounds(List<Player> players, Map<Integer, PlayerSnapshot> before) {
+        for (Player player : players) {
+            PlayerSnapshot was = before.get(player.id());
+            PlayerGear gear = gear(player);
+            if (was.state() != PlayerState.TRAPPED && player.state() == PlayerState.TRAPPED) {
+                sounds.add(GameSound.TRAPPED);
+            }
+            if (was.alive() && !player.isAlive()) {
+                sounds.add(GameSound.DIE);
+            }
+            if (was.tank() && !gear.hasTank()) {
+                sounds.add(GameSound.TANK_BROKEN);
+            }
+            boolean moved = was.col() != player.col() || was.row() != player.row();
+            if (moved && player.isAlive() && !gear.isAirborne() && map.isInside(player.col(), player.row())
+                    && map.tileAt(player.col(), player.row()) == Tile.BUSH) {
+                sounds.add(GameSound.BUSH);
+            }
+        }
     }
 
     /** player가 들어갈 수 없는 칸: 맵의 막힌 칸과, player가 지나갈 수 없는 물풍선 칸 */
@@ -223,7 +354,10 @@ public final class GameWorld {
         }
         for (Point cell : hit) {
             if (map.hitBlock(cell.x, cell.y)) {
-                itemDrops.rollForBrokenBlock().ifPresent(item -> items.place(cell.x, cell.y, item));
+                itemDrops.rollForBrokenBlock().ifPresent(item -> {
+                    items.place(cell.x, cell.y, item);
+                    sounds.add(GameSound.ITEM_POP);
+                });
             }
         }
     }
@@ -233,7 +367,10 @@ public final class GameWorld {
         for (Player player : players()) {
             PlayerGear gear = gear(player);
             if (player.state() == PlayerState.NORMAL && !gear.isAirborne()) {
-                items.take(player.col(), player.row()).ifPresent(item -> ItemEffects.apply(player, gear, item));
+                items.take(player.col(), player.row()).ifPresent(item -> {
+                    ItemEffects.apply(player, gear, item);
+                    sounds.add(GameSound.ITEM_EATEN);
+                });
             }
         }
     }

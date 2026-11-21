@@ -18,8 +18,12 @@ import hansung.arcade.ingame.render.Tileset;
 import hansung.arcade.ingame.render.WorldRenderer;
 
 import javax.swing.JPanel;
+import javax.swing.SwingUtilities;
 import javax.swing.Timer;
+import java.awt.AlphaComposite;
+import java.awt.Color;
 import java.awt.Component;
+import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
@@ -30,7 +34,12 @@ import java.awt.event.FocusAdapter;
 import java.awt.event.FocusEvent;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.awt.geom.AffineTransform;
+import java.awt.geom.RoundRectangle2D;
+import java.util.Objects;
+import java.util.function.Consumer;
 
 /**
  * 인게임 화면(800 x 600). 아웃게임에서는 이 패널을 프레임에 붙이고 {@link #start()}만 호출하면 된다.
@@ -47,6 +56,12 @@ import java.awt.geom.AffineTransform;
  * <p>Enter를 누르면 맵 왼쪽 아래에 채팅 입력칸({@link ChatField})이 열리고 포커스가 그리로 간다.
  * 다시 Enter를 치면 채팅을 올리고, Esc를 치면 올리지 않고 닫는다. 입력칸이 열려 있어도 방향키는 캐릭터를 움직이고,
  * 나머지 키(글자, Space, Shift 등)는 글을 치는 데 쓴다.</p>
+ *
+ * <p>오른쪽 아래 나가기 버튼({@link HudLayout#EXIT_BUTTON})을 누르면 게임을 멈추고 {@link #setOnExit 밖에서 정한 일}을 한다.
+ * 마우스를 올리면 버튼이 밝아지고 누르는 동안 어두워진다.</p>
+ *
+ * <p>프레임마다 게임 상태에 모인 소리({@link GameWorld#takeSounds()})를 꺼내 {@link #setSoundSink 밖에서 넘겨준 곳}으로 보낸다.
+ * 소리 장치는 이 패널이 모른다.</p>
  */
 public final class InGamePanel extends JPanel {
 
@@ -134,6 +149,51 @@ public final class InGamePanel extends JPanel {
     private double accumulator;
     /** Enter를 누른 채인지. 누르고 있는 동안 되풀이되는 누름 이벤트를 거른다 */
     private boolean enterHeld;
+    /** 게임에서 난 소리를 받는 곳. 정하지 않으면 버린다 */
+    private Consumer<GameSound> soundSink = sound -> { };
+    /** 나가기 버튼을 눌렀을 때 할 일 */
+    private Runnable onExit = () -> { };
+    /** 마우스가 나가기 버튼 위에 있는지 */
+    private boolean exitHover;
+    /** 나가기 버튼 위에서 마우스를 누르고 있는지 */
+    private boolean exitPressed;
+    private final MouseAdapter exitMouse = new MouseAdapter() {
+        @Override
+        public void mouseMoved(MouseEvent e) {
+            setExitHover(onExitButton(e));
+        }
+
+        @Override
+        public void mouseDragged(MouseEvent e) {
+            setExitHover(onExitButton(e));
+        }
+
+        @Override
+        public void mouseExited(MouseEvent e) {
+            setExitHover(false);
+        }
+
+        @Override
+        public void mousePressed(MouseEvent e) {
+            if (SwingUtilities.isLeftMouseButton(e) && onExitButton(e)) {
+                exitPressed = true;
+                repaint();
+            }
+        }
+
+        @Override
+        public void mouseReleased(MouseEvent e) {
+            if (!SwingUtilities.isLeftMouseButton(e)) {
+                return;
+            }
+            boolean click = exitPressed && onExitButton(e);
+            exitPressed = false;
+            repaint();
+            if (click) {
+                exit();
+            }
+        }
+    };
 
     public InGamePanel(GameWorld world, Tileset tileset, HudSkin skin, CharacterSprites characters,
                        BalloonSprites balloons, ItemSprites items, AirplaneSprites airplanes) {
@@ -160,8 +220,41 @@ public final class InGamePanel extends JPanel {
         chatField.addKeyListener(chatKeys);
         chatField.addFocusListener(focusLossHandler);
         add(chatField);
+        addMouseListener(exitMouse);
+        addMouseMotionListener(exitMouse);
         loopTimer = new Timer(1000 / 60, e -> tick());
         loopTimer.setCoalesce(true);
+    }
+
+    /** 게임에서 난 소리(물풍선 터짐, 아이템 먹음, Ready·Start 등)를 받을 곳. 프레임마다 그 프레임에 난 소리를 한 번씩 넘긴다 */
+    public void setSoundSink(Consumer<GameSound> sink) {
+        soundSink = Objects.requireNonNull(sink);
+    }
+
+    /** 나가기 버튼을 눌렀을 때 할 일. 부르기 전에 게임 루프와 입력은 멈춘다 */
+    public void setOnExit(Runnable listener) {
+        onExit = Objects.requireNonNull(listener);
+    }
+
+    /** 나가기 버튼을 누른 것과 같다. 게임을 멈추고 나가는 소리를 낸 뒤 밖에서 정한 일을 한다 */
+    void exit() {
+        stop();
+        soundSink.accept(GameSound.EXIT);
+        onExit.run();
+    }
+
+    private static boolean onExitButton(MouseEvent e) {
+        Box button = HudLayout.EXIT_BUTTON;
+        return e.getX() >= button.x() && e.getX() < button.right() && e.getY() >= button.y() && e.getY() < button.bottom();
+    }
+
+    private void setExitHover(boolean hover) {
+        if (exitHover != hover) {
+            exitHover = hover;
+            setCursor(hover ? Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) : Cursor.getDefaultCursor());
+            repaint(HudLayout.EXIT_BUTTON.x(), HudLayout.EXIT_BUTTON.y(),
+                    HudLayout.EXIT_BUTTON.width(), HudLayout.EXIT_BUTTON.height());
+        }
     }
 
     public void start() {
@@ -216,6 +309,7 @@ public final class InGamePanel extends JPanel {
         long now = System.nanoTime();
         advance(Math.min((now - lastTickNanos) / 1e9, MAX_FRAME_TIME));
         lastTickNanos = now;
+        world.takeSounds().forEach(soundSink);
         repaint();
     }
 
@@ -244,11 +338,30 @@ public final class InGamePanel extends JPanel {
             hud.paintBelowWorld(g);
             paintWorld(g);
             hud.paintAboveWorld(g, world);
+            paintExitFeedback(g);
         } finally {
             g.dispose();
         }
         // 리눅스에서 화면 갱신이 밀려 끊겨 보이는 현상 방지
         Toolkit.getDefaultToolkit().sync();
+    }
+
+    /** 나가기 버튼에 마우스를 올리면 밝게, 누르고 있으면 어둡게 덮는다 */
+    private void paintExitFeedback(Graphics2D g) {
+        if (!exitHover && !exitPressed) {
+            return;
+        }
+        Box face = HudLayout.EXIT_BUTTON;
+        Graphics2D g2 = (Graphics2D) g.create();
+        try {
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, exitPressed ? 0.22f : 0.18f));
+            g2.setColor(exitPressed ? Color.BLACK : Color.WHITE);
+            int arc = 2 * HudLayout.EXIT_BUTTON_RADIUS;
+            g2.fill(new RoundRectangle2D.Float(face.x(), face.y(), face.width(), face.height(), arc, arc));
+        } finally {
+            g2.dispose();
+        }
     }
 
     /**
