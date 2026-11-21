@@ -2,6 +2,7 @@ package hansung.arcade.outgame;
 
 import hansung.arcade.core.game.Scene;
 import hansung.arcade.core.game.SceneManager;
+import hansung.arcade.ingame.GameSound;
 import hansung.arcade.ingame.GameWorld;
 import hansung.arcade.ingame.InGamePanel;
 import hansung.arcade.ingame.entity.PlayerProfile;
@@ -24,7 +25,9 @@ import java.awt.BorderLayout;
 import java.awt.Dimension;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 /**
@@ -32,6 +35,9 @@ import java.util.stream.Collectors;
  * 캐릭터·팀 색으로 인게임에 넣는다. 인게임의 실제 승패(MatchResult)는 아직 결과 모달에 잇지 않아서
  * "목업 경기 끝내기"로 마지막 플레이어가 죽은 상황을 흉내 낸다.
  * 경기가 끝나면 게임 화면 위에 결과 모달({@link ResultOverlay})을 띄우고, 화면이 검어지면 원래 대기방으로 돌아간다.
+ *
+ * <p>게임은 시작 연출("Ready... Start!")부터 하고, 인게임 오른쪽 아래 나가기 버튼을 누르면 경기를 그만두고 대기방으로 돌아간다.
+ * 소리는 이 화면이 직접 내지 않고, 밖에서 넘겨준 곳으로 보낸다 ({@link #setSoundSink}, {@link #setOnGameStart}).</p>
  */
 public final class GamePreviewScene implements Scene {
     private static final int FRAME_MS = 16;
@@ -45,10 +51,13 @@ public final class GamePreviewScene implements Scene {
     private final BalloonSprites balloons;
     private final ItemSprites items;
     private final AirplaneSprites airplanes;
+    private final SceneManager scenes;
     private InGamePanel game;
     private GameStartInfo start;
     private long endedAt;
     private Runnable onGameOver = () -> { };
+    private Consumer<GameSound> soundSink = sound -> { };
+    private Consumer<String> onGameStart = theme -> { };
 
     /** 그림은 부팅 때 한 번 읽어 둔 것을 받는다 (ResourceStep) */
     public GamePreviewScene(SceneManager scenes, HudSkin skin, CharacterSprites sprites, BalloonSprites balloons,
@@ -58,6 +67,7 @@ public final class GamePreviewScene implements Scene {
         this.balloons = balloons;
         this.items = items;
         this.airplanes = airplanes;
+        this.scenes = scenes;
         layers.setPreferredSize(new Dimension(HudLayout.WIDTH, HudLayout.HEIGHT));
         overlay.setBounds(0, 0, HudLayout.WIDTH, HudLayout.HEIGHT);
         layers.add(overlay, JLayeredPane.MODAL_LAYER);
@@ -75,6 +85,21 @@ public final class GamePreviewScene implements Scene {
     /** 경기가 끝났을 때 한 번 불린다 (끝나는 소리 등) */
     public void setOnGameOver(Runnable listener) {
         onGameOver = listener;
+    }
+
+    /** 게임에서 난 소리(Ready·Start, 물풍선, 아이템, 나가기 등)를 받을 곳 */
+    public void setSoundSink(Consumer<GameSound> sink) {
+        soundSink = Objects.requireNonNull(sink);
+    }
+
+    /** 게임 화면에 들어갈 때 맵 테마(camp, patrit, village)를 받는다. 맵마다 다른 BGM을 틀 때 쓴다 */
+    public void setOnGameStart(Consumer<String> listener) {
+        onGameStart = Objects.requireNonNull(listener);
+    }
+
+    /** 지금 띄운 게임 화면. 없으면 null (테스트에서 나가기 버튼을 누를 때 쓴다) */
+    public InGamePanel game() {
+        return game;
     }
 
     public ResultOverlay resultOverlay() {
@@ -120,8 +145,12 @@ public final class GamePreviewScene implements Scene {
         start = (GameStartInfo) data;
         overlay.reset();
         var map = MapLoader.loadResource(start.mapId());
-        game = new InGamePanel(new GameWorld(map, localProfiles(start), MatchMode.SOLO),
-                Tileset.forTheme(map.theme()), skin, sprites, balloons, items, airplanes);
+        GameWorld world = new GameWorld(map, localProfiles(start), MatchMode.SOLO);
+        world.beginIntro();
+        game = new InGamePanel(world, Tileset.forTheme(map.theme()), skin, sprites, balloons, items, airplanes);
+        game.setSoundSink(soundSink);
+        // 나가기: 경기를 그만두고 대기방으로 돌아간다 (방장이면 방을 다시 대기 중으로 돌린다)
+        game.setOnExit(() -> scenes.show("waiting", null));
         game.setBounds(0, 0, HudLayout.WIDTH, HudLayout.HEIGHT);
         layers.add(game, JLayeredPane.DEFAULT_LAYER);
         view.revalidate();
@@ -129,6 +158,7 @@ public final class GamePreviewScene implements Scene {
         if (window != null) {
             window.pack();
         }
+        onGameStart.accept(map.theme());
         game.start();
         game.requestFocusInWindow();
     }

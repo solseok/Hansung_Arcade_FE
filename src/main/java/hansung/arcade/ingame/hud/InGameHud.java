@@ -12,7 +12,7 @@ import java.util.List;
 
 /**
  * 맵을 뺀 인게임 화면 전체(맵 프레임, 맵 이름표, 플레이어 목록, 아이템 상자, 나가기, 내 아이템 바, 맵 위에 올라온 채팅과 말풍선,
- * 2인 모드의 1P·2P 표시).
+ * 캐릭터 머리 위 닉네임, 경기 시작 연출의 검은 막·START!! 글자·내 캐릭터 화살표).
  *
  * <p>바뀌지 않는 부분은 만들 때 두 장의 그림(맵 아래 층, 맨 위 층)으로 한 번만 그려 두고,
  * 매 프레임에는 그 그림을 붙인 뒤 타이머·플레이어처럼 바뀌는 부분만 그린다.</p>
@@ -23,6 +23,7 @@ import java.util.List;
 public final class InGameHud {
 
     private final MapFrame frame = new MapFrame();
+    private final IntroView intro;
     private final List<HudPart> parts;
     private final BufferedImage base;
     private final BufferedImage overlay;
@@ -37,6 +38,7 @@ public final class InGameHud {
      * @param itemKeyNames 이 컴퓨터 플레이어마다(1P, 2P 순서) 아이템 키 이름. 인원만큼 아이템 칸을 그린다
      */
     public InGameHud(HudSkin skin, TileMap map, Tileset tileset, ItemSprites items, List<String> itemKeyNames) {
+        this.intro = new IntroView(skin.chatText());
         this.parts = List.of(
                 frame,
                 new MapLabel(skin, map, tileset),
@@ -46,7 +48,8 @@ public final class InGameHud {
                 new ItemBar(skin),
                 new ChatLogView(skin.chatText(), skin.myChatText()),
                 new PlayerTagView(skin.chatText()),
-                new SpeechBubbleView(skin.chatText()));
+                new SpeechBubbleView(skin.chatText()),
+                intro);
 
         PixelCanvas baseCanvas = new PixelCanvas(HudLayout.WIDTH, HudLayout.HEIGHT);
         Graphics2D g = baseCanvas.graphics();
@@ -71,11 +74,12 @@ public final class InGameHud {
         frame.paintFieldCorners(g);
     }
 
-    /** 맵을 그린 뒤 그 위에 그리는 HUD 내용 */
+    /** 맵을 그린 뒤 그 위에 그리는 HUD 내용. 시작 연출의 검은 막은 모든 것 위에 덮는다 */
     public void paintAboveWorld(Graphics2D g, GameWorld world) {
         for (HudPart part : parts) {
             part.paint(g, world);
         }
         g.drawImage(overlay, 0, 0, null);
+        intro.paintBlackout(g, world);
     }
 }
