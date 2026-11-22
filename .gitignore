@@ -268,3 +268,6 @@ gradle-app.setting
 *.hprof
 
 # End of https://www.toptal.com/developers/gitignore/api/eclipse,macos,windows,java,intellij+all,gradle
+
+# 서버 주소 등 개인 설정 (.env.example을 복사해 쓴다)
+.env
