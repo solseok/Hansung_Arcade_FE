@@ -53,6 +53,7 @@ public final class GamePreviewScene implements Scene {
     private final AirplaneSprites airplanes;
     private final SceneManager scenes;
     private InGamePanel game;
+    private GameWorld world;
     private GameStartInfo start;
     private long endedAt;
     private Runnable onGameOver = () -> { };
@@ -112,8 +113,11 @@ public final class GamePreviewScene implements Scene {
             return;
         }
         endedAt = System.nanoTime();
+        // 시작 연출 중에 끝났으면(목업 버튼) 연출을 끝내 둔다. 그대로 멈추면 검은 화면이 결과 모달 아래에 남는다
+        world.intro().finish();
         // 경기가 끝났으니 더는 움직이지 않게 게임 루프와 입력을 멈춘다 (맵은 마지막 모습으로 남는다)
         game.stop();
+        game.repaint();
         // 이 컴퓨터의 플레이어(players 앞쪽 localPlayers명)의 줄을 강조한다
         Set<Integer> local = start.players().stream().limit(start.localPlayers())
                 .map(GameStartInfo.PlayerInfo::id).collect(Collectors.toSet());
@@ -145,7 +149,7 @@ public final class GamePreviewScene implements Scene {
         start = (GameStartInfo) data;
         overlay.reset();
         var map = MapLoader.loadResource(start.mapId());
-        GameWorld world = new GameWorld(map, localProfiles(start), MatchMode.SOLO);
+        world = new GameWorld(map, localProfiles(start), MatchMode.SOLO);
         world.beginIntro();
         game = new InGamePanel(world, Tileset.forTheme(map.theme()), skin, sprites, balloons, items, airplanes);
         game.setSoundSink(soundSink);
@@ -180,6 +184,7 @@ public final class GamePreviewScene implements Scene {
             layers.remove(game);
             game = null;
         }
+        world = null;
     }
 
     @Override

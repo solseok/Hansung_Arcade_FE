@@ -38,6 +38,9 @@ import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.KeyEventDispatcher;
+import java.awt.KeyboardFocusManager;
+import java.awt.event.InputEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
@@ -56,12 +59,13 @@ import static hansung.arcade.outgame.ui.WaitingRoomLayout.*;
  * 방장은 맵 선택(랜덤 포함)과 게임 시작을, 손님은 준비를 한다. 맵은 최대 인원(빌리지 6명)에 맞춰 정원이 바뀐다.
  * 모든 구역의 위치·크기는 {@link WaitingRoomLayout}, 색은 {@link OutgamePalette}를 따른다.
  *
- * <p>2P(한 컴퓨터 2인)로 들어오면 캐릭터 칸과 팀 칸을 왼쪽 클릭하면 1P의 것을, 오른쪽 클릭하면 2P의 것을 고른다.
+ * <p>2P(한 컴퓨터 2인)로 들어오면 캐릭터 칸과 팀 칸을 왼쪽 클릭하면 1P의 것을, 오른쪽 클릭(맥의 Ctrl+클릭 포함)하면 2P의 것을 고른다.
  * 칸에는 고른 사람의 "1P"(빨강)·"2P"(파랑) 표시가 붙고, 위 배너는 마지막으로 고른 사람의 캐릭터를 보여 준다.
  * 1P(혼자)면 오른쪽 클릭은 아무 일도 하지 않고, 고른 칸에는 체크만 붙는다.</p>
  *
  * <p>방장이 게임을 시작하면 크레이지아케이드처럼 대기실이 {@link #START_FADE_MS}ms 동안 검게 어두워진 뒤 게임 화면으로 넘어간다
- * (게임은 검은 화면에서 시작한다). 어두워지는 동안에는 눌러도 아무 일도 없다.
+ * (게임은 검은 화면에서 시작한다). 어두워지는 동안에는 마우스로 누르거나 키를 쳐도 아무 일도 없고,
+ * 그 사이 대기실을 떠나면 게임으로 넘어가지 않는다.
  * 화면에 보이지 않는 대기실(테스트 등)은 기다리지 않고 바로 넘어간다.</p>
  */
 public final class WaitingRoomPanel extends JPanel implements Scene {
@@ -315,6 +319,7 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
     /**
      * 칸을 왼쪽 클릭하면 1P(0)로, 2P로 들어왔으면 오른쪽 클릭하면 2P(1)로 pick을 부른다.
      * 왼쪽 클릭은 버튼의 눌림(키보드 Space 포함)으로 받고, 오른쪽 클릭은 칸 안에서 뗄 때 받는다.
+     * Ctrl+클릭은 {@link PickCell}이 오른쪽 클릭으로 바꿔 넘긴다.
      */
     private void onPick(JToggleButton cell, IntConsumer pick) {
         cell.addActionListener(event -> pick.accept(0));
@@ -486,6 +491,12 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
         refresh();
     }
 
+    /** 대기실을 떠나면 짙어지던 막을 걷는다. 그래야 막이 다 짙어졌을 때 떠난 방의 게임을 시작하지 않는다 */
+    @Override
+    public void exit() {
+        curtain.clear();
+    }
+
     /**
      * 검은 막이 덮여 있는 동안에는 자식끼리 겹친다고 알린다. 그래야 막 아래의 버튼이 눌린 모양 등으로 혼자 다시 그려질 때도
      * 막을 그 위에 함께 다시 그려, 버튼만 밝게 튀어나와 보이지 않는다.
@@ -525,10 +536,15 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
 
     /**
      * 게임을 시작할 때 대기실 전체를 덮으며 {@link #START_FADE_MS}ms 동안 투명에서 검정으로 짙어지는 막.
-     * 덮여 있는 동안에는 마우스를 받아 아래 버튼이 눌리지 않게 한다.
+     * 짙어지는 동안에는 마우스(클릭·마우스 올림)를 받아 버리고, 키도 모두 버려 Space·Enter로 아래 버튼을 누르거나
+     * 채팅을 칠 수 없게 한다.
      */
     static final class Curtain extends JComponent {
         private final Timer timer = new Timer(15, event -> step());
+        /** 짙어지는 동안 모든 키를 버린다. 키가 어느 부품으로 가든 그보다 먼저 받는다 */
+        private final KeyEventDispatcher keyBlocker = event -> true;
+        /** keyBlocker를 붙인 곳. 붙이지 않았으면 null */
+        private KeyboardFocusManager blocking;
         private long startedAt;
         private float alpha;
         private Runnable next;
@@ -537,9 +553,15 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
             setName("start-curtain");
             setOpaque(false);
             setVisible(false);
-            // 덮인 동안 아래 칸·버튼으로 클릭이 가지 않게 받아서 버린다
+            // 덮인 동안 아래 칸·버튼으로 클릭이 가지 않게 받아서 버린다. 마우스 리스너가 있으면 마우스 이동도 막이 받아
+            // 아래 버튼이 마우스 올림으로 밝아지지 않는다
             addMouseListener(new MouseAdapter() { });
             timer.setCoalesce(true);
+        }
+
+        /** 짙어지는 동안 키를 버리는지 */
+        boolean blocksKeys() {
+            return blocking != null;
         }
 
         /** 시작한 뒤 elapsedMs가 지났을 때 막의 불투명도(0~1) */
@@ -556,22 +578,38 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
             startedAt = System.nanoTime();
             alpha = 0;
             setVisible(true);
+            blockKeys();
             timer.restart();
         }
 
-        /** 막을 걷는다. 대기실에 다시 들어올 때 부른다 */
+        /** 막을 걷는다. 짙어지던 중이면 멈추고 다 짙어져도 아무것도 하지 않는다. 대기실을 떠나거나 다시 들어올 때 부른다 */
         void clear() {
-            timer.stop();
+            stop();
             next = null;
             alpha = 0;
             setVisible(false);
+        }
+
+        private void blockKeys() {
+            if (blocking == null) {
+                blocking = KeyboardFocusManager.getCurrentKeyboardFocusManager();
+                blocking.addKeyEventDispatcher(keyBlocker);
+            }
+        }
+
+        private void stop() {
+            timer.stop();
+            if (blocking != null) {
+                blocking.removeKeyEventDispatcher(keyBlocker);
+                blocking = null;
+            }
         }
 
         private void step() {
             alpha = alphaAt((System.nanoTime() - startedAt) / 1_000_000);
             repaint();
             if (alpha >= 1) {
-                timer.stop();
+                stop();
                 Runnable then = next;
                 next = null;
                 if (then != null) {
@@ -658,10 +696,42 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
     }
 
     /**
+     * 1P·2P가 고르는 칸(캐릭터·팀). Ctrl을 쥐고 왼쪽 버튼으로 누른 클릭은 오른쪽 클릭으로 바꿔 넘긴다.
+     * 맥은 Ctrl+클릭이 오른쪽 클릭인데 Java에는 Ctrl을 쥔 왼쪽 버튼으로 와서, 그대로 두면 2P가 아니라 1P가 고르게 된다.
+     * 누를 때 Ctrl을 쥐었는지로 정하고, 뗄 때까지 같은 버튼으로 넘긴다 (누른 뒤 Ctrl을 떼거나 쥐어도 칸이 눌린 채 남지 않게).
+     */
+    private abstract static class PickCell extends JToggleButton {
+        private boolean ctrlPress;
+
+        @Override
+        protected void processMouseEvent(MouseEvent e) {
+            if (e.getButton() == MouseEvent.BUTTON1) {
+                if (e.getID() == MouseEvent.MOUSE_PRESSED) {
+                    ctrlPress = e.isControlDown();
+                }
+                if (ctrlPress) {
+                    e = asRightButton(e);
+                }
+            }
+            super.processMouseEvent(e);
+        }
+
+        /** 같은 자리·같은 때의 오른쪽 버튼 이벤트 */
+        static MouseEvent asRightButton(MouseEvent e) {
+            int modifiers = e.getModifiersEx() & ~(InputEvent.BUTTON1_DOWN_MASK | InputEvent.CTRL_DOWN_MASK);
+            if (e.getID() == MouseEvent.MOUSE_PRESSED) {
+                modifiers |= InputEvent.BUTTON3_DOWN_MASK;
+            }
+            return new MouseEvent(e.getComponent(), e.getID(), e.getWhen(), modifiers, e.getX(), e.getY(),
+                    e.getXOnScreen(), e.getYOnScreen(), e.getClickCount(), e.isPopupTrigger(), MouseEvent.BUTTON3);
+        }
+    }
+
+    /**
      * 캐릭터 칸: 얼굴 그림 또는 글자(? 랜덤, X 잠김). 고르면 밝은 테두리와 체크.
      * 2P로 들어왔으면 체크 대신 고른 사람의 "1P"(왼쪽 위)·"2P"(오른쪽 위) 딱지를 붙인다.
      */
-    private static final class CharacterCell extends JToggleButton {
+    private static final class CharacterCell extends PickCell {
         private final BufferedImage face;
         private final String mark;
         /** 이 칸을 고른 사람들 (1P 1, 2P 2) */
@@ -732,7 +802,7 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
      * 팀 색 칸. 고르면 흰 테두리와 체크.
      * 2P로 들어왔으면 체크 대신 고른 사람의 "1P"(위)·"2P"(아래) 딱지를 붙인다.
      */
-    private static final class TeamSwatch extends JToggleButton {
+    private static final class TeamSwatch extends PickCell {
         private final Team team;
         private int pickers;
         private boolean twoPlayers;

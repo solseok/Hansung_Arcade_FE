@@ -164,6 +164,29 @@ class GameWorldSoundTest {
     }
 
     @Test
+    void 비행기가_나오면_비행기_소리가_나고_아이템을_떨어뜨리면_떨어뜨리는_소리가_난다() {
+        // 난수 0.9: 7 x 3칸 가운데 18·19번째 칸(맨 아랫줄 4·5열)에 떨어뜨린다
+        GameWorld world = solo(ScriptedRandom.noDrops(), "..1....", ".......", ".......");
+        List<GameSound> heard = new ArrayList<>();
+        int ticks = 0;
+        while (!heard.contains(GameSound.AIRPLANE)) {
+            assertTrue(++ticks < 70 * 60, "1분 59초가 되어도 비행기 소리가 나지 않습니다");
+            heard.addAll(ticks(world, 1, Map.of()));
+        }
+        assertEquals(119, world.match().clock().remainingSeconds());
+        assertEquals(1, world.airDrop().launches());
+
+        heard.clear();
+        for (int i = 0; i < 10 * 60 && !world.airDrop().flights().isEmpty(); i++) {
+            heard.addAll(ticks(world, 1, Map.of()));
+        }
+
+        assertEquals(2, world.airDrop().releases());
+        assertEquals(2, heard.stream().filter(sound -> sound == GameSound.AIR_DROP).count(), heard.toString());
+        assertFalse(heard.contains(GameSound.AIRPLANE), "비행기가 사라질 때 다시 소리가 났습니다");
+    }
+
+    @Test
     void 같은_소리는_한_번_꺼낼_때_한_번만_담기고_꺼내면_비워진다() {
         GameWorld world = solo(ScriptedRandom.noDrops(), ".....", "..1..", ".....");
         Player me = world.localPlayer();

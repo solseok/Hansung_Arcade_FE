@@ -22,7 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** 2P(한 컴퓨터 2인)면 대기실의 캐릭터·팀 칸을 왼쪽 클릭은 1P, 오른쪽 클릭은 2P가 고른다 */
+/** 2P(한 컴퓨터 2인)면 대기실의 캐릭터·팀 칸을 왼쪽 클릭은 1P, 오른쪽 클릭(맥의 Ctrl+클릭 포함)은 2P가 고른다 */
 @ExtendWith(RunOnEdt.class)
 class WaitingRoomTwoPlayerTest {
 
@@ -96,6 +96,61 @@ class WaitingRoomTwoPlayerTest {
         assertFalse(session.randomCharacter(0));
     }
 
+    /** 왼쪽 버튼으로 칸 가운데를 눌렀다 뗀다. ctrlOnPress·ctrlOnRelease는 누를 때·뗄 때 Ctrl을 쥐었는지 */
+    private static void leftClick(Component cell, boolean ctrlOnPress, boolean ctrlOnRelease) {
+        int x = cell.getWidth() / 2;
+        int y = cell.getHeight() / 2;
+        long now = System.currentTimeMillis();
+        int press = InputEvent.BUTTON1_DOWN_MASK | (ctrlOnPress ? InputEvent.CTRL_DOWN_MASK : 0);
+        int release = ctrlOnRelease ? InputEvent.CTRL_DOWN_MASK : 0;
+        // 맥은 Ctrl+클릭을 누를 때 팝업 트리거로 보낸다
+        cell.dispatchEvent(new MouseEvent(cell, MouseEvent.MOUSE_PRESSED, now, press, x, y, 1, ctrlOnPress,
+                MouseEvent.BUTTON1));
+        cell.dispatchEvent(new MouseEvent(cell, MouseEvent.MOUSE_RELEASED, now, release, x, y, 1, false,
+                MouseEvent.BUTTON1));
+        cell.dispatchEvent(new MouseEvent(cell, MouseEvent.MOUSE_CLICKED, now, release, x, y, 1, false,
+                MouseEvent.BUTTON1));
+    }
+
+    @Test
+    void 맥의_Ctrl_클릭은_오른쪽_클릭처럼_2P가_고른다() {
+        enter("부기", "꾸꾸");
+        Mascot first = session.character(0);
+        Team firstTeam = session.team(0);
+
+        leftClick(button("character-" + Mascot.KKOKKO.id()), true, true);
+        leftClick(button("team-" + Team.GREEN.name()), true, true);
+
+        assertEquals(first, session.character(0));
+        assertEquals(Mascot.KKOKKO, session.character(1));
+        assertEquals(firstTeam, session.team(0));
+        assertEquals(Team.GREEN, session.team(1));
+        assertFalse(button("character-" + Mascot.KKOKKO.id()).getModel().isPressed(), "칸이 눌린 채 남았습니다");
+    }
+
+    @Test
+    void Ctrl은_누를_때_쥐었는지로_정한다() {
+        enter("부기", "꾸꾸");
+        Mascot second = session.character(1);
+
+        // 누른 뒤에 Ctrl을 쥐어도 왼쪽 클릭(1P)이다
+        leftClick(button("character-" + Mascot.KKOKKO.id()), false, true);
+        assertEquals(Mascot.KKOKKO, session.character(0));
+        assertEquals(second, session.character(1));
+
+        // Ctrl을 쥐고 누른 뒤 떼고 손을 놓아도 오른쪽 클릭(2P)이고, 칸이 눌린 채 남지 않는다
+        AbstractButton cell = button("character-" + Mascot.SANGZZI.id());
+        leftClick(cell, true, false);
+        assertEquals(Mascot.KKOKKO, session.character(0));
+        assertEquals(Mascot.SANGZZI, session.character(1));
+        assertFalse(cell.getModel().isPressed());
+        assertFalse(cell.getModel().isArmed());
+
+        // 그다음 Ctrl 없는 클릭은 다시 1P다
+        leftClick(cell, false, false);
+        assertEquals(Mascot.SANGZZI, session.character(0));
+    }
+
     @Test
     void 둘이_같은_칸을_골라도_된다() {
         enter("부기", "꾸꾸");
@@ -122,6 +177,7 @@ class WaitingRoomTwoPlayerTest {
 
         rightClick(button("character-" + Mascot.KKOKKO.id()));
         rightClick(button("team-" + Team.GREEN.name()));
+        leftClick(button("character-" + Mascot.KKOKKO.id()), true, true);
 
         assertEquals(before, session.character());
         assertEquals(team, session.team());

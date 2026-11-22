@@ -242,6 +242,39 @@ class ResultOverlayTest {
     }
 
     @Test
+    void 시작_연출_중에_목업_경기를_끝내면_검은_화면을_걷고_결과를_띄운다() {
+        GamePreviewScene game = new GamePreviewScene(new SceneManager(view -> { }),
+                HudSkin.load(HudFonts.load()), CharacterSprites.load(),
+                hansung.arcade.ingame.render.BalloonSprites.load(), hansung.arcade.ingame.render.ItemSprites.load(),
+                hansung.arcade.ingame.render.AirplaneSprites.load());
+        game.enter(new GameStartInfo("camp/camp08", List.of(
+                new GameStartInfo.PlayerInfo(1, "부기", Mascot.SANGSANGBUGI, "빨강"),
+                new GameStartInfo.PlayerInfo(2, "목업 2", Mascot.KKOKKO, "파랑")), 1));
+        try {
+            // 들어가자마자는 READY라 맵 한가운데가 검다
+            assertEquals(0x000000, fieldCenter(game));
+
+            SwingTree.button(game.view(), "목업 경기 끝내기").doClick();
+
+            assertTrue(game.resultOverlay().isRunning());
+            assertTrue(fieldCenter(game) != 0x000000, "결과 모달 아래 맵이 검은 채로 멈췄습니다");
+        } finally {
+            game.exit();
+        }
+    }
+
+    /** 게임 화면(1배)을 그렸을 때 맵 영역 한가운데 픽셀 색 */
+    private static int fieldCenter(GamePreviewScene game) {
+        BufferedImage image = new BufferedImage(HudLayout.WIDTH, HudLayout.HEIGHT, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g = image.createGraphics();
+        game.game().setSize(HudLayout.WIDTH, HudLayout.HEIGHT);
+        game.game().paint(g);
+        g.dispose();
+        Box field = HudLayout.FIELD;
+        return image.getRGB(field.x() + field.width() / 2, field.y() + field.height() / 2) & 0xFFFFFF;
+    }
+
+    @Test
     void 이름은_굵은_굴림체로_쓴다() {
         Font font = ResultOverlay.nameFont();
 

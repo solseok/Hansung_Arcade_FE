@@ -54,6 +54,16 @@ public final class StartIntro {
         elapsed = 0;
     }
 
+    /**
+     * 연출을 바로 끝낸다: 검은 화면·START!! 글자·화살표가 모두 사라진다. 연출 중에 경기를 끝낼 때(목업 버튼) 쓴다.
+     * 시작하지 않은 연출은 그대로 둔다.
+     */
+    public void finish() {
+        if (begun) {
+            elapsed = Math.max(elapsed, TOTAL_SECONDS + ARROW_LINGER_SECONDS);
+        }
+    }
+
     /** 연출 시간을 dt초 흘린다. 연출이 끝난 뒤에도 화살표가 사라질 때까지는 센다 */
     public void advance(double dt) {
         if (begun && dt > 0 && elapsed < TOTAL_SECONDS + ARROW_LINGER_SECONDS) {

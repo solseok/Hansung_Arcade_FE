@@ -244,6 +244,23 @@ class AirDropTest {
     }
 
     @Test
+    void 띄운_비행기와_떨어뜨린_아이템_수는_사라진_뒤에도_줄지_않는다() {
+        Field field = new Field(map(), 1);
+        AirDrop airDrop = new AirDrop(field.map, ScriptedRandom.of(0.5));
+        assertEquals(0, airDrop.launches());
+        assertEquals(0, airDrop.releases());
+
+        airDrop.launch(eastward(new Drop(3, 5, ItemType.SHOE), new Drop(9, 6, ItemType.BUBBLE)));
+        while (!airDrop.flights().isEmpty() || !airDrop.fallingItems().isEmpty()) {
+            run(field, airDrop, 1);
+        }
+
+        assertEquals(1, airDrop.launches());
+        assertEquals(2, airDrop.releases());
+        assertEquals(2, field.placed().size());
+    }
+
+    @Test
     void 떨어진_아이템은_칸에_닿는_순간_맵에_놓인다() {
         Field field = new Field(map(), 1);
         AirDrop airDrop = new AirDrop(field.map, ScriptedRandom.of(0.5));

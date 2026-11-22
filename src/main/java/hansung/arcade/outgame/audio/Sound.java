@@ -12,6 +12,7 @@ import javax.sound.sampled.AudioFormat;
 import javax.sound.sampled.AudioSystem;
 import javax.sound.sampled.Clip;
 import javax.sound.sampled.LineEvent;
+import javax.sound.sampled.LineUnavailableException;
 import java.io.BufferedInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
@@ -22,6 +23,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -53,6 +55,9 @@ public final class Sound {
     private static final Set<Clip> PLAYING = ConcurrentHashMap.newKeySet();
     /** 소리 장치를 열지 못했다고 이미 알렸는지. 장치가 없는 환경에서 효과음마다 경고가 쌓이지 않게 한다 */
     private static final AtomicBoolean DEVICE_WARNED = new AtomicBoolean();
+    /** 앱이 쓰는 기본 Clip */
+    static final ClipSource SYSTEM_CLIPS = AudioSystem::getClip;
+    private static volatile ClipSource clips = SYSTEM_CLIPS;
     private static boolean muted;
     private static String bgm;
 
@@ -147,30 +152,73 @@ public final class Sound {
         PLAYING.clear();
     }
 
-    /** 효과음 스레드에서 Clip을 열어 낸다. 다 울리면 닫는다 */
-    private static void playNow(String key) {
+    /**
+     * 효과음 스레드에서 Clip을 열어 낸다. 다 울리면 닫는다. 열거나 틀지 못한 Clip은 바로 닫고 울리는 소리로 세지 않는다
+     * (세어 두면 {@value #MAX_EFFECTS}번 실패한 뒤로 효과음이 영영 나지 않는다).
+     */
+    static void playNow(String key) {
+        // 줄 서 있는 사이 음소거됐으면 내지 않는다
+        if (isMuted()) {
+            return;
+        }
         Optional<Pcm> pcm = pcm(key);
         if (pcm.isEmpty() || PLAYING.size() >= MAX_EFFECTS) {
             return;
         }
+        Clip clip = null;
         try {
-            Clip clip = AudioSystem.getClip();
-            clip.open(pcm.get().format(), pcm.get().data(), 0, pcm.get().data().length);
-            AtomicBoolean finished = new AtomicBoolean();
-            clip.addLineListener(event -> {
-                if (event.getType() == LineEvent.Type.STOP && finished.compareAndSet(false, true)) {
-                    PLAYING.remove(clip);
-                    // 리스너 안에서 바로 닫으면 일부 JDK에서 멈출 수 있어 효과음 스레드로 넘긴다
-                    EFFECTS.execute(clip::close);
-                }
-            });
-            PLAYING.add(clip);
-            clip.start();
+            clip = clips.open();
+            start(clip, pcm.get());
         } catch (Exception | LinkageError exception) {
+            if (clip != null) {
+                PLAYING.remove(clip);
+                clip.close();
+            }
             if (DEVICE_WARNED.compareAndSet(false, true)) {
                 LOG.warn("효과음을 낼 소리 장치를 열지 못했습니다: {}", key, exception);
             }
         }
+    }
+
+    private static void start(Clip clip, Pcm pcm) throws LineUnavailableException {
+        clip.open(pcm.format(), pcm.data(), 0, pcm.data().length);
+        AtomicBoolean finished = new AtomicBoolean();
+        clip.addLineListener(event -> {
+            if (event.getType() == LineEvent.Type.STOP && finished.compareAndSet(false, true)) {
+                PLAYING.remove(clip);
+                // 리스너 안에서 바로 닫으면 일부 JDK에서 멈출 수 있어 효과음 스레드로 넘긴다
+                EFFECTS.execute(clip::close);
+            }
+        });
+        // 음소거(setMuted)가 울리는 소리를 다 닫는 것과 엇갈리지 않게 같은 잠금 안에서 확인하고 튼다
+        synchronized (Sound.class) {
+            if (muted) {
+                clip.close();
+                return;
+            }
+            PLAYING.add(clip);
+            clip.start();
+        }
+    }
+
+    /** 지금 울리고 있는 효과음 수 */
+    static int playingCount() {
+        return PLAYING.size();
+    }
+
+    /** 효과음 스레드에 줄 서 있는 일을 다 할 때까지 기다린다 (테스트가 앞 테스트의 소리와 섞이지 않게) */
+    static void awaitEffects() throws Exception {
+        EFFECTS.submit(() -> { }).get(10, TimeUnit.SECONDS);
+    }
+
+    /** 효과음 Clip을 얻는 곳. 테스트는 실패하는 Clip으로 바꿔 끼운다 */
+    @FunctionalInterface
+    interface ClipSource {
+        Clip open() throws LineUnavailableException;
+    }
+
+    static void useClips(ClipSource source) {
+        clips = source;
     }
 
     private static Optional<Pcm> pcm(String key) {

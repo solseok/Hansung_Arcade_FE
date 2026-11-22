@@ -238,13 +238,14 @@ public final class GameWorld {
         // 이 틱의 탈락·kill·save를 모두 반영한 뒤에 시계를 흘리고 승패를 가린다
         match.update(dt);
         // 시계를 흘린 뒤라야 이번 틱에 출현 시각이 됐는지 안다
-        int flights = airDrop.flights().size();
-        int falling = airDrop.fallingItems().size();
+        // 목록 크기는 같은 틱에 하나가 나오고 하나가 사라지면 그대로라, 지금까지 띄운·떨어뜨린 수로 본다
+        int launches = airDrop.launches();
+        int releases = airDrop.releases();
         airDrop.update(dt, dropZone);
-        if (airDrop.flights().size() > flights) {
+        if (airDrop.launches() > launches) {
             sounds.add(GameSound.AIRPLANE);
         }
-        if (airDrop.fallingItems().size() > falling) {
+        if (airDrop.releases() > releases) {
             sounds.add(GameSound.AIR_DROP);
         }
         chatLog.expire(elapsedSeconds);

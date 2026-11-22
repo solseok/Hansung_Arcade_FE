@@ -100,6 +100,28 @@ class StartIntroTest {
     }
 
     @Test
+    void 끝내면_검은_화면도_글자도_화살표도_없이_바로_경기한다() {
+        StartIntro intro = new StartIntro();
+        intro.begin();
+        assertEquals(1, intro.blackout());
+
+        intro.finish();
+
+        assertEquals(StartIntro.Phase.DONE, intro.phase());
+        assertEquals(0, intro.blackout());
+        assertFalse(intro.showsArrow());
+        assertTrue(intro.isClockRunning());
+    }
+
+    @Test
+    void 시작하지_않은_연출은_끝내도_그대로다() {
+        StartIntro intro = new StartIntro();
+        intro.finish();
+        assertEquals(0, intro.elapsedSeconds());
+        assertEquals(StartIntro.Phase.DONE, intro.phase());
+    }
+
+    @Test
     void 크아_영상에서_잰_시간을_따른다() {
         // 검은 화면 0.5초, START!! 1.5초(밝아짐 0.5초 포함, 0.75초 뒤부터 0.75초 동안 흩어짐)
         assertEquals(0.5, StartIntro.READY_SECONDS, 1e-9);

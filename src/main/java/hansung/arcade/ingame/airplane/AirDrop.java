@@ -59,6 +59,7 @@ public final class AirDrop {
     private final List<Flight> flights = new ArrayList<>();
     private final List<FallingItem> falling = new ArrayList<>();
     private int launches;
+    private int releases;
 
     /**
      * @param map    비행기가 가로지를 맵
@@ -144,6 +145,7 @@ public final class AirDrop {
             return;
         }
         falling.add(new FallingItem(drop, TileMap.centerY(drop.row()) - Flight.CRUISE_Y));
+        releases++;
     }
 
     /**
@@ -174,5 +176,15 @@ public final class AirDrop {
     /** 비행기에서 떨어져 내려오는 중인 아이템들. 떨어뜨린 순서 */
     public List<FallingItem> fallingItems() {
         return Collections.unmodifiableList(falling);
+    }
+
+    /** 지금까지 띄운 비행기 수. 지나가 사라진 비행기도 센다 */
+    public int launches() {
+        return launches;
+    }
+
+    /** 지금까지 비행기에서 떨어뜨린 아이템 수. 칸에 닿아 놓였거나 사라진 것도 센다 */
+    public int releases() {
+        return releases;
     }
 }
