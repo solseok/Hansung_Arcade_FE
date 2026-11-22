@@ -177,11 +177,44 @@ public final class Player {
 
     /** 충돌 박스가 (col, row) 칸에 조금이라도 걸쳐 있는지. 칸 경계에 딱 맞닿은 것은 걸친 것으로 보지 않는다 */
     public boolean overlapsTile(int col, int row) {
-        int left = TileMap.colAt(x - HALF_HITBOX);
-        int right = TileMap.colAt(x + HALF_HITBOX - EPSILON);
-        int top = TileMap.rowAt(y - HALF_HITBOX);
-        int bottom = TileMap.rowAt(y + HALF_HITBOX - EPSILON);
-        return col >= left && col <= right && row >= top && row <= bottom;
+        return col >= leftCol() && col <= rightCol() && row >= topRow() && row <= bottomRow();
+    }
+
+    /** 충돌 박스가 걸친 가장 왼쪽 열 */
+    public int leftCol() {
+        return TileMap.colAt(x - HALF_HITBOX);
+    }
+
+    /** 충돌 박스가 걸친 가장 오른쪽 열. 칸 경계에 딱 맞닿은 것은 걸친 것으로 보지 않는다 */
+    public int rightCol() {
+        return TileMap.colAt(x + HALF_HITBOX - EPSILON);
+    }
+
+    /** 충돌 박스가 걸친 가장 위 줄 */
+    public int topRow() {
+        return TileMap.rowAt(y - HALF_HITBOX);
+    }
+
+    /** 충돌 박스가 걸친 가장 아래 줄. 칸 경계에 딱 맞닿은 것은 걸친 것으로 보지 않는다 */
+    public int bottomRow() {
+        return TileMap.rowAt(y + HALF_HITBOX - EPSILON);
+    }
+
+    /** 충돌 박스 너비 가운데 col 열 안에 든 비율 (0~1) */
+    public double widthShareIn(int col) {
+        return share(x, col);
+    }
+
+    /** 충돌 박스 높이 가운데 row 줄 안에 든 비율 (0~1) */
+    public double heightShareIn(int row) {
+        return share(y, row);
+    }
+
+    /** 가운데가 center인 충돌 박스 한 변 가운데 index번째 칸 안에 든 비율 */
+    private static double share(double center, int index) {
+        double from = Math.max(center - HALF_HITBOX, index * (double) TileMap.TILE_SIZE);
+        double to = Math.min(center + HALF_HITBOX, (index + 1) * (double) TileMap.TILE_SIZE);
+        return Math.max(0, to - from) / (2 * HALF_HITBOX);
     }
 
     /** 다른 캐릭터와 닿았는지. 중심끼리 가로·세로 모두 반 칸({@link #TOUCH_DISTANCE})보다 가까우면 닿은 것이다 */

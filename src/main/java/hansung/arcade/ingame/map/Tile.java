@@ -51,7 +51,7 @@ public enum Tile {
     STATUE('#', true, false),
     /** 부서지지 않는 철조망 */
     WIRE('W', true, false),
-    /** 바닥 가시. 지나갈 수 있다 */
+    /** 바닥 가시. 지나갈 수 있고, 이 칸에 놓이거나 들어온 물풍선은 바로 터진다 (BalloonField) */
     SPIKE('!', false, false),
     /** 부서지지 않는 미사일. 가로 2칸을 차지하므로 맵에서 MM 처럼 붙여 쓴다 */
     MISSILE('M', true, false, 2),

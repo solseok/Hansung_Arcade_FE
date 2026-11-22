@@ -42,6 +42,8 @@ public class GlossButton extends JButton {
 
     private final Style style;
     private final BufferedImage art;
+    /** 누를 때 나는 소리. null이면 소리를 내지 않는다 (누른 결과에 따라 다른 소리를 내는 버튼) */
+    private String clickSound = Sound.CLICK;
 
     public GlossButton(String text, Style style) {
         this(text, style, null);
@@ -60,7 +62,16 @@ public class GlossButton extends JButton {
         setOpaque(false);
         setRolloverEnabled(true);
         // 아웃게임 버튼은 누를 때 짧은 클릭음을 낸다 (음소거면 나지 않는다)
-        addActionListener(event -> Sound.click());
+        addActionListener(event -> {
+            if (clickSound != null) {
+                Sound.play(clickSound);
+            }
+        });
+    }
+
+    /** 누를 때 낼 소리(resources/sounds 의 파일 이름). null이면 버튼은 소리를 내지 않고, 누른 쪽이 직접 낸다 */
+    public void setClickSound(String key) {
+        clickSound = key;
     }
 
     public Style style() {
