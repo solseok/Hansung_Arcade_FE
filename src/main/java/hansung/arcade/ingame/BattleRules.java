@@ -5,8 +5,10 @@ import hansung.arcade.ingame.entity.PlayerState;
 import hansung.arcade.ingame.item.PlayerGear;
 import hansung.arcade.ingame.match.Match;
 
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -19,10 +21,12 @@ import java.util.function.Function;
  *
  * <p>한 번 부르면 이 순서로 가린다.</p>
  * <ol>
- *   <li>가둠: 물줄기가 덮은 칸에 선(충돌 박스 가운데가 있는) 플레이어는 누구의 물줄기든 물풍선에 갇힌다.
+ *   <li>가둠: 충돌 박스가 물줄기와 {@link #SOAK_SHARE}(66%) 이상 겹친 플레이어는 누구의 물줄기든 물풍선에 갇힌다.
+ *       겹침은 박스가 걸친 가로 줄·세로 열마다 따로 재므로, 네 칸이 만나는 곳에 걸쳐 서면 십자 물줄기 한가운데 옆이어도
+ *       갇히지 않는다(크아의 걸치기).
  *       보호막을 쓰는 중이거나, 탱크가 막 부서졌거나, 점프해 공중에 있으면 맞지 않고, 탱크에 타고 있으면 갇히는 대신 탱크가 부서진다.
- *       그 칸을 여러 사람의 물줄기가 덮었으면 상대의 물줄기를 먼저 보고 그 주인을 가둔 사람으로 친다. 상대가 여럿이면
- *       그 칸 가까이에서 터진 물줄기의 주인, 거리도 같으면 늦게 터진 물줄기의 주인이다
+ *       여러 사람의 물줄기에 맞았으면 상대의 물줄기를 먼저 보고 그 주인을 가둔 사람으로 친다. 상대가 여럿이면
+ *       많이 겹친 칸의 주인부터, 한 칸 안에서는 그 칸 가까이에서 터진 물줄기의 주인, 거리도 같으면 늦게 터진 물줄기의 주인이다
  *       ({@link hansung.arcade.ingame.balloon.BalloonField#wetOwnersAt}). 상대가 없으면 자기나 같은 편이 가둔 것이다.</li>
  *   <li>접촉: 갇힌 사람에게 보통 상태의 다른 플레이어가 닿으면, 같은 편이면 구하고(save) 상대면 터뜨린다(kill, 탈락).
  *       이전 틱부터 갇혀 있던 사람만 본다. 그래서 갇히는 틱에 이미 닿아 있었어도 그 틱에는 갇힌 채로 남고, 다음 틱부터 가린다.
@@ -32,6 +36,14 @@ import java.util.function.Function;
  * </ol>
  */
 final class BattleRules {
+
+    /**
+     * 물줄기에 맞았다고 보는 겹침 비율. 크레이지아케이드 개발자 설명(넥슨 "넥아알려줄게" 걸치기 편)대로 충돌 영역이
+     * 물줄기와 66% 이상 겹치면 맞는다
+     */
+    static final double SOAK_SHARE = 0.66;
+    /** 픽셀을 나눠 잰 비율이라 경계에서 아주 조금 모자랄 수 있어 그만큼은 넘은 것으로 친다 */
+    private static final double SHARE_SLACK = 1e-9;
 
     /** 칸을 덮은 물줄기의 주인들을 알려 준다 */
     @FunctionalInterface
@@ -70,7 +82,7 @@ final class BattleRules {
     }
 
     /**
-     * 물줄기가 덮은 칸에 선 사람을 가둔다. 자기나 같은 편의 물줄기여도 갇히고, 상대의 물줄기도 함께 덮었으면 그 상대가 가둔 것이다.
+     * 물줄기에 맞은 사람을 가둔다. 자기나 같은 편의 물줄기여도 갇히고, 상대의 물줄기에도 맞았으면 그 상대가 가둔 것이다.
      * 보호막을 쓰는 중이거나, 탱크가 막 부서졌거나, 점프해 공중에 있으면 맞지 않는다. 탱크에 타고 있으면 탱크가 대신 부서진다.
      *
      * @return 이번에 갇힌 사람들
@@ -82,7 +94,7 @@ final class BattleRules {
             if (player.state() != PlayerState.NORMAL || gear.ignoresWater()) {
                 continue;
             }
-            List<Integer> owners = water.at(player.col(), player.row());
+            List<Integer> owners = soakingOwners(player);
             if (!owners.isEmpty() && !gear.breakTank() && player.trap(trapperOf(player, owners))) {
                 trapped.add(player);
             }
@@ -90,7 +102,60 @@ final class BattleRules {
         return trapped;
     }
 
-    /** player가 선 칸을 덮은 물줄기 주인들 가운데 가둔 사람으로 칠 주인: 차례에서 맨 앞의 상대, 상대가 없으면 맨 앞 주인 */
+    /**
+     * player를 맞힌 물줄기의 주인들. 맞지 않았으면 빈 목록이다.
+     *
+     * <p>충돌 박스가 걸친 가로 줄마다, 세로 열마다 물줄기가 덮은 칸과 겹친 넓이를 충돌 박스 넓이에 대한 비율로 재어,
+     * 어느 한 줄이나 한 열에서라도 {@link #SOAK_SHARE} 이상이면 맞은 것이다. 그래서 네 칸이 만나는 곳에 서면
+     * 십자 물줄기가 그 가운데 세 칸을 덮어도 가로 줄기·세로 줄기와 각각 절반씩만 겹쳐 맞지 않는다(걸치기).</p>
+     *
+     * <p>주인은 겹친 넓이가 큰 칸부터 그 칸의 차례({@link WaterOwners#at})대로 늘어놓고, 앞에 나온 주인은 다시 넣지 않는다.</p>
+     */
+    private List<Integer> soakingOwners(Player player) {
+        int left = player.leftCol();
+        int right = player.rightCol();
+        int top = player.topRow();
+        int bottom = player.bottomRow();
+        boolean soaked = false;
+        for (int row = top; row <= bottom && !soaked; row++) {
+            double wet = 0;
+            for (int col = left; col <= right; col++) {
+                if (!water.at(col, row).isEmpty()) {
+                    wet += player.widthShareIn(col);
+                }
+            }
+            soaked = player.heightShareIn(row) * wet >= SOAK_SHARE - SHARE_SLACK;
+        }
+        for (int col = left; col <= right && !soaked; col++) {
+            double wet = 0;
+            for (int row = top; row <= bottom; row++) {
+                if (!water.at(col, row).isEmpty()) {
+                    wet += player.heightShareIn(row);
+                }
+            }
+            soaked = player.widthShareIn(col) * wet >= SOAK_SHARE - SHARE_SLACK;
+        }
+        if (!soaked) {
+            return List.of();
+        }
+        record WetCell(double share, List<Integer> owners) { }
+        List<WetCell> cells = new ArrayList<>();
+        for (int row = top; row <= bottom; row++) {
+            for (int col = left; col <= right; col++) {
+                List<Integer> owners = water.at(col, row);
+                if (!owners.isEmpty()) {
+                    cells.add(new WetCell(player.widthShareIn(col) * player.heightShareIn(row), owners));
+                }
+            }
+        }
+        // 넓이가 같으면 위·왼쪽 칸이 먼저다 (정렬은 같은 값의 순서를 지킨다)
+        cells.sort(Comparator.comparingDouble(WetCell::share).reversed());
+        Set<Integer> owners = new LinkedHashSet<>();
+        cells.forEach(cell -> owners.addAll(cell.owners()));
+        return List.copyOf(owners);
+    }
+
+    /** player를 맞힌 물줄기 주인들 가운데 가둔 사람으로 칠 주인: 차례에서 맨 앞의 상대, 상대가 없으면 맨 앞 주인 */
     private int trapperOf(Player player, List<Integer> owners) {
         return owners.stream()
                 .filter(owner -> playerById(owner).filter(other -> !match.isAlly(other, player)).isPresent())

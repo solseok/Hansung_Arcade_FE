@@ -23,16 +23,16 @@ import java.util.Optional;
  *       {@link Player#balloons()}다. 갇히거나 탈락한 플레이어는 놓지 못한다.</li>
  *   <li>놓은 뒤 {@link WaterBalloon#FUSE_SECONDS}초가 지나면 터져, 놓을 때 주인의 물줄기 길이만큼 상하좌우로 물줄기가 뻗는다.</li>
  *   <li>물줄기는 막힌 칸(블럭·맵 끝)에 들어가지 않고 그 앞에서 멈춘다. 다른 물풍선에 닿으면 그 물풍선도 같은 순간 터진다.
- *       물줄기가 남아 있는 칸에 물풍선을 놓아도 바로 터진다.</li>
+ *       물줄기가 남아 있는 칸이나 바닥 가시({@link Tile#SPIKE}) 칸에 물풍선을 놓아도 바로 터진다.</li>
  *   <li>물줄기는 {@link Explosion#SECONDS}초 동안 남는다.</li>
  *   <li>{@link #push 밀린} 물풍선은 그 방향으로 미끄러져, 통과할 수 없는 블럭(맵 끝 포함) 바로 앞 칸에 멈춘다.
  *       다른 물풍선·캐릭터·덤불은 막지 않고 지나간다. 다만 멈출 칸에 다른 물풍선이 있으면 그 앞의 빈 칸에 멈춘다.
  *       블럭의 가시 난 면({@link Tile#popsBalloonMoving})에 닿아 멈추면 그 자리에서 바로 터지고,
- *       미끄러지다 물줄기가 남은 칸에 들어가도 바로 터진다. 지나가는 사이 앞 칸이 막혀(상자가 밀려 들어오는 등)
+ *       미끄러지다 물줄기가 남은 칸이나 바닥 가시 칸에 들어가도 바로 터진다. 지나가는 사이 앞 칸이 막혀(상자가 밀려 들어오는 등)
  *       다른 물풍선이 있는 칸에 멈추게 되면, 한 칸에 둘을 둘 수 없으므로 그 자리에서 터진다(겹친 물풍선도 함께 터진다).</li>
  *   <li>{@link #throwBalloon 던진} 물풍선은 공중을 날아 원래 칸에서 {@link #THROW_DISTANCE}칸째에 내려앉는다
  *       ({@link #landingCell} 참고). 나는 동안에는 길을 막지 않고 물줄기에도 맞지 않으며, 그 사이 터질 때가 되면
- *       내려앉자마자 터진다. 내려앉을 칸은 미리 차지한 것으로 쳐서 그 칸에는 물풍선을 놓을 수 없다.</li>
+ *       내려앉자마자 터진다. 물줄기가 남은 칸이나 바닥 가시 칸에 내려앉아도 바로 터진다. 내려앉을 칸은 미리 차지한 것으로 쳐서 그 칸에는 물풍선을 놓을 수 없다.</li>
  *   <li>한 칸에 물풍선이 둘 있는 동안(미끄러지는 물풍선이 다른 물풍선 위를 지나는 중) 그 칸에서 하나가 터지거나
  *       물줄기가 닿으면 둘 다 터진다.</li>
  *   <li>물풍선이 사람이 있는 칸에 미끄러져 들어오거나 내려앉으면, 그 사람은 놓는 순간처럼 그 칸을 벗어날 때까지 지나갈 수 있다.</li>
@@ -199,7 +199,7 @@ public final class BalloonField {
 
     /**
      * 날던 물풍선이 내려앉는다. 나는 사이 그 칸이 막혔거나 다른 물풍선이 놓였으면 같은 방향의 다음 빈 칸으로 더 날아간다.
-     * 내려앉은 칸에 사람이 있으면 그 칸을 벗어날 때까지 지나가게 두고, 물줄기가 남은 칸이면 바로 터진다.
+     * 내려앉은 칸에 사람이 있으면 그 칸을 벗어날 때까지 지나가게 두고, 물줄기가 남은 칸이나 바닥 가시 칸이면 바로 터진다.
      */
     private void land(WaterBalloon balloon, Direction direction, List<Player> players, List<WaterBalloon> burst) {
         if (!canLand(balloon.col(), balloon.row(), balloon)) {
@@ -213,14 +213,14 @@ public final class BalloonField {
             return;
         }
         admitOverlapping(balloon, players);
-        if (isWet(balloon.col(), balloon.row())) {
+        if (popsAt(balloon.col(), balloon.row())) {
             burst.add(balloon);
         }
     }
 
     /**
      * 미끄러지는 balloon을 dt초만큼 옮긴다. 칸 가운데에 올 때마다 {@link #nextMove}로 더 갈지 정하고,
-     * 새 칸에 들어가면 그 칸에 있던 사람을 지나가게 두며, 물줄기가 남은 칸이면 터뜨린다.
+     * 새 칸에 들어가면 그 칸에 있던 사람을 지나가게 두며, 물줄기가 남은 칸이나 바닥 가시 칸이면 터뜨린다.
      */
     private void slide(WaterBalloon balloon, double dt, List<Player> players, List<WaterBalloon> burst) {
         double remaining = SLIDE_TILES_PER_SECOND * TileMap.TILE_SIZE * dt;
@@ -250,7 +250,7 @@ public final class BalloonField {
                 balloon.setSlideOffset(HALF_TILE);
                 balloon.stepCell();
                 admitOverlapping(balloon, players);
-                if (isWet(balloon.col(), balloon.row())) {
+                if (popsAt(balloon.col(), balloon.row())) {
                     balloon.stopSliding();
                     burst.add(balloon);
                     return;
@@ -321,6 +321,7 @@ public final class BalloonField {
     /**
      * player가 선 칸(충돌 박스 가운데가 있는 칸)에 물풍선을 놓는다. 놓을 수 없으면 아무 일도 없다.
      * 놓는 순간 그 칸에 몸이 걸쳐 있는 플레이어(놓은 사람 포함)는 그 칸을 벗어날 때까지 지나갈 수 있다.
+     * 물줄기가 남은 칸이나 바닥 가시 칸에 놓으면 바로 터진다.
      *
      * @param players 맵 위의 모든 플레이어
      * @return 놓은 물풍선. 갇혀 있거나, 이미 놓아 둔 개수가 꽉 찼거나, 그 칸을 물풍선이 차지했으면({@link #holds}) 비어 있다
@@ -335,7 +336,7 @@ public final class BalloonField {
         List<Integer> passers = players.stream().filter(p -> p.overlapsTile(col, row)).map(Player::id).toList();
         WaterBalloon balloon = new WaterBalloon(player.id(), col, row, player.waterRange(), passers);
         balloons.add(balloon);
-        if (isWet(col, row)) {
+        if (popsAt(col, row)) {
             explode(balloon);
         }
         return Optional.of(balloon);
@@ -404,6 +405,14 @@ public final class BalloonField {
             }
         }
         return false;
+    }
+
+    /**
+     * (col, row) 칸에 놓이거나 내려앉거나 미끄러져 들어온 물풍선이 바로 터지는지: 물줄기가 남은 칸이거나 바닥 가시({@link Tile#SPIKE}) 칸이다.
+     * 가시 위에 덤불이 있어도 바닥이 가시면 터진다.
+     */
+    private boolean popsAt(int col, int row) {
+        return isWet(col, row) || (map.isInside(col, row) && map.groundAt(col, row) == Tile.SPIKE);
     }
 
     /**
