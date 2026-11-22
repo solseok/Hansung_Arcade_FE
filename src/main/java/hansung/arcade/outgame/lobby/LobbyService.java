@@ -4,8 +4,17 @@ import java.util.List;
 
 /**
  * 방 목록과 입장·퇴장·방 설정 바꾸기. seats는 이 컴퓨터에서 함께 들어가는 사람 수(1P면 1, 2P면 2)다.
+ * 오프라인은 {@link MockLobbyService}, 온라인은 {@link ServerLobbyService}다.
  */
 public interface LobbyService {
+    /** 로그인한 플레이어 번호(1P부터)를 알린다. 다시 로그인하면 들고 있던 목록·방을 잊는다 */
+    default void signedIn(List<Long> playerIds) {
+    }
+
+    /** 방 목록을 새로 받는다 (로비에 들어갈 때, 새로고침). 목업은 늘 최신이라 할 일이 없다 */
+    default void reload() {
+    }
+
     List<Room> rooms();
 
     default Room join(int roomNumber) {
