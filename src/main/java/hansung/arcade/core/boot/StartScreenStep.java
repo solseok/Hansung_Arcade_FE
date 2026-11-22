@@ -31,6 +31,7 @@ import hansung.arcade.outgame.audio.Sound;
 import hansung.arcade.outgame.lobby.LobbyPanel;
 import hansung.arcade.outgame.lobby.LobbyService;
 import hansung.arcade.outgame.lobby.MockLobbyService;
+import hansung.arcade.outgame.lobby.ServerLobbyService;
 import hansung.arcade.outgame.lobby.WaitingRoomPanel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,8 +42,9 @@ import java.util.List;
 /**
  * 5단계: 첫 화면을 조립해 창에 띄운다. 기본 화면은 로그인이고(app.start-screen=login, lobby로 로비부터),
  * 로그인 → 로비 → 대기실 → 게임 → 결과 모달 → 대기실로 이어진다.
- * 온라인 모드(network.mode=online)면 로그인은 서버에 하고, 연결이 끊기면 로그인 화면으로 돌아가 이유를 보여 준다.
- * 로비·대기실·게임은 아직 목업이다.
+ * 온라인 모드(network.mode=online)면 로그인·로비·대기실은 서버에 하고({@link ServerLobbyService}),
+ * 연결이 끊기면 로그인 화면으로 돌아가 이유를 보여 준다. 게임 화면은 서버가 정한 맵·참가자로 열지만
+ * 경기 안(이동·물풍선)은 아직 이 컴퓨터에서만 돌고, 서버가 GAME_OVER를 보내면 그 결과로 끝낸다.
  *
  * <p>app.start-screen=game 으로 실행하면 아웃게임 없이 인게임을 바로 띄운다. 이때 내 닉네임·캐릭터·팀·고정색은
  * 설정값 player.nickname, player.character, player.team, player.color 로, 경기 방식(개인전·팀전)은 game.match-mode 로 정한다.
@@ -82,10 +84,12 @@ public final class StartScreenStep implements BootStep {
         String screen = properties.get(START_SCREEN, "login");
         if (screen.equals("login") || screen.equals("lobby")) {
             SwingThread.runAndWait(() -> {
-                LobbyService service = new MockLobbyService();
+                ServerClient server = context.contains(ServerClient.class) ? context.get(ServerClient.class) : null;
+                LobbyService service = server == null
+                        ? new MockLobbyService()
+                        : new ServerLobbyService(server, SwingUtilities::invokeLater);
                 SceneManager scenes = new SceneManager(window::show);
                 OutgameSession session = new OutgameSession(service);
-                ServerClient server = context.contains(ServerClient.class) ? context.get(ServerClient.class) : null;
                 LoginService login = server == null ? new OfflineLoginService() : new ServerLoginService(server);
                 scenes.register("login", new LoginPanel(session, scenes, login));
                 if (server != null) {
@@ -97,6 +101,13 @@ public final class StartScreenStep implements BootStep {
                 // 결과는 게임 화면 위 모달로 뜨므로, 끝나는 소리는 경기가 끝나는 때 낸다
                 game.setOnGameOver(() -> Sound.play("Ntc_GameEnd"));
                 scenes.register("game", game);
+                session.online().ifPresent(online -> online.listen(new ServerLobbyService.Listener() {
+                    @Override
+                    public void gameOver(hansung.arcade.outgame.GameResult result) {
+                        // 게임 화면이 아니면(이미 돌아왔으면) 아무 일도 하지 않는다
+                        game.endGame(result);
+                    }
+                }));
                 scenes.onShow(name -> {
                     Sound.playBgm(Sound.bgmFor(name));
                     if (name.equals("game")) {

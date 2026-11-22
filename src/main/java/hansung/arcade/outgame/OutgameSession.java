@@ -3,19 +3,30 @@ package hansung.arcade.outgame;
 import hansung.arcade.ingame.entity.Mascot;
 import hansung.arcade.outgame.lobby.LobbyService;
 import hansung.arcade.outgame.lobby.Room;
+import hansung.arcade.outgame.lobby.RoomState;
+import hansung.arcade.outgame.lobby.ServerLobbyService;
+import hansung.arcade.outgame.lobby.SlotState;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Random;
 
 /**
  * 한 컴퓨터의 아웃게임 상태. 1P면 한 명, 2P면 두 명이 이 컴퓨터에서 함께 한다.
- * 로그인은 온라인이면 서버가 받아들인 플레이어 번호를 들고 있고, 대기실의 다른 인원은 아직 준비된 목업 참가자다.
  * 서버 주소·포트는 사용자가 넣지 않고 설정(application.properties, .env)에서 읽는다.
+ *
+ * <p>오프라인({@link hansung.arcade.outgame.lobby.MockLobbyService})이면 대기실의 다른 인원은 준비된 목업 참가자다.
+ * 온라인({@link ServerLobbyService})이면 방·자리·방장·준비는 서버의 ROOM_STATE를 따르고, 고르기·준비·맵·시작은 서버로 보낸다.
+ * 내 캐릭터·팀·준비도 서버가 알려 준 내 자리 값으로 맞춘다.</p>
  */
 public final class OutgameSession {
     public final LobbyService service;
+    /** 온라인이면 서버 방 API. 오프라인이면 null */
+    private final ServerLobbyService online;
+    /** 온라인 대기실의 마지막 ROOM_STATE. 방 밖이거나 오프라인이면 null */
+    private RoomState roomState;
     private List<String> nicknames = List.of("나");
     /** 로그인한 플레이어 번호 (1P부터). 오프라인이면 1, 2 */
     private List<Long> playerIds = List.of(1L);
@@ -30,8 +41,32 @@ public final class OutgameSession {
     /** 목업 참가자(이 컴퓨터 밖의 사람)의 준비 상태. 서버가 붙으면 서버에서 받은 값으로 바꾼다 */
     private final Map<Integer, Boolean> participantReady = new HashMap<>();
 
+    /** 대기실 자리 하나를 그릴 내용. character가 null이면 랜덤(?)이다 */
+    public record SeatView(int slot, String nickname, Mascot character, Team team, SlotState state) {
+    }
+
     public OutgameSession(LobbyService service) {
         this.service = service;
+        this.online = service instanceof ServerLobbyService server ? server : null;
+        if (online != null) {
+            // 화면보다 먼저 등록해, 화면이 알림을 받을 때는 세션이 이미 새 상태다
+            online.listen(new ServerLobbyService.Listener() {
+                @Override
+                public void roomStateChanged(RoomState state) {
+                    applyRoomState(state);
+                }
+            });
+        }
+    }
+
+    /** 서버의 방 API를 쓰는지 */
+    public boolean isOnline() {
+        return online != null;
+    }
+
+    /** 온라인이면 서버 방 API */
+    public Optional<ServerLobbyService> online() {
+        return Optional.ofNullable(online);
     }
 
     /**
@@ -68,6 +103,9 @@ public final class OutgameSession {
         }
         nicknames = players.stream().map(LoginService.LoginPlayer::nickname).toList();
         playerIds = players.stream().map(LoginService.LoginPlayer::playerId).toList();
+        room = null;
+        roomState = null;
+        service.signedIn(playerIds);
     }
 
     /** 이 컴퓨터의 플레이어 닉네임. 1P부터 */
@@ -83,6 +121,13 @@ public final class OutgameSession {
     public int localPlayers() { return nicknames.size(); }
 
     public boolean isHost() { return service.isHost(); }
+
+    /** 1P가 말한다. 온라인이면 서버에 보내고, 화면에는 서버가 돌려준 CHAT_MESSAGE로 뜬다 */
+    public void chat(String text) {
+        if (online != null) {
+            online.chat(playerIds.getFirst(), text);
+        }
+    }
 
     /** 방에 들어간다. 2P면 두 자리를 차지한다. */
     public Room join(int roomNumber) {
@@ -103,11 +148,15 @@ public final class OutgameSession {
         return joined;
     }
 
-    /** 방에 들어온 상태로 맞춘다. 목업 참가자는 모두 준비한 채로 시작한다. */
+    /** 방에 들어온 상태로 맞춘다. 목업 참가자는 모두 준비한 채로 시작한다. 온라인이면 서버가 알려 준 방 상태를 쓴다 */
     public void enter(Room room) {
         this.room = room;
         ready = false;
         participantReady.clear();
+        if (online != null) {
+            applyRoomState(online.state());
+            return;
+        }
         for (int id = localPlayers() + 1; id <= room.players(); id++) {
             participantReady.put(id, true);
         }
@@ -121,25 +170,62 @@ public final class OutgameSession {
     public Team team() { return team; }
     public String mapId() { return mapId; }
     public boolean ready() { return ready; }
-    public void setReady(boolean value) { ready = value; }
+
+    /** 준비를 켜고 끈다. 온라인이면 바뀔 때만 서버에 READY를 보낸다 (방장은 보내지 않는다) */
+    public void setReady(boolean value) {
+        if (online != null && room != null && room.status() == Room.Status.WAITING && !isHost() && value != ready) {
+            online.ready(value);
+        }
+        ready = value;
+    }
+
+    /**
+     * 서버가 알려 준 방 상태로 맞춘다 (온라인). 방·맵과 함께 내 자리(1P)의 캐릭터·팀·준비도 서버 값을 따른다.
+     */
+    public void applyRoomState(RoomState state) {
+        if (state == null) {
+            return;
+        }
+        roomState = state;
+        room = state.room();
+        mapId = state.mapId();
+        RoomState.Seat mine = state.seatOf(playerIds.getFirst());
+        if (mine != null) {
+            randomCharacter = mine.randomCharacter();
+            if (!randomCharacter) {
+                character = mine.mascot();
+            }
+            team = mine.team();
+            ready = mine.ready();
+        }
+    }
 
     /** 캐릭터를 바꾼다. 바꾸면 준비가 풀리고 랜덤도 풀린다. */
     public void select(Mascot character) {
         this.character = character;
         randomCharacter = false;
         ready = false;
+        if (online != null) {
+            online.selectCharacter(character.id());
+        }
     }
 
     /** ?(랜덤 캐릭터)를 고른다. 게임을 시작할 때 다섯 캐릭터 중 하나로 정한다 */
     public void selectRandomCharacter() {
         randomCharacter = true;
         ready = false;
+        if (online != null) {
+            online.selectCharacter(RoomState.RANDOM_CHARACTER);
+        }
     }
 
     /** 팀을 바꾼다. 바꾸면 준비가 풀린다. */
     public void selectTeam(Team team) {
         this.team = team;
         ready = false;
+        if (online != null) {
+            online.selectTeam(team);
+        }
     }
 
     /**
@@ -163,6 +249,38 @@ public final class OutgameSession {
             room = service.updateRoom(map.name(), Room.Status.WAITING);
         }
         this.mapId = mapId;
+    }
+
+    /**
+     * 대기실 자리들 (자리 번호 순서, 빈자리는 없다). 온라인은 ROOM_STATE를, 오프라인은 이 컴퓨터의 플레이어를 앞에,
+     * 목업 참가자를 뒤에 둔다. 방장과 같은 컴퓨터의 2P는 방장이 시작할 때 함께 들어가므로 늘 준비한 것으로 보인다.
+     */
+    public List<SeatView> seats() {
+        List<SeatView> seats = new ArrayList<>();
+        boolean meHost = isHost();
+        if (roomState != null) {
+            for (RoomState.Seat seat : roomState.seats()) {
+                boolean mine = playerIds.contains(seat.playerId());
+                SlotState state = seat.playerId() == roomState.hostId() ? SlotState.HOST
+                        : (mine && meHost) || seat.ready() ? SlotState.READY : SlotState.WAITING;
+                seats.add(new SeatView(seat.slot(), seat.nickname(), seat.mascot(), seat.team(), state));
+            }
+            return List.copyOf(seats);
+        }
+        if (room == null) {
+            return List.of();
+        }
+        List<GameStartInfo.PlayerInfo> players = players();
+        int host = hostIndex();
+        for (int i = 0; i < players.size(); i++) {
+            GameStartInfo.PlayerInfo player = players.get(i);
+            boolean local = i < localPlayers();
+            SlotState state = i == host ? SlotState.HOST
+                    : (local && meHost) || isReady(i + 1) ? SlotState.READY : SlotState.WAITING;
+            seats.add(new SeatView(i, player.nickname(), local && randomCharacter ? null : player.character(),
+                    Team.fromLabel(player.team()), state));
+        }
+        return List.copyOf(seats);
     }
 
     /** 방장 자리의 순서. 내가 방장이면 0(1P), 아니면 내 다음 첫 목업 참가자다. */
@@ -199,24 +317,45 @@ public final class OutgameSession {
 
     /** 방장이고, 방이 대기 중이고, 다른 참가자가 모두 준비했으면 시작할 수 있다 */
     public boolean canStart() {
+        if (roomState != null) {
+            return isHost()
+                    && room.status() == Room.Status.WAITING
+                    && roomState.seats().size() >= 2
+                    && roomState.seats().stream()
+                    .filter(seat -> !playerIds.contains(seat.playerId()))
+                    .allMatch(RoomState.Seat::ready);
+        }
         return room != null
                 && service.isHost()
                 && room.status() == Room.Status.WAITING
                 && participantReady.values().stream().allMatch(Boolean::booleanValue);
     }
 
-    /** 경기가 끝나 대기방으로 돌아온다. 방장이면 방을 다시 대기 중으로 돌리고, 준비는 풀린다 */
+    /** 경기가 끝나 대기방으로 돌아온다. 방장이면 방을 다시 대기 중으로 돌리고, 준비는 풀린다 (온라인은 서버가 돌린다) */
     public void returnToWaiting() {
+        if (online != null) {
+            ready = false;
+            return;
+        }
         if (room != null && service.isHost()) {
             room = service.updateRoom(room.map(), Room.Status.WAITING);
         }
         ready = false;
     }
 
-    /** 게임을 시작한다. 방은 게임 중이 되고, 랜덤 맵·랜덤 캐릭터는 여기서 실제 맵·캐릭터로 정한다 */
+    /**
+     * 게임을 시작한다. 방은 게임 중이 되고, 랜덤 맵·랜덤 캐릭터는 여기서 실제 맵·캐릭터로 정한다.
+     * 온라인이면 서버에 GAME_START만 보내고 null을 돌려준다. 맵·캐릭터는 서버가 정해 GAME_STARTED로 알린다({@link #startInfo}).
+     *
+     * @throws IllegalStateException 방장이 아니거나 시작할 수 없으면. 온라인이면 서버 문구(모두 준비 등)
+     */
     public GameStartInfo start() {
         if (!service.isHost()) {
             throw new IllegalStateException("방장만 게임을 시작할 수 있습니다.");
+        }
+        if (online != null) {
+            online.startGame();
+            return null;
         }
         if (!canStart()) {
             throw new IllegalStateException("모든 참가자가 준비해야 시작할 수 있습니다.");
@@ -236,8 +375,36 @@ public final class OutgameSession {
         return info;
     }
 
+    /**
+     * 서버가 알린 GAME_STARTED를 게임 화면에 넘길 정보로 바꾼다. 이 컴퓨터의 플레이어(1P, 2P 순서)를 앞에 둔다.
+     */
+    public GameStartInfo startInfo(ServerLobbyService.GameStarted started) {
+        List<GameStartInfo.PlayerInfo> local = new ArrayList<>();
+        List<GameStartInfo.PlayerInfo> others = new ArrayList<>();
+        for (long id : playerIds) {
+            started.players().stream().filter(player -> player.playerId() == id).findFirst()
+                    .ifPresent(player -> local.add(info(player)));
+        }
+        for (ServerLobbyService.StartedPlayer player : started.players()) {
+            if (!playerIds.contains(player.playerId())) {
+                others.add(info(player));
+            }
+        }
+        if (local.isEmpty()) {
+            throw new IllegalStateException("시작한 경기에 이 컴퓨터의 플레이어가 없습니다.");
+        }
+        local.addAll(others);
+        return new GameStartInfo(started.mapId(), local, local.size() - others.size());
+    }
+
+    private static GameStartInfo.PlayerInfo info(ServerLobbyService.StartedPlayer player) {
+        return new GameStartInfo.PlayerInfo((int) player.playerId(), player.nickname(),
+                Mascot.fromId(player.character()), Team.valueOf(player.team()).label());
+    }
+
     public void leave() {
         service.leave();
+        roomState = null;
         room = null;
         participantReady.clear();
         ready = false;

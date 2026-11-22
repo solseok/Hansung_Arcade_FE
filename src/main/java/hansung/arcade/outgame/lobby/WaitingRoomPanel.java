@@ -48,6 +48,10 @@ import static hansung.arcade.outgame.ui.WaitingRoomLayout.*;
  * 자리마다 캐릭터를 팀 색으로 다시 칠해 보여 주고, 상태 줄에 방장·준비(불 켜짐·꺼짐)를 보여 준다.
  * 방장은 맵 선택(랜덤 포함)과 게임 시작을, 손님은 준비를 한다. 맵은 최대 인원(빌리지 6명)에 맞춰 정원이 바뀐다.
  * 모든 구역의 위치·크기는 {@link WaitingRoomLayout}, 색은 {@link OutgamePalette}를 따른다.
+ *
+ * <p>온라인이면 자리·방장·준비는 서버의 ROOM_STATE로 다시 그리고, 채팅은 서버가 돌려준 CHAT_MESSAGE로 보여 준다
+ * (입장·퇴장·방장 안내 포함). 방장이 게임을 시작하면 GAME_STARTED를 받은 모두가 서버가 정한 맵·참가자로 게임 화면에 들어가고
+ * LOADED를 보낸다. 서버에서 경기가 아직 진행 중이면(게임 중) 고르기·준비·맵을 막는다.</p>
  */
 public final class WaitingRoomPanel extends JPanel implements Scene {
     private static final String NOTICE_TEXT = "모두 준비되면 방장이 게임을 시작할 수 있어요.";
@@ -75,6 +79,10 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
     private final GlossButton mapSelect = new GlossButton("맵 선택", GlossButton.MAP_SELECT);
     private final GlossButton ready = new GlossButton("준비", GlossButton.READY);
     private final JCheckBox autoReady = new AutoReadyBox();
+    /** 이 화면이 떠 있는지. 서버 알림은 떠 있을 때만 화면에 반영한다 */
+    private boolean showing;
+    /** 마지막으로 그린 방 상태. 게임 중 → 대기 중으로 바뀌면 자동 준비를 다시 켠다 */
+    private Room.Status lastStatus;
 
     public WaitingRoomPanel(OutgameSession session, SceneManager scenes) {
         this(session, scenes, MapPicker.dialog());
@@ -92,6 +100,59 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
         buildLeftPanel();
         buildRightPanel();
         buildBottomBar();
+        session.online().ifPresent(this::listen);
+    }
+
+    /** 서버에서 온 일을 화면에 반영한다 (EDT) */
+    private void listen(ServerLobbyService server) {
+        server.listen(new ServerLobbyService.Listener() {
+            @Override
+            public void roomStateChanged(RoomState state) {
+                if (!showing) {
+                    return;
+                }
+                if (lastStatus == Room.Status.PLAYING && state.room().status() == Room.Status.WAITING
+                        && autoReady.isSelected() && !session.isHost()) {
+                    session.setReady(true);
+                }
+                refresh();
+            }
+
+            @Override
+            public void chatReceived(ServerLobbyService.ChatLine line) {
+                if (!showing) {
+                    return;
+                }
+                if (line.notice()) {
+                    chat.systemMessage(line.text());
+                } else {
+                    chat.message(line.sender(), line.text());
+                }
+            }
+
+            @Override
+            public void serverError(String message) {
+                if (showing) {
+                    chat.systemMessage(message);
+                }
+            }
+
+            @Override
+            public void gameStarted(ServerLobbyService.GameStarted started) {
+                if (!showing) {
+                    return;
+                }
+                GameStartInfo start;
+                try {
+                    start = session.startInfo(started);
+                } catch (RuntimeException e) {
+                    chat.systemMessage("게임을 열지 못했습니다: " + e.getMessage());
+                    return;
+                }
+                scenes.show("game", start);
+                server.loaded();
+            }
+        });
     }
 
     // ── 화면 짜기 ───────────────────────────────────────────
@@ -228,8 +289,17 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
         ready.setFont(OutgameFonts.label(24));
         ready.addActionListener(event -> {
             if (session.isHost()) {
-                GameStartInfo start = session.start();
-                scenes.show("game", start);
+                GameStartInfo start;
+                try {
+                    start = session.start();
+                } catch (IllegalStateException e) {
+                    chat.systemMessage(e.getMessage());
+                    return;
+                }
+                // 온라인이면 GAME_STARTED를 받을 때 모두 함께 게임 화면으로 간다
+                if (start != null) {
+                    scenes.show("game", start);
+                }
                 return;
             }
             session.setReady(!session.ready());
@@ -252,7 +322,12 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
         GlossButton leave = new GlossButton("로비로 나가기", GlossButton.BLUE);
         leave.setName("leave");
         leave.addActionListener(event -> {
-            session.leave();
+            try {
+                session.leave();
+            } catch (IllegalStateException e) {
+                chat.systemMessage(e.getMessage());
+                return;
+            }
             chat.clear();
             scenes.show("lobby", null);
         });
@@ -262,6 +337,11 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
     // ── 상태 반영 ───────────────────────────────────────────
 
     private void sendChat(String message) {
+        if (session.isOnline()) {
+            // 서버가 방 전체에 돌려주는 CHAT_MESSAGE로 뜬다
+            session.chat(message);
+            return;
+        }
         chat.message(session.nickname(), message);
     }
 
@@ -283,27 +363,32 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
         roomTitle.setText(room.title());
         roomCount.setText(room.players() + "/" + room.capacity());
 
-        List<GameStartInfo.PlayerInfo> players = session.players();
+        Map<Integer, OutgameSession.SeatView> seats = new HashMap<>();
+        session.seats().forEach(seat -> seats.put(seat.slot(), seat));
         boolean meHost = session.isHost();
-        int host = session.hostIndex();
         for (int i = 0; i < SLOTS; i++) {
-            if (i < players.size()) {
-                GameStartInfo.PlayerInfo player = players.get(i);
-                boolean local = i < session.localPlayers();
-                BufferedImage figure = local && session.randomCharacter()
+            OutgameSession.SeatView seat = seats.get(i);
+            if (seat != null) {
+                BufferedImage figure = seat.character() == null
                         ? randomFigure()
-                        : figure(player.character(), Team.fromLabel(player.team()).characterColor());
-                slots[i].display(stateOf(i, host, meHost), player.nickname(), figure);
+                        : figure(seat.character(), seat.team().characterColor());
+                slots[i].display(seat.state(), seat.nickname(), figure);
             } else {
                 slots[i].display(i < room.capacity() ? SlotState.EMPTY : SlotState.CLOSED, "", null);
             }
         }
 
+        // 서버에서 경기가 아직 끝나지 않았으면(게임 중) 고르기·준비·맵을 막는다
+        boolean waiting = room.status() == Room.Status.WAITING;
+        lastStatus = room.status();
         ready.setText(meHost ? "게임 시작" : session.ready() ? "준비 취소" : "준비");
         // 방장은 다른 참가자가 모두 준비했고 방이 대기 중일 때만 시작할 수 있다
-        ready.setEnabled(!meHost || session.canStart());
-        mapSelect.setEnabled(meHost);
+        ready.setEnabled(waiting && (!meHost || session.canStart()));
+        mapSelect.setEnabled(meHost && waiting);
         autoReady.setEnabled(!meHost);
+        characterCells.values().forEach(cell -> cell.setEnabled(waiting));
+        randomCell.setEnabled(waiting);
+        teamSwatches.values().forEach(swatch -> swatch.setEnabled(waiting));
         if (session.randomCharacter()) {
             randomCell.setSelected(true);
         } else {
@@ -313,18 +398,6 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
         banner.display(session.randomCharacter() ? null : session.character());
         showMap();
         repaint();
-    }
-
-    /** index번째 자리의 상태. 이 컴퓨터의 플레이어는 내 준비 상태를, 목업 참가자는 세션이 들고 있는 준비 상태를 따른다 */
-    private SlotState stateOf(int index, int host, boolean meHost) {
-        if (index == host) {
-            return SlotState.HOST;
-        }
-        if (index < session.localPlayers() && meHost) {
-            // 방장과 같은 컴퓨터의 2P는 방장이 시작할 때 함께 들어가므로 늘 준비한 것으로 보인다
-            return SlotState.READY;
-        }
-        return session.isReady(index + 1) ? SlotState.READY : SlotState.WAITING;
     }
 
     /** 고른 맵을 보여 준다. 실제 맵은 그림이 미리보기 칸을 꽉 채우고, 랜덤 맵은 보라 액자 안에 물음표 카드를 둔다 */
@@ -393,10 +466,13 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
 
     @Override
     public void enter(Object data) {
+        showing = true;
         if (data instanceof Room room) {
             session.enter(room);
             chat.clear();
-            chat.systemMessage("다른 참가자는 준비된 목업입니다. 실제 서버 연결 전입니다.");
+            if (!session.isOnline()) {
+                chat.systemMessage("다른 참가자는 준비된 목업입니다. 실제 서버 연결 전입니다.");
+            }
         } else {
             // 경기를 마치고 돌아왔다: 방을 다시 대기 중으로 돌린다
             session.returnToWaiting();
@@ -404,6 +480,11 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
         // 새 방에 들어왔든 경기를 마치고 돌아왔든, 자동 준비면 바로 준비한다
         session.setReady(autoReady.isSelected() && !session.isHost());
         refresh();
+    }
+
+    @Override
+    public void exit() {
+        showing = false;
     }
 
     @Override
