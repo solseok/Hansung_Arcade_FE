@@ -7,6 +7,7 @@ import hansung.arcade.ingame.ServerRules.TileChange;
 import hansung.arcade.ingame.balloon.Explosion;
 import hansung.arcade.ingame.balloon.WaterCell;
 import hansung.arcade.ingame.balloon.WaterCell.Part;
+import hansung.arcade.ingame.block.BoxPusher;
 import hansung.arcade.ingame.entity.Direction;
 import hansung.arcade.ingame.entity.Mascot;
 import hansung.arcade.ingame.entity.Player;
@@ -19,6 +20,7 @@ import hansung.arcade.ingame.map.Tile;
 import hansung.arcade.ingame.map.TileMap;
 import hansung.arcade.ingame.match.MatchClock;
 import hansung.arcade.ingame.match.StartIntro;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -48,11 +50,19 @@ class ServerRulesTest {
         final List<String> sent = new ArrayList<>();
         /** 보낸 MOVE의 자리 (x, y) */
         final List<double[]> moves = new ArrayList<>();
+        /** 보낸 MOVE의 방향과 걷는 중인지 ("RIGHT false") */
+        final List<String> moveStates = new ArrayList<>();
 
         @Override
         public void move(int playerId, double x, double y, Direction facing, boolean moving) {
             sent.add("MOVE " + playerId);
             moves.add(new double[]{x, y});
+            moveStates.add(facing + " " + moving);
+        }
+
+        @Override
+        public void pushBox(int playerId, int col, int row, Direction direction) {
+            sent.add("BOX_PUSH %d %d,%d %s".formatted(playerId, col, row, direction));
         }
 
         @Override
@@ -469,5 +479,134 @@ class ServerRulesTest {
         assertEquals(x, me.x());
         assertTrue(outbox.sent.isEmpty(), outbox.sent.toString());
         assertEquals(remaining, world.match().clock().remainingSeconds(), "시계가 멈춘다");
+    }
+
+    /** 상자 밀기: 상자는 서버가 밀고, 이 컴퓨터는 다 밀었을 때 밀어 달라고 보낸 뒤 BOX_MOVED로 옮긴다 */
+    @Nested
+    class 상자_밀기 {
+
+        /** 상자에 닿는 데 걸리는 틱 (상상부기는 한 틱에 3px, 칸 가운데에서 상자까지 2px) */
+        private final int reachTicks = 2;
+        private final int pushTicks = (int) Math.ceil(BoxPusher.PUSH_SECONDS / TICK);
+        /** 나(12번)는 (0,0), 다른 플레이어(20번)는 (4,0)에 선다. 상자는 (1,0)·(1,1), 철로 보강된 상자는 (4,1) */
+        private final GameWorld boxWorld = GameWorld.online(MapLoader.parse("fixture/online-box", List.of(
+                "1P..2",
+                ".P..c")), List.of(
+                new OnlineSeat(ME, new PlayerProfile("부기", Mascot.SANGSANGBUGI, 1), 1, true),
+                new OnlineSeat(OTHER, new PlayerProfile("냥이", Mascot.HANSUNGNYANGI, 2), 2, false)), outbox);
+        private final ServerRules boxServer = boxWorld.server().orElseThrow();
+        private final Player pusher = boxWorld.localPlayers().getFirst();
+
+        private void run(int count, Direction move) {
+            for (int i = 0; i < count; i++) {
+                boxWorld.update(TICK, move == null ? Map.of() : Map.of(ME, PlayerCommand.moving(move)));
+            }
+        }
+
+        private void start() {
+            boxServer.roundBegin(3_000, 180_000);
+            run(181, null);
+            assertTrue(boxServer.isPlaying());
+            outbox.sent.clear();
+        }
+
+        @Test
+        void 상자에_막힌_채_다_밀면_옮기지_않고_멈춘_자리와_방향부터_보낸_뒤_밀어_달라고_한다() {
+            start();
+
+            run(reachTicks + pushTicks, Direction.RIGHT);
+
+            int push = outbox.sent.indexOf("BOX_PUSH " + ME + " 1,0 RIGHT");
+            assertTrue(push > 0, outbox.sent.toString());
+            assertEquals("MOVE " + ME, outbox.sent.get(push - 1));
+            assertEquals("RIGHT false", outbox.moveStates.getLast(), "멈춘 채 미는 쪽을 본다");
+            assertEquals(Tile.PUSH_BOX, boxWorld.map().tileAt(1, 0), "서버가 알릴 때까지 옮기지 않는다");
+            assertTrue(boxWorld.boxPusher().slides().isEmpty());
+        }
+
+        @Test
+        void 서버가_밀지_않았으면_계속_밀_때_다시_보낸다() {
+            start();
+            run(reachTicks + pushTicks, Direction.RIGHT);
+            assertEquals(1, outbox.count("BOX_PUSH"));
+
+            run(pushTicks - 2, Direction.RIGHT);
+            assertEquals(1, outbox.count("BOX_PUSH"), "보낸 뒤 민 시간은 처음부터 다시 센다");
+            run(2, Direction.RIGHT);
+            assertEquals(2, outbox.count("BOX_PUSH"));
+        }
+
+        @Test
+        void 밀려_갈_칸에_아이템이_있으면_보내지_않는다() {
+            start();
+            boxServer.itemsScattered(OTHER, 4, 0, List.of(new Drop(1, 2, 0, "bubble")));
+
+            run(reachTicks + pushTicks * 2, Direction.RIGHT);
+
+            assertEquals(0, outbox.count("BOX_PUSH"));
+        }
+
+        @Test
+        void 경기가_시작되기_전에는_밀어도_보내지_않는다() {
+            run(reachTicks + pushTicks * 2, Direction.RIGHT);
+
+            assertEquals(0, outbox.count("BOX_PUSH"));
+        }
+
+        @Test
+        void BOX_MOVED가_오면_맵_칸을_바로_옮기고_그림만_미끄러뜨린다() {
+            start();
+
+            boxServer.boxMoved(1, 0, 2, 0);
+
+            assertEquals(Tile.FLOOR, boxWorld.map().tileAt(1, 0));
+            assertEquals(Tile.PUSH_BOX, boxWorld.map().tileAt(2, 0));
+            assertTrue(boxWorld.boxPusher().slidingInto(2, 0).orElseThrow().offsetX() < 0, "떠난 칸 쪽에서 미끄러져 온다");
+            run((int) Math.ceil(BoxPusher.SLIDE_SECONDS / TICK), null);
+            assertTrue(boxWorld.boxPusher().slides().isEmpty());
+
+            run(10, Direction.RIGHT);
+            assertEquals(1, pusher.col(), "비워진 칸에 들어간다");
+        }
+
+        @Test
+        void 철로_보강된_상자는_남은_맞을_횟수째_옮겨진다() {
+            start();
+
+            boxServer.boxMoved(4, 1, 3, 1);
+
+            assertEquals(Tile.FLOOR, boxWorld.map().tileAt(4, 1));
+            assertEquals(Tile.HARD_BLOCK_3, boxWorld.map().tileAt(3, 1));
+        }
+
+        @Test
+        void 밀리는_상자가_없는_칸의_BOX_MOVED는_맵을_바꾸지_않는다() {
+            start();
+
+            boxServer.boxMoved(2, 0, 3, 0);
+            boxServer.boxMoved(1, 0, 1, 1);
+
+            assertEquals(Tile.FLOOR, boxWorld.map().tileAt(3, 0));
+            assertEquals(Tile.PUSH_BOX, boxWorld.map().tileAt(1, 0), "들어갈 칸에 이미 상자가 있으면 옮기지 않는다");
+            assertTrue(boxWorld.boxPusher().slides().isEmpty());
+        }
+
+        @Test
+        void 알림이_오는_사이_들어선_칸에_상자가_밀려_오면_그_칸을_벗어날_때까지_지나갈_수_있다() {
+            start();
+            run(5, Direction.DOWN);
+            assertTrue(pusher.overlapsTile(0, 1));
+
+            // 다른 사람이 (1,1) 상자를 왼쪽으로 밀었다. 서버가 볼 때는 아무도 (0,1)에 없었다
+            boxServer.boxMoved(1, 1, 0, 1);
+            double y = pusher.y();
+            run(3, Direction.UP);
+            assertTrue(pusher.y() < y, "상자에 갇히지 않고 빠져나온다");
+
+            run(10, Direction.UP);
+            assertFalse(pusher.overlapsTile(0, 1));
+            run(10, Direction.DOWN);
+            assertFalse(pusher.overlapsTile(0, 1), "벗어난 뒤에는 다시 막힌다");
+        }
     }
 }

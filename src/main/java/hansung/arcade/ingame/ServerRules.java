@@ -5,6 +5,8 @@ import hansung.arcade.ingame.airplane.FlightPlan;
 import hansung.arcade.ingame.balloon.BalloonField;
 import hansung.arcade.ingame.balloon.BalloonField.ServerBurst;
 import hansung.arcade.ingame.balloon.WaterBalloon;
+import hansung.arcade.ingame.block.BoxPusher;
+import hansung.arcade.ingame.block.BoxPusher.PushRequest;
 import hansung.arcade.ingame.chat.ChatMessage;
 import hansung.arcade.ingame.entity.Direction;
 import hansung.arcade.ingame.entity.Player;
@@ -39,12 +41,14 @@ import java.util.Objects;
  *       떨어뜨려 닿으면 놓는다. 떨어지는 사이 그 아이템이 물줄기에 사라지거나 누가 먹으면 놓지 않는다.</li>
  *   <li>아이템 키를 누르면 손에 든 쓰는 아이템을 ITEM_USE로 보낸다. 바늘·보호막·스프링 신발의 효과와 남은 개수는
  *       ITEM_USED를 따른다.</li>
+ *   <li>상자에 막힌 채 {@link BoxPusher#PUSH_SECONDS}초를 밀면 상자를 옮기지 않고 멈춘 자리(MOVE)와 BOX_PUSH를 보낸다.
+ *       상자는 BOX_MOVED가 오면 옮겨 미끄러뜨린다. 서버가 밀지 않았으면 계속 밀 때 다시 보낸다.</li>
  *   <li>갇힘·구출·탈락·나감은 PLAYER_TRAPPED, PLAYER_RESCUED, PLAYER_POPPED, PLAYER_LEFT를 따르고, 승패는 GAME_OVER로 정한다.</li>
  *   <li>화면을 연 뒤 ROUND_BEGIN이 올 때까지는 검은 화면에서 기다린다. ROUND_BEGIN의 카운트다운이 끝나는 순간에
  *       시작 연출("Ready... Start!")도 끝나도록 연출을 늦춰 시작하고, 그때부터 조작과 경기 시계가 움직인다.</li>
  * </ul>
  *
- * <p>서버가 아직 다루지 않는 것(물풍선 밀기·던지기, 밀리는 상자)은 온라인에서 하지 않는다.
+ * <p>서버가 아직 다루지 않는 것(물풍선 밀기·던지기)은 온라인에서 하지 않는다.
  * 서버 메시지는 게임 루프와 같은 스레드(EDT)에서 넣는다.</p>
  */
 public final class ServerRules {
@@ -244,6 +248,19 @@ public final class ServerRules {
             sendMove(player);
             outbox.useItem(player.id(), item.id());
         });
+    }
+
+    /**
+     * player가 상자에 막힌 채 다 밀었다 ({@link BoxPusher#requestPush}). 상자는 옮기지 않고 밀어 달라고 서버에 보낸다.
+     * 서버는 마지막 MOVE가 멈춘 채 미는 쪽을 보고 상자 바로 앞 칸에 있을 때만 미므로, 지금 자리(멈춤, 미는 쪽을 봄)를 먼저 보낸다.
+     * 상자는 BOX_MOVED가 오면 옮긴다 ({@link #boxMoved}).
+     */
+    void requestBoxPush(Player player, PushRequest request) {
+        if (!isPlaying() || !player.isAlive() || world.gear(player).isAirborne()) {
+            return;
+        }
+        sendMove(player);
+        outbox.pushBox(player.id(), request.col(), request.row(), request.direction());
     }
 
     /** 경기 중이면 {@link #MOVE_INTERVAL_SECONDS}초마다, 지난번 보낸 뒤 바뀐 플레이어의 자리만 보낸다 */
@@ -447,6 +464,17 @@ public final class ServerRules {
         remote.x = x;
         remote.y = y;
         remote.moving = false;
+    }
+
+    /**
+     * BOX_MOVED. 밀린 상자가 (fromCol, fromRow)에서 (toCol, toRow)로 갔다. 맵 칸은 바로 옮기고(원래 칸은 바닥이 드러난다)
+     * 그림만 {@link BoxPusher#SLIDE_SECONDS}초 동안 미끄러뜨린다. 보강된 상자는 남은 맞을 횟수째 옮겨진다.
+     */
+    public void boxMoved(int fromCol, int fromRow, int toCol, int toRow) {
+        if (world.boxPusher().moveFromServer(fromCol, fromRow, toCol, toRow, world.players()).isEmpty()) {
+            log.warn("밀리는 상자가 없거나 들어갈 칸이 비어 있지 않아 옮기지 않습니다: ({}, {}) → ({}, {})",
+                    fromCol, fromRow, toCol, toRow);
+        }
     }
 
     /** AIRPLANE_APPEARED. 비행기가 heading(RIGHT·LEFT) 쪽으로 맵 위를 가로지르기 시작했다. 떨어뜨릴 칸은 서버가 따로 알린다 */

@@ -25,12 +25,12 @@ import java.util.function.Consumer;
 
 /**
  * 온라인 경기와 서버를 잇는다. 인게임 푸시를 읽어 지금 띄운 경기({@link ServerRules})에 넣고,
- * 이 컴퓨터의 플레이어가 한 일(MOVE, BALLOON_PLACE, ITEM_PICKUP, ITEM_USE, CHAT)을 서버로 보낸다.
+ * 이 컴퓨터의 플레이어가 한 일(MOVE, BALLOON_PLACE, ITEM_PICKUP, ITEM_USE, BOX_PUSH, CHAT)을 서버로 보낸다.
  * 나가기(GAME_EXIT)는 방 API({@link ServerLobbyService#exitGame})가 보낸다.
  *
  * <ul>
  *   <li>푸시: ROUND_BEGIN, PLAYER_MOVED, BALLOON_PLACED, BALLOON_EXPLODED, PLAYER_TRAPPED, PLAYER_RESCUED,
- *       PLAYER_POPPED, ITEM_TAKEN, ITEM_USED, ITEM_SCATTERED, AIRPLANE_APPEARED, ITEM_DROPPED, PLAYER_LEFT,
+ *       PLAYER_POPPED, ITEM_TAKEN, ITEM_USED, ITEM_SCATTERED, AIRPLANE_APPEARED, ITEM_DROPPED, BOX_MOVED, PLAYER_LEFT,
  *       CHAT_MESSAGE, GAME_OVER. 게임 화면을 여는 GAME_STARTED는
  *       방 API({@link ServerLobbyService})가 받는다.</li>
  *   <li>받는 스레드에서 오므로 {@code ui}(EDT, 게임 루프와 같은 스레드)로 넘겨 넣는다.</li>
@@ -45,6 +45,7 @@ public final class ServerMatchLink implements ServerOutbox {
     public static final String BALLOON_PLACE = "BALLOON_PLACE";
     public static final String ITEM_PICKUP = "ITEM_PICKUP";
     public static final String ITEM_USE = "ITEM_USE";
+    public static final String BOX_PUSH = "BOX_PUSH";
     public static final String CHAT = "CHAT";
     public static final String ROUND_BEGIN = "ROUND_BEGIN";
     public static final String PLAYER_MOVED = "PLAYER_MOVED";
@@ -58,6 +59,7 @@ public final class ServerMatchLink implements ServerOutbox {
     public static final String AIRPLANE_APPEARED = "AIRPLANE_APPEARED";
     public static final String ITEM_DROPPED = "ITEM_DROPPED";
     public static final String ITEM_SCATTERED = "ITEM_SCATTERED";
+    public static final String BOX_MOVED = "BOX_MOVED";
     public static final String PLAYER_LEFT = "PLAYER_LEFT";
     public static final String CHAT_MESSAGE = "CHAT_MESSAGE";
 
@@ -101,6 +103,9 @@ public final class ServerMatchLink implements ServerOutbox {
     }
 
     private record ItemScattered(long playerId, int col, int row, List<Drop> items) {
+    }
+
+    private record BoxMoved(int fromCol, int fromRow, int toCol, int toRow) {
     }
 
     private record PlayerLeft(List<Long> playerIds, String reason) {
@@ -152,6 +157,7 @@ public final class ServerMatchLink implements ServerOutbox {
                 (r, b) -> r.itemDropped(b.airplaneId(), b.itemId(), b.col(), b.row(), b.item(), b.fallMs()));
         onPush(ITEM_SCATTERED, ItemScattered.class,
                 (r, b) -> r.itemsScattered(b.playerId(), b.col(), b.row(), listOf(b.items())));
+        onPush(BOX_MOVED, BoxMoved.class, (r, b) -> r.boxMoved(b.fromCol(), b.fromRow(), b.toCol(), b.toRow()));
         client.onPush(PLAYER_LEFT, body -> ui.execute(() -> {
             PlayerLeft left = read(PLAYER_LEFT, body, PlayerLeft.class);
             if (left != null) {
@@ -283,6 +289,11 @@ public final class ServerMatchLink implements ServerOutbox {
     @Override
     public void useItem(int playerId, String item) {
         client.send(ITEM_USE, Map.of("playerId", playerId, "item", item));
+    }
+
+    @Override
+    public void pushBox(int playerId, int col, int row, Direction direction) {
+        client.send(BOX_PUSH, Map.of("playerId", playerId, "col", col, "row", row, "direction", direction.name()));
     }
 
     @Override

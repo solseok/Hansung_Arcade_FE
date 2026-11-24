@@ -33,7 +33,7 @@ public enum Tile {
     BUSH('T', false, false),
     /** 몸으로 밀 수 있고 한 번 맞으면 부서지는 상자 */
     PUSH_BOX('P', true, true),
-    /** 세 번 맞아야 부서지는 블록. 맞을 때마다 {@link #HARD_BLOCK_2} → {@link #HARD_BLOCK_1} 로 바뀐다 */
+    /** 철로 보강된 상자. 세 번 맞아야 부서지고 맞을 때마다 {@link #HARD_BLOCK_2} → {@link #HARD_BLOCK_1} 로 바뀐다. 상자처럼 밀린다 */
     HARD_BLOCK_3('c', true, true),
     /** 두 번 더 맞아야 부서지는 블록 */
     HARD_BLOCK_2('b', true, true),
@@ -108,9 +108,16 @@ public enum Tile {
         };
     }
 
-    /** 몸으로 밀어 한 칸씩 옮길 수 있는 블럭인지 */
+    /**
+     * 몸으로 밀어 한 칸씩 옮길 수 있는 블럭인지. 상자({@link #PUSH_BOX})와 철로 보강된 상자({@link #HARD_BLOCK_3}·
+     * {@link #HARD_BLOCK_2}·{@link #HARD_BLOCK_1})다. 보강된 상자는 타일째 옮기므로 남은 맞을 횟수도 그대로 따라간다.
+     * 서버(BOX_PUSH)도 같은 네 타일을 민다.
+     */
     public boolean isPushable() {
-        return this == PUSH_BOX;
+        return switch (this) {
+            case PUSH_BOX, HARD_BLOCK_3, HARD_BLOCK_2, HARD_BLOCK_1 -> true;
+            default -> false;
+        };
     }
 
     /**
