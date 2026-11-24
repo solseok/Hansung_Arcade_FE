@@ -344,6 +344,22 @@ class ServerRulesTest {
     }
 
     @Test
+    void 내가_선_칸에_떨어진_아이템은_서버가_바로_먹이면_닿기_전에_지우고_줍기를_보내지_않는다() {
+        play();
+        // 서버는 사람이 서 있어도 떨어뜨리고, 닿는 순간(서버 시각) 그 칸에 선 사람에게 바로 먹인다 (서버 #24).
+        // 이 컴퓨터는 받은 뒤부터 떨어뜨리므로 대개 닿기 전에 ITEM_TAKEN이 온다
+        server.itemDropped(1, 12, me.col(), me.row(), "roller_shoe", 200);
+        ticks(3);
+        server.itemTaken(12, ME, "roller_shoe", new Stats(1, 1, 6), null, 0);
+        ticks(60);
+
+        assertTrue(world.airDrop().fallingItems().isEmpty());
+        assertTrue(world.items().all().isEmpty());
+        assertEquals(6, me.speedLevel());
+        assertEquals(0, outbox.count("ITEM_PICKUP"), "서버가 이미 먹였으니 보내지 않는다: " + outbox.sent);
+    }
+
+    @Test
     void 손에_든_쓰는_아이템은_서버를_따르고_아이템_키는_쓰겠다고_보내기만_한다() {
         play();
         server.itemTaken(5, ME, "shield", new Stats(1, 1, 5), "shield", 2);
