@@ -520,6 +520,9 @@ class ServerRulesTest {
             assertTrue(push > 0, outbox.sent.toString());
             assertEquals("MOVE " + ME, outbox.sent.get(push - 1));
             assertEquals("RIGHT false", outbox.moveStates.getLast(), "멈춘 채 미는 쪽을 본다");
+            double[] at = outbox.moves.getLast();
+            assertEquals(0, TileMap.colAt(at[0]), "서버는 MOVE 칸 + 미는 쪽이 상자 칸일 때만 민다");
+            assertEquals(0, TileMap.rowAt(at[1]));
             assertEquals(Tile.PUSH_BOX, boxWorld.map().tileAt(1, 0), "서버가 알릴 때까지 옮기지 않는다");
             assertTrue(boxWorld.boxPusher().slides().isEmpty());
         }
@@ -580,6 +583,46 @@ class ServerRulesTest {
         }
 
         @Test
+        void 보강된_상자는_미끄러지다_맞아도_끝까지_미끄러지고_다_부서지면_멈춘다() {
+            start();
+            boxServer.boxMoved(4, 1, 3, 1);
+
+            boxServer.balloonExploded(List.of(), List.of(new TileChange(3, 1, "b")), List.of(), List.of());
+            run(1, null);
+            assertTrue(boxWorld.boxPusher().slidingInto(3, 1).isPresent(), "c → b로 맞아도 미끄러진다");
+
+            boxServer.balloonExploded(List.of(), List.of(new TileChange(3, 1, ".")), List.of(), List.of());
+            run(1, null);
+            assertTrue(boxWorld.boxPusher().slides().isEmpty());
+        }
+
+        @Test
+        void 미끄러지는_중에_또_밀리면_앞의_미끄러짐은_끝내고_새로_미끄러진다() {
+            start();
+            boxServer.boxMoved(1, 0, 2, 0);
+
+            boxServer.boxMoved(2, 0, 3, 0);
+
+            assertEquals(Tile.PUSH_BOX, boxWorld.map().tileAt(3, 0));
+            assertEquals(1, boxWorld.boxPusher().slides().size());
+            assertTrue(boxWorld.boxPusher().slidingInto(3, 0).isPresent());
+        }
+
+        @Test
+        void 비행기_아이템이_떨어지는_중인_칸으로는_밀어_달라고_하지_않는다() {
+            start();
+            run(reachTicks + pushTicks - 3, Direction.RIGHT);
+            // 맨 윗줄은 0.1초 만에 닿으므로 밀 때가 되기 직전에 떨어뜨린다
+            boxServer.airplaneAppeared(1, "LEFT");
+            boxServer.itemDropped(1, 7, 2, 0, "bubble", 100);
+
+            run(3, Direction.RIGHT);
+
+            assertTrue(boxWorld.airDrop().fallingItems().size() == 1, "아직 떨어지는 중이다");
+            assertEquals(0, outbox.count("BOX_PUSH"), "서버는 떨어뜨린 순간부터 그 칸에 아이템이 있다고 본다");
+        }
+
+        @Test
         void 밀리는_상자가_없는_칸의_BOX_MOVED는_맵을_바꾸지_않는다() {
             start();
 
@@ -599,6 +642,8 @@ class ServerRulesTest {
 
             // 다른 사람이 (1,1) 상자를 왼쪽으로 밀었다. 서버가 볼 때는 아무도 (0,1)에 없었다
             boxServer.boxMoved(1, 1, 0, 1);
+            Player remote = boxWorld.players().get(1);
+            assertFalse(boxWorld.boxPusher().lets(remote, 0, 1), "걸치지 않은 사람에게는 막힌 칸이다");
             double y = pusher.y();
             run(3, Direction.UP);
             assertTrue(pusher.y() < y, "상자에 갇히지 않고 빠져나온다");

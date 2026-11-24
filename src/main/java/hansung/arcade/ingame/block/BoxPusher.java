@@ -81,7 +81,7 @@ public final class BoxPusher {
      * <p>서버는 아무도 걸치지 않은 칸으로만 밀지만, 알림이 오는 사이 이 컴퓨터의 플레이어가 그 칸에 들어섰을 수 있다.
      * 그 순간 몸이 걸쳐 있는 플레이어는 블럭에 갇히지 않도록 그 칸을 벗어날 때까지 지나갈 수 있다 ({@link #lets}).</p>
      *
-     * @param players 맵 위의 플레이어
+     * @param players 이 컴퓨터의 플레이어 (키로 움직이며 막힌 칸을 보는 사람)
      * @return 옮겼으면 그 미끄러짐. from 칸에 밀리는 블럭이 없거나 to 칸이 맵 밖이거나 바닥이 아니면 옮기지 않고 비어 있다
      */
     public Optional<SlidingBlock> moveFromServer(int fromCol, int fromRow, int toCol, int toRow, List<Player> players) {
@@ -110,6 +110,10 @@ public final class BoxPusher {
      * 그 칸을 벗어나면 다시 막힌다.
      */
     public boolean lets(Player player, int col, int row) {
+        // 막힌 칸을 볼 때마다 불리므로 (오프라인은 늘 비어 있다) 빈 때는 바로 돌려준다
+        if (passers.isEmpty()) {
+            return false;
+        }
         Point cell = new Point(col, row);
         Set<Integer> ids = passers.get(cell);
         if (ids == null || !ids.contains(player.id())) {

@@ -471,7 +471,7 @@ public final class ServerRules {
      * 그림만 {@link BoxPusher#SLIDE_SECONDS}초 동안 미끄러뜨린다. 보강된 상자는 남은 맞을 횟수째 옮겨진다.
      */
     public void boxMoved(int fromCol, int fromRow, int toCol, int toRow) {
-        if (world.boxPusher().moveFromServer(fromCol, fromRow, toCol, toRow, world.players()).isEmpty()) {
+        if (world.boxPusher().moveFromServer(fromCol, fromRow, toCol, toRow, world.localPlayers()).isEmpty()) {
             log.warn("밀리는 상자가 없거나 들어갈 칸이 비어 있지 않아 옮기지 않습니다: ({}, {}) → ({}, {})",
                     fromCol, fromRow, toCol, toRow);
         }

@@ -146,9 +146,10 @@ class ServerMatchLinkTest {
 
         server.push("{\"type\":\"BOX_MOVED\",\"body\":{\"fromCol\":5,\"fromRow\":0,\"toCol\":5,\"toRow\":1}}");
 
-        until(() -> world.map().tileAt(5, 1) == Tile.PUSH_BOX);
+        // 맵 칸을 옮긴 뒤 미끄러짐을 더하므로, 미끄러짐이 보이면 칸도 다 옮겨졌다
+        until(() -> world.boxPusher().slidingInto(5, 1).isPresent());
+        assertEquals(Tile.PUSH_BOX, world.map().tileAt(5, 1));
         assertEquals(Tile.FLOOR, world.map().tileAt(5, 0));
-        assertTrue(world.boxPusher().slidingInto(5, 1).isPresent());
     }
 
     @Test
