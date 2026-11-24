@@ -32,6 +32,9 @@ import java.util.function.Supplier;
  * 로비. 대기 중인 방을 앞에, 게임 중인 방을 뒤에 둔 한 목록을 8칸씩 보여 준다 ({@link RoomOrder}).
  * 방 칸을 누르면 입장을 묻고({@link EntryPrompt}), 게임 중이거나 가득 찬 방은 묻지 않고 안내만 한다.
  * 쪽은 목록 아래로 튀어나온 자리의 ◁ ▷ 버튼으로 넘긴다.
+ *
+ * <p>온라인이면 로비에 들어올 때 서버에서 목록을 받고(ROOM_LIST), 다른 사람이 방을 만들거나 들어가고 나가면
+ * 서버가 보내는 목록(LOBBY_ROOMS)으로 바로 다시 그린다. 만들기·입장·바로시작이 거절되면 서버 문구를 안내 줄에 보여 준다.</p>
  */
 public final class LobbyPanel extends JPanel implements Scene {
     private final OutgameSession session;
@@ -45,7 +48,10 @@ public final class LobbyPanel extends JPanel implements Scene {
     private final ArrowButton previous = new ArrowButton("이전쪽", ArrowButton.Direction.LEFT);
     private final ArrowButton next = new ArrowButton("다음쪽", ArrowButton.Direction.RIGHT);
     private int page;
-    /** 이 화면이 떠 있는지. 확인 창이 떠 있는 동안 연결이 끊겨 다른 화면으로 갔으면 입장하지 않는다 */
+    /**
+     * 이 화면이 떠 있는지. 서버가 보낸 목록은 떠 있을 때만 다시 그리고,
+     * 확인 창이 떠 있는 동안 연결이 끊겨 다른 화면으로 갔으면 입장하지 않는다
+     */
     private boolean showing;
 
     public LobbyPanel(OutgameSession session, SceneManager scenes) {
@@ -106,7 +112,7 @@ public final class LobbyPanel extends JPanel implements Scene {
         JButton menu = new GlossButton("메뉴", GlossButton.BLUE);
         JPopupMenu popup = new JPopupMenu();
         JMenuItem reload = new JMenuItem("방 목록 새로고침");
-        reload.addActionListener(event -> refresh());
+        reload.addActionListener(event -> reload());
         popup.add(reload);
         JCheckBoxMenuItem mute = new JCheckBoxMenuItem("음소거", Sound.isMuted());
         mute.addActionListener(event -> Sound.setMuted(mute.isSelected()));
@@ -121,6 +127,34 @@ public final class LobbyPanel extends JPanel implements Scene {
         });
         place(footer, menu, relative(LobbyLayout.MENU, LobbyLayout.FOOTER));
         place(footer, exit, relative(LobbyLayout.EXIT, LobbyLayout.FOOTER));
+
+        session.online().ifPresent(server -> server.listen(new ServerLobbyService.Listener() {
+            @Override
+            public void roomsChanged() {
+                if (showing) {
+                    // 다른 사람 때문에 다시 그려도 방금 보여 준 안내(입장 거절 등)는 남긴다
+                    String kept = message.getText();
+                    refresh();
+                    if (!kept.isBlank() && !session.service.rooms().isEmpty()) {
+                        message.setText(kept);
+                    }
+                }
+            }
+        }));
+    }
+
+    /** 목록을 새로 받아 다시 그린다. 받지 못하면 이유를 안내 줄에 보여 준다 */
+    private void reload() {
+        String failure = null;
+        try {
+            session.service.reload();
+        } catch (IllegalStateException exception) {
+            failure = exception.getMessage();
+        }
+        refresh();
+        if (failure != null) {
+            message.setText(failure);
+        }
     }
 
     private void createRoom() {
@@ -197,11 +231,15 @@ public final class LobbyPanel extends JPanel implements Scene {
         return this;
     }
 
+    /** @param data 대기실에서 나오다 생긴 안내(String). 없으면 null */
     @Override
     public void enter(Object data) {
         showing = true;
         nickname.setText(String.join(" · ", session.nicknames()) + " 님");
-        refresh();
+        reload();
+        if (data instanceof String notice && !notice.isBlank()) {
+            message.setText(notice);
+        }
     }
 
     @Override

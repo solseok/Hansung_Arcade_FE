@@ -39,6 +39,11 @@ public final class GameMaps {
         return Stream.concat(ALL.stream(), Stream.of(RANDOM)).toList();
     }
 
+    /** 그림만 그릴 때 쓴다: id의 맵, 모르는 id면 기본 맵 (서버가 클라이언트에 없는 맵을 알려도 화면이 깨지지 않게) */
+    public static GameMap byIdOrDefault(String id) {
+        return choices().stream().filter(map -> map.id().equals(id)).findFirst().orElse(byId(DEFAULT_ID));
+    }
+
     public static GameMap byId(String id) {
         return choices().stream().filter(map -> map.id().equals(id)).findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("지원하지 않는 맵입니다: " + id));

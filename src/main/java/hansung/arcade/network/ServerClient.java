@@ -3,10 +3,14 @@ package hansung.arcade.network;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.fasterxml.jackson.databind.JsonNode;
+
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -16,6 +20,7 @@ import java.util.function.Consumer;
 /**
  * 설정({@link NetworkSettings})의 서버와의 접속을 들고 있다. 로그인할 때 {@link #connect}로 새로 접속하고,
  * 끊기면 다음 로그인 때 다시 접속한다. 로비·대기실·인게임은 {@link #connection()}으로 같은 연결을 쓴다.
+ * 서버가 먼저 보내는 메시지는 {@link #onPush}로 한 번 구독해 두면 다시 접속해도 계속 받는다.
  */
 public final class ServerClient implements AutoCloseable {
 
@@ -36,6 +41,7 @@ public final class ServerClient implements AutoCloseable {
         return thread;
     });
     private final List<Consumer<ServerException>> disconnectListeners = new CopyOnWriteArrayList<>();
+    private final Map<String, List<Consumer<JsonNode>>> pushListeners = new ConcurrentHashMap<>();
     private final AtomicReference<ServerConnection> current = new AtomicReference<>();
 
     public ServerClient(NetworkSettings settings) {
@@ -59,6 +65,11 @@ public final class ServerClient implements AutoCloseable {
         return CompletableFuture.supplyAsync(() -> {
             disconnect();
             ServerConnection connection = opener.open(settings.host(), settings.port());
+            connection.onAnyPush((type, body) -> {
+                if (current.get() == connection) {
+                    pushListeners.getOrDefault(type, List.of()).forEach(listener -> listener.accept(body));
+                }
+            });
             connection.onDisconnect(reason -> {
                 // 지금 들고 있는 연결일 때만 알린다 (그사이 새로 접속했으면 옛 연결의 끊김은 알리지 않는다)
                 if (current.compareAndSet(connection, null)) {
@@ -71,6 +82,38 @@ public final class ServerClient implements AutoCloseable {
             }
             return connection;
         }, connector);
+    }
+
+    /**
+     * 서버가 먼저 보내는 type 메시지의 body를 받는다. 지금 연결과 앞으로 다시 접속할 연결 모두에 적용된다.
+     * 받는 스레드(server-recv)에서 불리므로 화면을 바꿀 때는 EDT로 넘긴다.
+     */
+    public void onPush(String type, Consumer<JsonNode> listener) {
+        pushListeners.computeIfAbsent(type, key -> new CopyOnWriteArrayList<>()).add(Objects.requireNonNull(listener));
+    }
+
+    /**
+     * 지금 연결로 요청을 보내고 응답을 기다린다 (부른 스레드가 멈춘다). 응답은 {@link ServerConnection}의 시간 안에 온다.
+     *
+     * @throws ServerException 연결이 없거나, 서버가 거절했거나, 시간이 지나면. 문구는 화면에 그대로 띄울 수 있다
+     */
+    public JsonNode call(String type, Object body) {
+        ServerConnection connection = connection()
+                .orElseThrow(() -> new ServerException(ServerException.DISCONNECTED, "서버와 연결이 끊겼습니다."));
+        try {
+            return connection.request(type, body).get();
+        } catch (java.util.concurrent.ExecutionException e) {
+            throw ServerException.from(e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new ServerException(ServerException.DISCONNECTED, "요청을 기다리다 멈췄습니다.", e);
+        }
+    }
+
+    /** 지금 연결로 응답이 없는 메시지를 보낸다. 연결이 없으면 버린다 */
+    public void send(String type, Object body) {
+        connection().ifPresentOrElse(connection -> connection.send(type, body),
+                () -> log.debug("연결이 없어 {}를 보내지 않습니다.", type));
     }
 
     /** 지금 열려 있는 연결 */

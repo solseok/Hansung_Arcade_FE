@@ -26,6 +26,7 @@ import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 /**
@@ -89,6 +90,7 @@ public final class ServerConnection implements AutoCloseable {
     private final AtomicLong nextId = new AtomicLong(1);
     private final Map<Long, Pending> pending = new ConcurrentHashMap<>();
     private final Map<String, List<Consumer<JsonNode>>> pushListeners = new ConcurrentHashMap<>();
+    private final List<BiConsumer<String, JsonNode>> anyPushListeners = new CopyOnWriteArrayList<>();
     private final List<Consumer<ServerException>> disconnectListeners = new CopyOnWriteArrayList<>();
     private final ScheduledThreadPoolExecutor timer;
     private final AtomicBoolean closed = new AtomicBoolean();
@@ -213,6 +215,11 @@ public final class ServerConnection implements AutoCloseable {
         pushListeners.computeIfAbsent(type, key -> new CopyOnWriteArrayList<>()).add(listener);
     }
 
+    /** 서버가 먼저 보내는 모든 메시지를 (type, body)로 받는다. 받는 스레드에서 불린다 */
+    public void onAnyPush(BiConsumer<String, JsonNode> listener) {
+        anyPushListeners.add(listener);
+    }
+
     /** {@link #close}를 부르지 않았는데 끊기면 그 이유를 받는다. 받는 스레드나 끊김을 알아챈 스레드에서 한 번 불린다 */
     public void onDisconnect(Consumer<ServerException> listener) {
         disconnectListeners.add(listener);
@@ -313,14 +320,21 @@ public final class ServerConnection implements AutoCloseable {
         if (Protocol.ERROR.equals(message.type())) {
             log.warn("서버 ERROR: {}", message.body());
         }
-        List<Consumer<JsonNode>> listeners = pushListeners.get(message.type());
-        if (listeners == null || listeners.isEmpty()) {
+        List<Consumer<JsonNode>> listeners = pushListeners.getOrDefault(message.type(), List.of());
+        if (listeners.isEmpty() && anyPushListeners.isEmpty()) {
             log.debug("받을 곳이 없는 메시지를 버립니다: {}", message.type());
             return;
         }
         for (Consumer<JsonNode> listener : listeners) {
             try {
                 listener.accept(message.body());
+            } catch (RuntimeException e) {
+                log.error("{} 메시지를 처리하다 실패했습니다.", message.type(), e);
+            }
+        }
+        for (BiConsumer<String, JsonNode> listener : anyPushListeners) {
+            try {
+                listener.accept(message.type(), message.body());
             } catch (RuntimeException e) {
                 log.error("{} 메시지를 처리하다 실패했습니다.", message.type(), e);
             }

@@ -67,6 +67,10 @@ import static hansung.arcade.outgame.ui.WaitingRoomLayout.*;
  * (게임은 검은 화면에서 시작한다). 어두워지는 동안에는 마우스로 누르거나 키를 쳐도 아무 일도 없고,
  * 그 사이 대기실을 떠나면 게임으로 넘어가지 않는다.
  * 화면에 보이지 않는 대기실(테스트 등)은 기다리지 않고 바로 넘어간다.</p>
+ *
+ * <p>온라인이면 자리·방장·준비는 서버의 ROOM_STATE로 다시 그리고, 채팅은 서버가 돌려준 CHAT_MESSAGE로 보여 준다
+ * (입장·퇴장·방장 안내 포함). 방장이 게임을 시작하면 GAME_STARTED를 받은 모두가 서버가 정한 맵·참가자로 게임 화면에 들어가고
+ * LOADED를 보낸다. 서버에서 경기가 아직 진행 중이면(게임 중) 고르기·준비·맵을 막는다.</p>
  */
 public final class WaitingRoomPanel extends JPanel implements Scene {
     private static final String NOTICE_TEXT = "모두 준비되면 방장이 게임을 시작할 수 있어요.";
@@ -110,6 +114,10 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
     private final GlossButton mapSelect = new GlossButton("맵 선택", GlossButton.MAP_SELECT);
     private final GlossButton ready = new GlossButton("준비", GlossButton.READY);
     private final JCheckBox autoReady = new AutoReadyBox();
+    /** 이 화면이 떠 있는지. 서버 알림은 떠 있을 때만 화면에 반영한다 */
+    private boolean showing;
+    /** 마지막으로 그린 방 상태. 게임 중 → 대기 중으로 바뀌면 자동 준비를 다시 켠다 */
+    private Room.Status lastStatus;
 
     public WaitingRoomPanel(OutgameSession session, SceneManager scenes) {
         this(session, scenes, MapPicker.dialog());
@@ -131,6 +139,76 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
         add(curtain);
         // 모든 구역보다 위에 그리고, 마우스도 먼저 받는다
         setComponentZOrder(curtain, 0);
+        session.online().ifPresent(this::listen);
+    }
+
+    /** 서버에서 온 일을 화면에 반영한다 (EDT) */
+    private void listen(ServerLobbyService server) {
+        server.listen(new ServerLobbyService.Listener() {
+            @Override
+            public void roomStateChanged(RoomState state) {
+                if (!showing) {
+                    return;
+                }
+                if (lastStatus == Room.Status.PLAYING && state.room().status() == Room.Status.WAITING
+                        && autoReady.isSelected() && !session.isHost()) {
+                    session.setReady(true);
+                }
+                refresh();
+            }
+
+            @Override
+            public void chatReceived(ServerLobbyService.ChatLine line) {
+                // 게임 화면에 있는 동안 온 채팅·안내도 쌓아 두어, 대기실로 돌아오면 보인다
+                if (line.notice()) {
+                    chat.systemMessage(line.text());
+                } else {
+                    chat.message(line.sender(), line.text());
+                }
+            }
+
+            @Override
+            public void serverError(String message) {
+                chat.systemMessage(message);
+            }
+
+            @Override
+            public void gameOver(hansung.arcade.outgame.GameResult result) {
+                // 시작 페이드 중에 경기가 끝났으면(상대가 바로 나감 등) 게임 화면으로 가지 않는다
+                if (showing && curtain.isFading()) {
+                    curtain.clear();
+                    chat.systemMessage("경기가 시작되자마자 끝났습니다.");
+                }
+            }
+
+            @Override
+            public void gameStarted(ServerLobbyService.GameStarted started) {
+                GameStartInfo start;
+                try {
+                    start = session.startInfo(started);
+                } catch (RuntimeException e) {
+                    // 게임을 열 수 없으면 서버 경기에서 빠진다 (LOADED를 못 보내 방에서 빠지기를 기다리지 않게)
+                    session.exitGame();
+                    chat.clear();
+                    scenes.show("lobby", "게임을 열지 못했습니다: " + e.getMessage());
+                    return;
+                }
+                if (!showing) {
+                    // 결과 모달 등 다른 화면에 있으면 페이드 없이 바로 게임으로 간다
+                    scenes.show("game", start);
+                    server.loaded();
+                    return;
+                }
+                if (!session.isHost()) {
+                    Sound.play("Bt_c_GameStart");
+                }
+                // 방장이 혼자 시작할 때처럼 어두워진 뒤 게임 화면으로 가고, 다 띄웠다고 서버에 알린다 (10초 안)
+                fadeOutThen(() -> {
+                    scenes.show("game", start);
+                    server.loaded();
+                });
+            }
+        });
     }
 
     // ── 화면 짜기 ───────────────────────────────────────────
@@ -272,9 +350,21 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
                 return;
             }
             if (session.isHost()) {
+                GameStartInfo start;
+                try {
+                    start = session.start();
+                } catch (IllegalStateException e) {
+                    chat.systemMessage(e.getMessage());
+                    Sound.play("Bt_c_GameStartNotAble");
+                    return;
+                }
                 Sound.play("Bt_c_GameStart");
-                GameStartInfo start = session.start();
-                fadeOutThen(() -> scenes.show("game", start));
+                if (start != null) {
+                    fadeOutThen(() -> scenes.show("game", start));
+                } else {
+                    // 온라인: GAME_STARTED를 받을 때 모두 함께 어두워진 뒤 게임 화면으로 간다. 그 사이 다시 누르지 못하게 끈다
+                    ready.setEnabled(false);
+                }
                 return;
             }
             session.setReady(!session.ready());
@@ -300,9 +390,15 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
         leave.setName("leave");
         leave.setClickSound("Bt_c_Out");
         leave.addActionListener(event -> {
-            session.leave();
+            // 서버가 거절해도(이미 방에서 빠짐 등) 로비로 간다. 이유는 로비 안내 줄에 보인다
+            String failure = null;
+            try {
+                session.leave();
+            } catch (IllegalStateException e) {
+                failure = e.getMessage();
+            }
             chat.clear();
-            scenes.show("lobby", null);
+            scenes.show("lobby", failure);
         });
         place(bottom, BOTTOM_BAR, leave, LEAVE);
     }
@@ -337,6 +433,11 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
     // ── 상태 반영 ───────────────────────────────────────────
 
     private void sendChat(String message) {
+        if (session.isOnline()) {
+            // 서버가 방 전체에 돌려주는 CHAT_MESSAGE로 뜬다
+            session.chat(message);
+            return;
+        }
         chat.message(session.nickname(), message);
     }
 
@@ -358,27 +459,32 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
         roomTitle.setText(room.title());
         roomCount.setText(room.players() + "/" + room.capacity());
 
-        List<GameStartInfo.PlayerInfo> players = session.players();
+        Map<Integer, OutgameSession.SeatView> seats = new HashMap<>();
+        session.seats().forEach(seat -> seats.put(seat.slot(), seat));
         boolean meHost = session.isHost();
-        int host = session.hostIndex();
         for (int i = 0; i < SLOTS; i++) {
-            if (i < players.size()) {
-                GameStartInfo.PlayerInfo player = players.get(i);
-                boolean local = i < session.localPlayers();
-                BufferedImage figure = local && session.randomCharacter(i)
+            OutgameSession.SeatView seat = seats.get(i);
+            if (seat != null) {
+                BufferedImage figure = seat.character() == null
                         ? randomFigure()
-                        : figure(player.character(), Team.fromLabel(player.team()).characterColor());
-                slots[i].display(stateOf(i, host, meHost), player.nickname(), figure);
+                        : figure(seat.character(), seat.team().characterColor());
+                slots[i].display(seat.state(), seat.nickname(), figure);
             } else {
                 slots[i].display(i < room.capacity() ? SlotState.EMPTY : SlotState.CLOSED, "", null);
             }
         }
 
+        // 서버에서 경기가 아직 끝나지 않았으면(게임 중) 고르기·준비·맵을 막는다
+        boolean waiting = room.status() == Room.Status.WAITING;
+        lastStatus = room.status();
         ready.setText(meHost ? "게임 시작" : session.ready() ? "준비 취소" : "준비");
         // 방장은 다른 참가자가 모두 준비했고 방이 대기 중일 때만 시작할 수 있다
-        ready.setEnabled(!meHost || session.canStart());
-        mapSelect.setEnabled(meHost);
+        ready.setEnabled(waiting && (!meHost || session.canStart()));
+        mapSelect.setEnabled(meHost && waiting);
         autoReady.setEnabled(!meHost);
+        characterCells.values().forEach(cell -> cell.setEnabled(waiting));
+        randomCell.setEnabled(waiting);
+        teamSwatches.values().forEach(swatch -> swatch.setEnabled(waiting));
         // 칸마다 그 칸을 고른 사람(1P·2P)을 표시한다
         int locals = session.localPlayers();
         boolean two = locals > 1;
@@ -399,21 +505,9 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
         repaint();
     }
 
-    /** index번째 자리의 상태. 이 컴퓨터의 플레이어는 내 준비 상태를, 목업 참가자는 세션이 들고 있는 준비 상태를 따른다 */
-    private SlotState stateOf(int index, int host, boolean meHost) {
-        if (index == host) {
-            return SlotState.HOST;
-        }
-        if (index < session.localPlayers() && meHost) {
-            // 방장과 같은 컴퓨터의 2P는 방장이 시작할 때 함께 들어가므로 늘 준비한 것으로 보인다
-            return SlotState.READY;
-        }
-        return session.isReady(index + 1) ? SlotState.READY : SlotState.WAITING;
-    }
-
     /** 고른 맵을 보여 준다. 실제 맵은 그림이 미리보기 칸을 꽉 채우고, 랜덤 맵은 보라 액자 안에 물음표 카드를 둔다 */
     private void showMap() {
-        GameMaps.GameMap map = GameMaps.byId(session.mapId());
+        GameMaps.GameMap map = GameMaps.byIdOrDefault(session.mapId());
         if (!map.id().equals(thumbnailMapId)) {
             if (thumbnail != null) {
                 thumbnail.getParent().remove(thumbnail);
@@ -477,11 +571,14 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
 
     @Override
     public void enter(Object data) {
+        showing = true;
         curtain.clear();
         if (data instanceof Room room) {
             session.enter(room);
             chat.clear();
-            chat.systemMessage("다른 참가자는 준비된 목업입니다. 실제 서버 연결 전입니다.");
+            if (!session.isOnline()) {
+                chat.systemMessage("다른 참가자는 준비된 목업입니다. 실제 서버 연결 전입니다.");
+            }
         } else {
             // 경기를 마치고 돌아왔다: 방을 다시 대기 중으로 돌린다
             session.returnToWaiting();
@@ -494,6 +591,7 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
     /** 대기실을 떠나면 짙어지던 막을 걷는다. 그래야 막이 다 짙어졌을 때 떠난 방의 게임을 시작하지 않는다 */
     @Override
     public void exit() {
+        showing = false;
         curtain.clear();
     }
 
