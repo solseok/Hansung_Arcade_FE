@@ -70,10 +70,25 @@ class NetworkStepTest {
     }
 
     @Test
-    void 잘못된_모드나_포트면_실패한다() {
+    void 잘못된_모드나_온라인의_잘못된_포트면_실패한다() {
         assertThrows(IllegalArgumentException.class,
                 () -> new NetworkStep().run(contextWith(Map.of("network.mode", "lan"))));
         assertThrows(IllegalArgumentException.class,
-                () -> new NetworkStep().run(contextWith(Map.of("network.port", "70000"))));
+                () -> new NetworkStep().run(contextWith(Map.of("network.mode", "online",
+                        "network.host", "localhost", "network.port", "70000"))));
+        assertThrows(IllegalStateException.class,
+                () -> new NetworkStep().run(contextWith(Map.of("network.mode", "online",
+                        "network.host", "localhost", "network.port", "9000 # 집"))));
+    }
+
+    @Test
+    void 오프라인은_쓰지_않는_포트가_잘못돼도_뜬다() {
+        GameContext numberless = contextWith(Map.of("network.port", "9000 # 집"));
+        new NetworkStep().run(numberless);
+        assertEquals(9000, numberless.get(NetworkSettings.class).port());
+
+        GameContext outOfRange = contextWith(Map.of("network.port", "70000"));
+        new NetworkStep().run(outOfRange);
+        assertEquals(9000, outOfRange.get(NetworkSettings.class).port());
     }
 }

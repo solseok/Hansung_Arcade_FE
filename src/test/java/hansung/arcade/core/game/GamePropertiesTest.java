@@ -39,7 +39,8 @@ class GamePropertiesTest {
 
     @Test
     void 리소스의_application_properties를_읽는다() {
-        GameProperties properties = GameProperties.load(GamePropertiesTest.class, List.of());
+        // 이 컴퓨터의 .env·환경 변수와 상관없이 본다
+        GameProperties properties = GameProperties.load(GamePropertiesTest.class, List.of(), Map.of());
 
         // 시작 맵은 자주 바뀌므로 값 대신 "테마/맵" 형식만 확인한다
         assertTrue(properties.get("game.start-map").matches("[a-z]+/[a-z0-9]+"), properties.get("game.start-map"));

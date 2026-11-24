@@ -29,9 +29,15 @@ public final class NetworkStep implements BootStep {
         GameProperties properties = context.get(GameProperties.class);
         NetworkMode mode = NetworkMode.from(properties.get("network.mode", "offline"));
         if (mode == NetworkMode.OFFLINE) {
-            // 오프라인은 주소를 쓰지 않으므로 .env가 없어도 된다
+            // 오프라인은 주소를 쓰지 않으므로 .env가 없거나 값이 틀려도 그대로 뜬다
+            int port = 9000;
+            try {
+                port = properties.getInt("network.port", 9000);
+            } catch (IllegalStateException e) {
+                log.warn("오프라인이라 쓰지 않는 설정이 잘못되어 있습니다: {}", e.getMessage());
+            }
             context.register(NetworkSettings.class, new NetworkSettings(mode,
-                    properties.get("network.host", "localhost"), properties.getInt("network.port", 9000)));
+                    properties.get("network.host", "localhost"), port < 1 || port > 65535 ? 9000 : port));
             log.info("오프라인 모드: 서버에 접속하지 않습니다.");
             return;
         }

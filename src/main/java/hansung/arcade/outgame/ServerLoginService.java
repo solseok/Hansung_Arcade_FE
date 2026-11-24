@@ -2,6 +2,7 @@ package hansung.arcade.outgame;
 
 import hansung.arcade.network.Message;
 import hansung.arcade.network.ServerClient;
+import hansung.arcade.network.ServerException;
 
 import java.util.List;
 import java.util.Map;
@@ -33,13 +34,28 @@ public final class ServerLoginService implements LoginService {
 
     @Override
     public CompletableFuture<List<LoginPlayer>> login(List<String> nicknames) {
-        return client.connect()
-                .thenCompose(connection -> connection.request(LOGIN, Map.of("nicknames", List.copyOf(nicknames))))
-                .thenApply(body -> List.copyOf(Message.read(body, LoginResponse.class).players()))
+        return client.connect().thenCompose(connection -> connection
+                .request(LOGIN, Map.of("nicknames", List.copyOf(nicknames)))
+                .thenApply(body -> players(body, nicknames))
+                // 실패하면 이 로그인에서 연 연결만 닫는다 (그사이 다른 연결이 생겼으면 건드리지 않는다)
                 .whenComplete((players, failure) -> {
                     if (failure != null) {
-                        client.disconnect();
+                        client.disconnect(connection);
                     }
-                });
+                }));
+    }
+
+    /** 서버가 보낸 플레이어. 보낸 닉네임 수와 다르면 서버 응답이 잘못된 것으로 보고 실패한다 */
+    private static List<LoginPlayer> players(com.fasterxml.jackson.databind.JsonNode body, List<String> nicknames) {
+        List<LoginPlayer> players;
+        try {
+            players = Message.read(body, LoginResponse.class).players();
+        } catch (IllegalArgumentException e) {
+            players = null;
+        }
+        if (players == null || players.size() != nicknames.size()) {
+            throw new ServerException("BAD_RESPONSE", "서버 응답이 올바르지 않습니다.");
+        }
+        return List.copyOf(players);
     }
 }

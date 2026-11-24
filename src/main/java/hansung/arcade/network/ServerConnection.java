@@ -4,10 +4,9 @@ import com.fasterxml.jackson.databind.JsonNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.BufferedReader;
+import java.io.BufferedInputStream;
 import java.io.BufferedWriter;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.io.Writer;
 import java.net.InetSocketAddress;
@@ -22,6 +21,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -63,11 +63,26 @@ public final class ServerConnection implements AutoCloseable {
         public static final Timing DEFAULT = new Timing(3_000, 5_000, Protocol.PING_INTERVAL_MS, Protocol.IDLE_TIMEOUT_MS);
     }
 
-    private record Pending(String type, CompletableFuture<JsonNode> future) {
+    /** 응답을 기다리는 요청. 응답이 오면 시간 초과 예약을 취소한다 */
+    private static final class Pending {
+        final String type;
+        final CompletableFuture<JsonNode> future = new CompletableFuture<>();
+        volatile ScheduledFuture<?> timeout;
+
+        Pending(String type) {
+            this.type = type;
+        }
+
+        void cancelTimeout() {
+            ScheduledFuture<?> scheduled = timeout;
+            if (scheduled != null) {
+                scheduled.cancel(false);
+            }
+        }
     }
 
     private final Socket socket;
-    private final BufferedReader reader;
+    private final LineInput input;
     private final Writer writer;
     private final String address;
     private final Timing timing;
@@ -83,9 +98,9 @@ public final class ServerConnection implements AutoCloseable {
     private final Thread receiver;
     private final Thread sender;
 
-    private ServerConnection(Socket socket, BufferedReader reader, Writer writer, String address, Timing timing) {
+    private ServerConnection(Socket socket, LineInput input, Writer writer, String address, Timing timing) {
         this.socket = socket;
-        this.reader = reader;
+        this.input = input;
         this.writer = writer;
         this.address = address;
         this.timing = timing;
@@ -111,11 +126,11 @@ public final class ServerConnection implements AutoCloseable {
             socket.connect(new InetSocketAddress(host, port), timing.connectMs());
             socket.setTcpNoDelay(true);
             socket.setSoTimeout(timing.connectMs());
-            BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
+            LineInput input = new LineInput(new BufferedInputStream(socket.getInputStream()));
             Writer writer = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8));
-            readHello(reader, address);
+            readHello(input, address);
             socket.setSoTimeout(timing.idleMs());
-            ServerConnection connection = new ServerConnection(socket, reader, writer, address, timing);
+            ServerConnection connection = new ServerConnection(socket, input, writer, address, timing);
             connection.start();
             log.info("서버 {}에 접속했습니다.", address);
             return connection;
@@ -127,8 +142,8 @@ public final class ServerConnection implements AutoCloseable {
         }
     }
 
-    private static void readHello(BufferedReader reader, String address) throws IOException {
-        String line = reader.readLine();
+    private static void readHello(LineInput input, String address) throws IOException {
+        String line = input.readLine();
         if (line == null) {
             throw new ServerException(ServerException.DISCONNECTED, "서버와 연결이 끊겼습니다.");
         }
@@ -157,13 +172,14 @@ public final class ServerConnection implements AutoCloseable {
      */
     public CompletableFuture<JsonNode> request(String type, Object body) {
         long id = nextId.getAndIncrement();
-        CompletableFuture<JsonNode> future = new CompletableFuture<>();
+        Pending waiting = new Pending(type);
+        CompletableFuture<JsonNode> future = waiting.future;
         String line = Message.request(type, id, body).toJson();
         if (!fits(line)) {
             future.completeExceptionally(new IllegalArgumentException(type + " 메시지가 한 줄 최대 길이를 넘습니다."));
             return future;
         }
-        pending.put(id, new Pending(type, future));
+        pending.put(id, waiting);
         if (closed.get()) {
             // 닫히는 중에 넣었으면 닫는 쪽이 이미 pending을 비웠을 수 있다
             failPending(id, disconnected());
@@ -171,7 +187,8 @@ public final class ServerConnection implements AutoCloseable {
         }
         outbox.add(line);
         try {
-            timer.schedule(() -> failPending(id, new ServerException(ServerException.TIMEOUT, "서버가 응답하지 않습니다.")),
+            waiting.timeout = timer.schedule(
+                    () -> failPending(id, new ServerException(ServerException.TIMEOUT, "서버가 응답하지 않습니다.")),
                     timing.responseMs(), TimeUnit.MILLISECONDS);
         } catch (RejectedExecutionException e) {
             // 그사이 닫혀 시간 재기가 멈췄다
@@ -217,7 +234,11 @@ public final class ServerConnection implements AutoCloseable {
         return address;
     }
 
-    /** BYE를 보내고 닫는다. 기다리던 요청은 모두 실패한다. 여러 번 불러도 된다 */
+    /**
+     * BYE를 보내고 닫는다. 기다리던 요청은 모두 실패한다. 여러 번 불러도 된다.
+     * 보내기를 닫은 뒤 서버가 BYE를 처리하고 연결을 닫을 때까지 최대 1초씩 기다린다(그래서 EDT에서 부르면 그만큼 멈춘다).
+     * 그래야 서버가 닉네임을 놓은 뒤에 같은 닉네임으로 다시 로그인한다.
+     */
     @Override
     public void close() {
         if (closed.get() || closing) {
@@ -226,14 +247,20 @@ public final class ServerConnection implements AutoCloseable {
         closing = true;
         outbox.add(Message.notice(Protocol.BYE, null).toJson());
         outbox.add(STOP);
-        if (Thread.currentThread() != sender) {
-            try {
-                sender.join(1_000);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-        }
+        join(sender);
+        join(receiver);
         shutdown(new ServerException(ServerException.DISCONNECTED, "서버와 연결을 닫았습니다."));
+    }
+
+    private static void join(Thread thread) {
+        if (Thread.currentThread() == thread) {
+            return;
+        }
+        try {
+            thread.join(1_000);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     private void ping() {
@@ -242,20 +269,25 @@ public final class ServerConnection implements AutoCloseable {
         }
     }
 
+    /** 받는 스레드. 어떤 이유로 끝나든(받은 메시지를 처리하다 난 오류 포함) 연결을 정리하고 끊김을 알린다 */
     private void receiveLoop() {
-        ServerException reason;
+        ServerException reason = disconnected();
         try {
             String line;
-            while ((line = reader.readLine()) != null) {
+            while ((line = input.readLine()) != null) {
                 dispatch(line);
             }
-            reason = disconnected();
         } catch (SocketTimeoutException e) {
             reason = new ServerException(ServerException.TIMEOUT, "서버가 응답하지 않습니다.", e);
         } catch (IOException e) {
             reason = new ServerException(ServerException.DISCONNECTED, "서버와 연결이 끊겼습니다.", e);
+        } catch (RuntimeException | Error e) {
+            log.error("서버 {}에서 받은 메시지를 처리하다 멈췄습니다. 연결을 닫습니다.", address, e);
+            reason = new ServerException(ServerException.DISCONNECTED, "서버와 연결이 끊겼습니다.", e);
+            throw e;
+        } finally {
+            shutdown(reason);
         }
-        shutdown(reason);
     }
 
     private void dispatch(String line) {
@@ -272,12 +304,16 @@ public final class ServerConnection implements AutoCloseable {
                 log.debug("기다리지 않는 응답을 버립니다: {}", message);
                 return;
             }
+            waiting.cancelTimeout();
             if (Boolean.TRUE.equals(message.ok())) {
-                waiting.future().complete(message.body());
+                waiting.future.complete(message.body());
             } else {
                 Message.Error error = message.error() == null ? new Message.Error("", "") : message.error();
-                log.info("{} 실패: {} {}", waiting.type(), error.code(), error.message());
-                waiting.future().completeExceptionally(new ServerException(error.code(), error.message()));
+                log.info("{} 실패: {} {}", waiting.type, error.code(), error.message());
+                // 서버 문구가 비면 화면에 아무것도 안 뜨므로 기본 문구를 쓴다
+                String text = error.message() == null || error.message().isBlank()
+                        ? "서버가 요청을 받지 않았습니다." : error.message();
+                waiting.future.completeExceptionally(new ServerException(error.code(), text));
             }
             return;
         }
@@ -306,10 +342,12 @@ public final class ServerConnection implements AutoCloseable {
     }
 
     private void sendLoop() {
+        boolean graceful = false;
         try {
             while (true) {
                 String line = outbox.take();
                 if (line == STOP) {
+                    graceful = closing;
                     break;
                 }
                 writer.write(line);
@@ -324,8 +362,17 @@ public final class ServerConnection implements AutoCloseable {
         } catch (IOException e) {
             log.debug("서버 {}에 보내지 못했습니다: {}", address, e.toString());
         }
-        // 보내는 쪽이 멈추면 소켓을 닫아 받는 스레드도 끝나게 한다
-        closeQuietly(socket);
+        if (graceful) {
+            // BYE까지 보냈다. 보내기만 닫고, 서버가 BYE를 처리해 연결을 닫으면 받는 스레드가 끝난다
+            try {
+                socket.shutdownOutput();
+            } catch (IOException e) {
+                closeQuietly(socket);
+            }
+        } else {
+            // 보내는 쪽이 멈추면 소켓을 닫아 받는 스레드도 끝나게 한다
+            closeQuietly(socket);
+        }
     }
 
     /** 한 번만 정리한다: 기다리던 요청 실패, PING·시간 재기 멈춤, 소켓 닫기, 끊김 알리기 */
@@ -356,7 +403,8 @@ public final class ServerConnection implements AutoCloseable {
     private void failPending(long id, ServerException reason) {
         Pending waiting = pending.remove(id);
         if (waiting != null) {
-            waiting.future().completeExceptionally(reason);
+            waiting.cancelTimeout();
+            waiting.future.completeExceptionally(reason);
         }
     }
 

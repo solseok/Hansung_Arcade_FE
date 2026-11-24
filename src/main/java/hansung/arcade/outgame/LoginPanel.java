@@ -201,15 +201,13 @@ public final class LoginPanel extends JPanel implements Scene {
     /** EDT에서 로그인 결과를 반영한다. 성공하면 로비로, 실패하면 이유를 보여 주고 머문다 */
     private void finishLogin(CompletableFuture<List<LoginService.LoginPlayer>> result) {
         setWaiting(false);
-        List<LoginService.LoginPlayer> players;
         try {
-            players = result.join();
+            session.signedIn(result.join());
         } catch (RuntimeException failure) {
             showError(ServerException.from(failure).getMessage());
             Sound.play("Bt_c_GameStartNotAble");
             return;
         }
-        session.signedIn(players);
         message.setText(" ");
         Sound.play("Bt_c_Success");
         scenes.show("lobby", null);

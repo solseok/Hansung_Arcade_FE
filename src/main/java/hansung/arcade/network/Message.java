@@ -1,5 +1,6 @@
 package hansung.arcade.network;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
@@ -51,12 +52,14 @@ public record Message(String type, Long id, Boolean ok, JsonNode body, Error err
         return new Message(type, null, null, toBody(body), null);
     }
 
-    /** 요청에 대한 응답인지 (ok가 있는지) */
+    /** 요청에 대한 응답인지 (ok가 있는지). 메시지 필드가 아니므로 JSON에 쓰지 않는다 */
+    @JsonIgnore
     public boolean isResponse() {
         return ok != null && id != null;
     }
 
     /** 실패 응답이나 ERROR 푸시의 code. 없으면 null */
+    @JsonIgnore
     public String errorCode() {
         if (error != null) {
             return error.code();

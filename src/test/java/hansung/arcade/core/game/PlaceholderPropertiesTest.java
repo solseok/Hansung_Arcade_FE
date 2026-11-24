@@ -84,6 +84,23 @@ class PlaceholderPropertiesTest {
     }
 
     @Test
+    void env_파일의_줄_끝_주석_BOM_UTF8이_아닌_글자를_견딘다(@TempDir Path dir) throws IOException {
+        Path file = dir.resolve(".env");
+        byte[] cp949Comment = {'#', ' ', (byte) 0xC1, (byte) 0xD6, (byte) 0xBC, (byte) 0xD2, '\n'};
+        byte[] rest = "\uFEFFSERVER_HOST=arcade.example # 집\nSERVER_PORT='9000 # 그대로'\n"
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        byte[] all = new byte[cp949Comment.length + rest.length];
+        System.arraycopy(cp949Comment, 0, all, 0, cp949Comment.length);
+        System.arraycopy(rest, 0, all, cp949Comment.length, rest.length);
+        Files.write(file, all);
+
+        Map<String, String> values = DotEnv.read(file);
+
+        assertEquals("arcade.example", values.get("SERVER_HOST"));
+        assertEquals("9000 # 그대로", values.get("SERVER_PORT"), "따옴표 안의 #은 값이다");
+    }
+
+    @Test
     void env_파일이_없으면_빈_값이다(@TempDir Path dir) {
         assertEquals(Map.of(), DotEnv.read(dir.resolve(".env")));
     }
