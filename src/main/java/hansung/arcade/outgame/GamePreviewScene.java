@@ -5,6 +5,8 @@ import hansung.arcade.core.game.SceneManager;
 import hansung.arcade.ingame.GameSound;
 import hansung.arcade.ingame.GameWorld;
 import hansung.arcade.ingame.InGamePanel;
+import hansung.arcade.ingame.OnlineSeat;
+import hansung.arcade.ingame.ServerRules;
 import hansung.arcade.ingame.entity.PlayerProfile;
 import hansung.arcade.ingame.hud.HudLayout;
 import hansung.arcade.ingame.hud.HudSkin;
@@ -31,13 +33,19 @@ import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 /**
- * 인게임 공개 API를 이용한 아웃게임 흐름 확인용 연결. 이 컴퓨터의 플레이어(1P, 2P면 2P까지)를 대기실에서 고른
- * 캐릭터·팀 색으로 인게임에 넣는다. 인게임의 실제 승패(MatchResult)는 아직 결과 모달에 잇지 않아서
- * "목업 경기 끝내기"로 마지막 플레이어가 죽은 상황을 흉내 낸다.
- * 경기가 끝나면 게임 화면 위에 결과 모달({@link ResultOverlay})을 띄우고, 화면이 검어지면 원래 대기방으로 돌아간다.
+ * 대기실에서 넘어온 게임 화면. 경기가 끝나면 게임 화면 위에 결과 모달({@link ResultOverlay})을 띄우고,
+ * 화면이 검어지면 원래 대기방으로 돌아간다. 소리는 이 화면이 직접 내지 않고, 밖에서 넘겨준 곳으로 보낸다
+ * ({@link #setSoundSink}, {@link #setOnGameStart}).
  *
- * <p>게임은 시작 연출("Ready... Start!")부터 하고, 인게임 오른쪽 아래 나가기 버튼을 누르면 경기를 그만두고 대기방으로 돌아간다.
- * 소리는 이 화면이 직접 내지 않고, 밖에서 넘겨준 곳으로 보낸다 ({@link #setSoundSink}, {@link #setOnGameStart}).</p>
+ * <ul>
+ *   <li>온라인(서버가 연 경기, {@link #setOnline}·{@link #connect})이면 서버가 정한 맵·스폰에 경기 인원 모두를 세우고
+ *       판정은 서버가 한다 ({@link ServerRules}). 서버가 GAME_OVER를 보내면 {@link #endGame}으로 끝난다.
+ *       목업 경기 끝내기는 없고, 나가기는 {@link #setOnline}으로 받은 일(GAME_EXIT 뒤 로비로)을 한다.</li>
+ *   <li>오프라인이면 이 컴퓨터의 플레이어(1P, 2P면 2P까지)만 대기실에서 고른 캐릭터·팀 색으로 넣는다. 인게임의 승패(MatchResult)는
+ *       아직 결과 모달에 잇지 않아서 "목업 경기 끝내기"로 마지막 플레이어가 죽은 상황을 흉내 내고, 나가기는 대기방으로 돌아간다.</li>
+ * </ul>
+ *
+ * <p>게임은 시작 연출("Ready... Start!")부터 한다. 온라인은 모두 화면을 띄울 때까지 검은 화면에서 기다렸다가 연출을 한다.</p>
  */
 public final class GamePreviewScene implements Scene {
     private static final int FRAME_MS = 16;
@@ -62,6 +70,10 @@ public final class GamePreviewScene implements Scene {
     private Runnable onExit;
     private Consumer<GameSound> soundSink = sound -> { };
     private Consumer<String> onGameStart = theme -> { };
+    /** 온라인이면 서버 인게임 API와 잇는 곳. 오프라인이면 null */
+    private ServerMatchLink link;
+    /** 온라인 경기에서 서버가 이 컴퓨터의 플레이어를 뺐을 때(로딩 시간 초과) 할 일 */
+    private Runnable onDropped = () -> { };
 
     /** 그림은 부팅 때 한 번 읽어 둔 것을 받는다 (ResourceStep) */
     public GamePreviewScene(SceneManager scenes, HudSkin skin, CharacterSprites sprites, BalloonSprites balloons,
@@ -96,6 +108,16 @@ public final class GamePreviewScene implements Scene {
         finish.setVisible(false);
     }
 
+    /**
+     * 서버가 연 경기({@link GameStartInfo#online()})의 판정을 이 연결로 받는다.
+     *
+     * @param dropped 서버가 이 컴퓨터의 플레이어를 경기와 방에서 뺐을 때(로딩 시간 초과) 할 일. GAME_EXIT는 보내지 않는다
+     */
+    public void connect(ServerMatchLink link, Runnable dropped) {
+        this.link = Objects.requireNonNull(link);
+        this.onDropped = Objects.requireNonNull(dropped);
+    }
+
     /** 경기가 끝났을 때 한 번 불린다 (끝나는 소리 등) */
     public void setOnGameOver(Runnable listener) {
         onGameOver = listener;
@@ -120,13 +142,19 @@ public final class GamePreviewScene implements Scene {
         return overlay;
     }
 
+    /** 지금 띄운 경기 상태. 없으면 null (테스트에서 경기 인원·온라인 여부를 볼 때 쓴다) */
+    GameWorld world() {
+        return world;
+    }
+
     /** 마지막 플레이어가 죽어 경기가 끝났다. 지금부터 결과 연출 시계를 잰다. */
     public void endGame(GameResult result) {
         if (game == null || start == null || overlay.isRunning()) {
             return;
         }
         endedAt = System.nanoTime();
-        // 시작 연출 중에 끝났으면(목업 버튼) 연출을 끝내 둔다. 그대로 멈추면 검은 화면이 결과 모달 아래에 남는다
+        world.server().ifPresent(ServerRules::gameOver);
+        // 시작 연출 중에 끝났으면(목업 버튼, 로딩 중 상대가 모두 나감) 연출을 끝내 둔다. 그대로 멈추면 검은 화면이 결과 모달 아래에 남는다
         world.intro().finish();
         // 경기가 끝났으니 더는 움직이지 않게 게임 루프와 입력을 멈춘다 (맵은 마지막 모습으로 남는다)
         game.stop();
@@ -162,8 +190,13 @@ public final class GamePreviewScene implements Scene {
         start = (GameStartInfo) data;
         overlay.reset();
         var map = MapLoader.loadResource(start.mapId());
-        world = new GameWorld(map, localProfiles(start), MatchMode.SOLO);
-        world.beginIntro();
+        boolean online = start.online() && link != null;
+        if (online) {
+            world = GameWorld.online(map, seats(start), link);
+        } else {
+            world = new GameWorld(map, localProfiles(start), MatchMode.SOLO);
+            world.beginIntro();
+        }
         game = new InGamePanel(world, Tileset.forTheme(map.theme()), skin, sprites, balloons, items, airplanes);
         game.setSoundSink(soundSink);
         // 나가기: 경기를 그만두고 대기방으로 돌아간다 (방장이면 방을 다시 대기 중으로 돌린다)
@@ -178,20 +211,49 @@ public final class GamePreviewScene implements Scene {
         onGameStart.accept(map.theme());
         game.start();
         game.requestFocusInWindow();
+        if (online) {
+            // 화면을 다 만든 뒤에 잇는다. 대기실이 어두워지는 동안 온 푸시(상대가 이미 나가 끝난 경기 등)가 여기서 들어간다
+            GameWorld shown = world;
+            shown.server().ifPresent(rules -> link.bind(rules, shown::receiveChat, this::endGame, this::dropped));
+        }
     }
 
-    /** 이 컴퓨터의 플레이어(players 앞쪽 localPlayers명). 팀 번호는 팀 순서(빨강 1)이고, 캐릭터 고정색은 팀 색으로 칠한다 */
+    /** 서버가 이 컴퓨터의 플레이어를 경기에서 뺐다 (로딩 시간 초과). 방에서도 빠졌으므로 GAME_EXIT 없이 밖에서 정한 곳으로 간다 */
+    private void dropped() {
+        if (game != null) {
+            game.stop();
+        }
+        onDropped.run();
+    }
+
+    /** 이 컴퓨터의 플레이어(players 앞쪽 localPlayers명) */
     private static List<PlayerProfile> localProfiles(GameStartInfo start) {
-        return start.players().stream().limit(start.localPlayers()).map(player -> {
-            Team team = Team.fromLabel(player.team());
-            return new PlayerProfile(player.nickname(), player.character(), team.ordinal() + 1, team.characterColor());
-        }).toList();
+        return start.players().stream().limit(start.localPlayers()).map(GamePreviewScene::profile).toList();
+    }
+
+    /** 온라인 경기 인원 모두. 서버가 정한 번호·스폰 자리이고, players 앞쪽 localPlayers명이 이 컴퓨터의 플레이어다 */
+    private static List<OnlineSeat> seats(GameStartInfo start) {
+        List<OnlineSeat> seats = new ArrayList<>();
+        for (int i = 0; i < start.players().size(); i++) {
+            GameStartInfo.PlayerInfo player = start.players().get(i);
+            seats.add(new OnlineSeat(player.id(), profile(player), player.spawn(), i < start.localPlayers()));
+        }
+        return seats;
+    }
+
+    /** 팀 번호는 팀 순서(빨강 1)이고, 캐릭터 고정색은 팀 색으로 칠한다 */
+    private static PlayerProfile profile(GameStartInfo.PlayerInfo player) {
+        Team team = Team.fromLabel(player.team());
+        return new PlayerProfile(player.nickname(), player.character(), team.ordinal() + 1, team.characterColor());
     }
 
     @Override
     public void exit() {
         clock.stop();
         overlay.reset();
+        if (link != null) {
+            link.unbind();
+        }
         if (game != null) {
             game.stop();
             layers.remove(game);

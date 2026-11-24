@@ -465,12 +465,26 @@ public final class OutgameSession {
             throw new IllegalStateException("이 게임에 없는 맵입니다: " + started.mapId());
         }
         local.addAll(others);
-        return new GameStartInfo(started.mapId(), local, local.size() - others.size());
+        return new GameStartInfo(started.mapId(), local, local.size() - others.size(), true);
     }
 
     private static GameStartInfo.PlayerInfo info(ServerLobbyService.StartedPlayer player) {
         return new GameStartInfo.PlayerInfo((int) player.playerId(), player.nickname(),
-                Mascot.fromId(player.character()), Team.valueOf(player.team()).label());
+                Mascot.fromId(player.character()), Team.valueOf(player.team()).label(), player.spawn());
+    }
+
+    /**
+     * 서버가 이 컴퓨터의 플레이어를 경기와 방에서 함께 뺐다 (로딩 시간 초과). 이미 빠졌으므로 GAME_EXIT·ROOM_LEAVE를
+     * 보내지 않고 방만 잊는다. 나가기를 눌러 나올 때는 {@link #exitGame}이다.
+     */
+    public void droppedFromGame() {
+        if (online != null) {
+            online.forgetRoom();
+        }
+        roomState = null;
+        room = null;
+        participantReady.clear();
+        ready = false;
     }
 
     /** 게임 화면에서 나간다 (온라인: GAME_EXIT). 서버는 방에서 빼므로 이 컴퓨터도 방을 떠난 상태가 된다 */

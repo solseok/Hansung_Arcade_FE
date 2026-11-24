@@ -358,14 +358,21 @@ public final class ServerRules {
         placeItems(items);
     }
 
-    /** PLAYER_LEFT. 나가기·끊김·로딩 시간 초과로 경기에서 빠졌다. 맵에서 바로 사라진다 */
-    public void playersLeft(List<Long> playerIds, String reason) {
+    /**
+     * PLAYER_LEFT. 나가기·끊김·로딩 시간 초과로 경기에서 빠졌다. 맵에서 바로 사라진다.
+     *
+     * @return 이 컴퓨터의 플레이어가 빠졌는지. 서버는 로딩 시간 초과로 뺄 때만 빠진 본인에게도 알리고, 방에서도 뺀다
+     */
+    public boolean playersLeft(List<Long> playerIds, String reason) {
+        boolean mine = false;
         for (long id : playerIds) {
             Player player = world.player((int) id);
             if (player != null) {
                 player.leaveMatch();
+                mine |= world.localPlayers().contains(player);
             }
         }
+        return mine;
     }
 
     /** GAME_OVER. 경기가 끝났다. 시계를 멈추고 더는 입력을 받지 않는다 */

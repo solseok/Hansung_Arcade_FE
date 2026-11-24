@@ -291,10 +291,11 @@ class ServerRulesTest {
     void 경기에서_나간_플레이어는_맵에서_바로_사라진다() {
         play();
 
-        server.playersLeft(List.of((long) OTHER), "EXIT");
+        assertFalse(server.playersLeft(List.of((long) OTHER), "EXIT"), "다른 컴퓨터의 플레이어다");
 
         assertEquals(PlayerState.GONE, other.state());
         assertFalse(other.isAlive());
+        assertTrue(server.playersLeft(List.of((long) ME), "DISCONNECT"), "이 컴퓨터의 플레이어가 빠졌다");
     }
 
     @Test
