@@ -5,6 +5,7 @@ import hansung.arcade.core.game.GameProperties;
 import hansung.arcade.core.game.GameWindow;
 import hansung.arcade.core.game.SceneManager;
 import hansung.arcade.core.ui.SwingThread;
+import hansung.arcade.ingame.GameSound;
 import hansung.arcade.ingame.GameWorld;
 import hansung.arcade.ingame.InGamePanel;
 import hansung.arcade.ingame.entity.CharacterColor;
@@ -37,6 +38,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.swing.SwingUtilities;
+import java.awt.Window;
+import java.awt.event.WindowEvent;
 import java.util.List;
 
 /**
@@ -100,6 +103,9 @@ public final class StartScreenStep implements BootStep {
                 GamePreviewScene game = new GamePreviewScene(scenes, skin, characters, balloons, items, airplanes);
                 // 결과는 게임 화면 위 모달로 뜨므로, 끝나는 소리는 경기가 끝나는 때 낸다
                 game.setOnGameOver(() -> Sound.play("Ntc_GameEnd"));
+                // Ready·Start, 물풍선·아이템 같은 인게임 소리와 맵마다 다른 BGM
+                game.setSoundSink(sound -> Sound.play(sound.key()));
+                game.setOnGameStart(theme -> Sound.playBgm(Sound.bgmForMap(theme)));
                 scenes.register("game", game);
                 session.online().ifPresent(online -> online.listen(new ServerLobbyService.Listener() {
                     @Override
@@ -109,14 +115,13 @@ public final class StartScreenStep implements BootStep {
                     }
                 }));
                 scenes.onShow(name -> {
-                    Sound.playBgm(Sound.bgmFor(name));
-                    if (name.equals("game")) {
-                        Sound.play("Ntc_GameStart");
-                    }
-                    if (name.equals("waiting")) {
-                        Sound.play("Ntc_GameReady");
+                    // 게임 화면의 곡은 맵을 알아야 정하므로 위 setOnGameStart가 튼다
+                    if (!name.equals("game")) {
+                        Sound.playBgm(Sound.bgmFor(name));
                     }
                 });
+                // 게임에 들어갈 때 처음 나는 효과음이 늦지 않게 미리 풀어 둔다
+                Sound.preload(GameSound.keys());
                 context.register(LobbyService.class, service);
                 context.register(SceneManager.class, scenes);
                 scenes.show(screen, null);
@@ -140,10 +145,21 @@ public final class StartScreenStep implements BootStep {
             TestItems.scatter(map, world.items());
             log.info("아이템 시험 모드: 1P 스폰 둘레에 아이템 {}종을 깔아 둡니다.", world.items().all().size());
         }
+        world.beginIntro();
+        Sound.preload(GameSound.keys());
 
         SwingThread.runAndWait(() -> {
             InGamePanel inGamePanel = new InGamePanel(world, tileset, skin, characters, balloons, items, airplanes);
+            inGamePanel.setSoundSink(sound -> Sound.play(sound.key()));
+            // 아웃게임 없이 띄운 게임이라 나가기는 창을 닫는다
+            inGamePanel.setOnExit(() -> {
+                Window frame = SwingUtilities.getWindowAncestor(inGamePanel);
+                if (frame != null) {
+                    frame.dispatchEvent(new WindowEvent(frame, WindowEvent.WINDOW_CLOSING));
+                }
+            });
             window.show(inGamePanel);
+            Sound.playBgm(Sound.bgmForMap(map.theme()));
             inGamePanel.start();
         });
     }

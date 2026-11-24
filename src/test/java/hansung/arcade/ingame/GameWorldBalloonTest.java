@@ -144,8 +144,9 @@ class GameWorldBalloonTest {
         Player first = world.localPlayers().get(0);
         Player second = world.localPlayers().get(1);
         world.update(TICK, Map.of(first.id(), BALLOON));
-        first.placeAt(TileMap.centerX(2), TileMap.TILE_SIZE - 5);
-        second.placeAt(TileMap.centerX(2), TileMap.TILE_SIZE + 5);
+        // 1P는 0번 줄에 몸이 72% 들어가 물줄기에 맞고(66% 이상), 2P는 1번 줄에 서서 칸 경계 너머로 1P에 닿는다
+        first.placeAt(TileMap.centerX(2), TileMap.TILE_SIZE - 8);
+        second.placeAt(TileMap.centerX(2), TileMap.TILE_SIZE + 8);
         assertTrue(first.touches(second));
         ticks(world, 119);
         assertEquals(PlayerState.NORMAL, first.state());

@@ -218,11 +218,12 @@ class TilesetTest {
     }
 
     @Test
-    void 기본_맵은_캠프_테마로_그릴_수_있다() {
+    void 캠프08은_캠프_테마_그림으로_빠짐없이_그린다() {
         TileMap map = MapLoader.loadResource("camp/camp08");
         Tileset camp = Tileset.forTheme(map.theme());
 
         assertNotNull(camp.sprite(Tile.BLOCK, 0, 0));
-        assertDoesNotThrow(() -> camp.missingArt(map));
+        assertNotNull(camp.sprite(Tile.MISSILE, 10, 12));
+        assertEquals(Set.of(), camp.missingArt(map));
     }
 }

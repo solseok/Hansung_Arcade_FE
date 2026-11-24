@@ -113,6 +113,23 @@ class OnlineSessionTest {
     }
 
     @Test
+    void 이P가_고른_것은_2P_번호로_보내고_2P_자리는_서버_값을_따른다() throws Exception {
+        enterAsHost(true);
+
+        session.select(1, Mascot.SANGZZI);
+        session.selectTeam(1, Team.YELLOW);
+
+        var character = server.next("SELECT_CHARACTER").path("body");
+        assertEquals(13, character.path("playerId").asLong());
+        assertEquals("sangzzi", character.path("character").asText());
+        assertEquals(13, server.next("SELECT_TEAM").path("body").path("playerId").asLong());
+        // 지금 서버는 연결 단위로 적용해 1P·2P가 같은 값으로 돌아온다. 세션은 서버가 돌려준 값을 따른다
+        session.applyRoomState(hansung.arcade.outgame.lobby.RoomState.from(read(HOST_STATE.formatted(true))));
+        assertEquals(Mascot.KKUKKU, session.character(1));
+        assertEquals(Team.MINT, session.team(1));
+    }
+
+    @Test
     void 게임_시작_정보는_이_컴퓨터의_플레이어를_앞에_둔다() {
         enterAsHost(true);
 

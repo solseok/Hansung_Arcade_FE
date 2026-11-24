@@ -251,13 +251,20 @@ public final class ServerLobbyService implements LobbyService {
         state = null;
     }
 
-    /** @param character 캐릭터 id 또는 {@value RoomState#RANDOM_CHARACTER} */
-    public void selectCharacter(String character) {
-        client.send(SELECT_CHARACTER, Map.of("character", character));
+    /**
+     * 캐릭터를 고른다. 지금 서버는 playerId를 보지 않고 이 연결의 플레이어(1P·2P) 모두에 적용한다.
+     * 서버가 플레이어별 선택을 받게 되면 그대로 쓰이도록 고른 사람의 번호를 함께 보낸다.
+     *
+     * @param playerId  고른 사람 (2P면 2P 번호)
+     * @param character 캐릭터 id 또는 {@value RoomState#RANDOM_CHARACTER}
+     */
+    public void selectCharacter(long playerId, String character) {
+        client.send(SELECT_CHARACTER, Map.of("playerId", playerId, "character", character));
     }
 
-    public void selectTeam(Team team) {
-        client.send(SELECT_TEAM, Map.of("team", team.name()));
+    /** 팀을 고른다. playerId는 {@link #selectCharacter}와 같다 */
+    public void selectTeam(long playerId, Team team) {
+        client.send(SELECT_TEAM, Map.of("playerId", playerId, "team", team.name()));
     }
 
     public void ready(boolean ready) {

@@ -170,16 +170,20 @@ class ServerLobbyServiceTest {
 
     @Test
     void 대기실에서_고르기_준비_채팅은_응답_없이_보낸다() throws Exception {
-        lobby.selectCharacter("kkukku");
-        lobby.selectCharacter(RoomState.RANDOM_CHARACTER);
-        lobby.selectTeam(Team.MINT);
+        lobby.selectCharacter(12, "kkukku");
+        lobby.selectCharacter(13, RoomState.RANDOM_CHARACTER);
+        lobby.selectTeam(13, Team.MINT);
         lobby.ready(true);
         lobby.chat(12, "안녕");
         lobby.loaded();
 
-        assertEquals("kkukku", server.next("SELECT_CHARACTER").path("body").path("character").asText());
+        JsonNode character = server.next("SELECT_CHARACTER").path("body");
+        assertEquals("kkukku", character.path("character").asText());
+        assertEquals(12, character.path("playerId").asLong());
         assertEquals("random", server.next("SELECT_CHARACTER").path("body").path("character").asText());
-        assertEquals("MINT", server.next("SELECT_TEAM").path("body").path("team").asText());
+        JsonNode team = server.next("SELECT_TEAM").path("body");
+        assertEquals("MINT", team.path("team").asText());
+        assertEquals(13, team.path("playerId").asLong(), "2P가 고른 것은 2P 번호로 보낸다");
         JsonNode ready = server.next("READY");
         assertTrue(ready.path("body").path("ready").asBoolean());
         assertFalse(ready.has("id"));
