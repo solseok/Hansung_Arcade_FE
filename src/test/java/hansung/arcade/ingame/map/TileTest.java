@@ -47,9 +47,11 @@ class TileTest {
     }
 
     @Test
-    void 밀리는_블럭은_상자뿐이다() {
+    void 밀리는_블럭은_상자와_철로_보강된_상자다() {
         for (Tile tile : Tile.values()) {
-            assertEquals(tile == Tile.PUSH_BOX, tile.isPushable(), tile.name());
+            boolean box = tile == Tile.PUSH_BOX || tile == Tile.HARD_BLOCK_3 || tile == Tile.HARD_BLOCK_2
+                    || tile == Tile.HARD_BLOCK_1;
+            assertEquals(box, tile.isPushable(), tile.name());
         }
     }
 

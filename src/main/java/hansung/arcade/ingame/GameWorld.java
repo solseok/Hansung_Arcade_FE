@@ -339,6 +339,7 @@ public final class GameWorld {
             boxPusher.pushRequest(player, move, dt, (col, row) -> occupancy.hasAny(col, row, BOX_BLOCKERS))
                     .ifPresent(box -> server.requestBoxPush(player, box, move));
         }
+        server.forgetBoxPasses();
         server.moveRemotePlayers(dt);
         balloonField.update(dt, allPlayers);
         if (controls) {
@@ -478,7 +479,8 @@ public final class GameWorld {
 
     /** player가 들어갈 수 없는 칸: 맵의 막힌 칸과, player가 지나갈 수 없는 물풍선 칸 */
     private Obstacles obstaclesFor(Player player) {
-        return (col, row) -> map.isSolid(col, row) || balloonField.blocks(player, col, row);
+        return (col, row) -> map.isSolid(col, row) && (server == null || !server.passesBox(player, col, row))
+                || balloonField.blocks(player, col, row);
     }
 
     /**

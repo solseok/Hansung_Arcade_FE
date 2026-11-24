@@ -111,6 +111,8 @@ public final class ServerRules {
     /** 이 컴퓨터의 플레이어 번호 → 지금 선 칸, 그 칸에서 줍겠다고 보낸 아이템 */
     private final Map<Integer, Point> pickupCells = new HashMap<>();
     private final Map<Integer, Integer> pickupRequests = new HashMap<>();
+    /** 이 컴퓨터의 플레이어 번호 → 몸이 걸친 채 상자가 밀려 들어온 칸. 그 칸을 벗어날 때까지 지나갈 수 있다 */
+    private final Map<Integer, Point> boxPasses = new HashMap<>();
     /** 비행기에서 떨어지는 중인 아이템 (서버 itemId → 떨어지는 아이템). 닿으면 맵에 놓는다 */
     private final Map<Integer, FallingItem> fallingItems = new HashMap<>();
     private double sinceMove;
@@ -463,11 +465,36 @@ public final class ServerRules {
         remote.moving = false;
     }
 
-    /** BOX_MOVED. 누군가 상자를 밀었다. 맵 칸은 바로 옮기고 미끄러지는 모습을 보인다 */
+    /**
+     * BOX_MOVED. 누군가 상자를 밀었다. 맵 칸은 바로 옮기고 미끄러지는 모습을 보인다.
+     * 서버는 마지막으로 받은 MOVE로 칸이 비었는지 보므로, 그 사이 이 컴퓨터의 플레이어가 그 칸에 몸을 걸쳤을 수 있다.
+     * 그러면 물풍선을 놓을 때처럼 그 칸을 벗어날 때까지 상자를 지나갈 수 있게 해 갇히지 않게 한다.
+     */
     public void boxMoved(int fromCol, int fromRow, int toCol, int toRow) {
         if (!world.boxPusher().moveFromServer(fromCol, fromRow, toCol, toRow)) {
             log.warn("맵이 서버와 달라 상자를 옮기지 못했습니다: ({}, {}) → ({}, {})", fromCol, fromRow, toCol, toRow);
+            return;
         }
+        for (Player player : world.localPlayers()) {
+            if (player.overlapsTile(toCol, toRow)) {
+                boxPasses.put(player.id(), new Point(toCol, toRow));
+            }
+        }
+    }
+
+    /** player가 (col, row) 칸의 상자를 지나갈 수 있는지. 상자가 밀려 들어올 때 몸이 걸쳐 있었고 아직 벗어나지 않았으면 지나간다 */
+    boolean passesBox(Player player, int col, int row) {
+        Point cell = boxPasses.get(player.id());
+        return cell != null && cell.x == col && cell.y == row;
+    }
+
+    /** 상자가 밀려 들어온 칸에서 몸이 완전히 빠져나간 플레이어는 다시 그 상자를 지나가지 못한다 */
+    void forgetBoxPasses() {
+        boxPasses.entrySet().removeIf(entry -> {
+            Player player = world.player(entry.getKey());
+            Point cell = entry.getValue();
+            return player == null || !player.overlapsTile(cell.x, cell.y);
+        });
     }
 
     /** AIRPLANE_APPEARED. 비행기가 heading(RIGHT·LEFT) 쪽으로 맵 위를 가로지르기 시작했다. 떨어뜨릴 칸은 서버가 따로 알린다 */

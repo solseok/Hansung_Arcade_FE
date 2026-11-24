@@ -108,9 +108,15 @@ public enum Tile {
         };
     }
 
-    /** 몸으로 밀어 한 칸씩 옮길 수 있는 블럭인지 */
+    /**
+     * 몸으로 밀어 한 칸씩 옮길 수 있는 블럭인지. 상자와 철로 보강된 상자(c·b·a)다 (네프 API BOX_PUSH, 서버 Tile.isPushable과 같다).
+     * 보강된 상자는 타일째 옮기므로 남은 맞을 횟수도 그대로 따라간다.
+     */
     public boolean isPushable() {
-        return this == PUSH_BOX;
+        return switch (this) {
+            case PUSH_BOX, HARD_BLOCK_3, HARD_BLOCK_2, HARD_BLOCK_1 -> true;
+            default -> false;
+        };
     }
 
     /**

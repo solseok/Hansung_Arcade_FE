@@ -460,9 +460,14 @@ class ServerRulesTest {
 
     /** 1번 스폰(1,1) 오른쪽 바로 옆 (2,1)에 밀리는 상자가 있고 그 너머 (3,1)은 바닥이다. 나(12번)는 1번 스폰에 선다 */
     private GameWorld boxWorld(Outbox box) {
+        return boxWorld(box, ".1P...2");
+    }
+
+    /** middle은 가운데 줄. 1번 스폰에 나(12번), 2번 스폰에 다른 플레이어가 선다 */
+    private GameWorld boxWorld(Outbox box, String middle) {
         GameWorld boxes = GameWorld.online(MapLoader.parse("fixture/box", List.of(
                         ".......",
-                        ".1P...2",
+                        middle,
                         ".......")), List.of(
                 new OnlineSeat(ME, new PlayerProfile("부기", Mascot.SANGSANGBUGI, 1), 1, true),
                 new OnlineSeat(OTHER, new PlayerProfile("냥이", Mascot.HANSUNGNYANGI, 2), 2, false)), box);
@@ -496,6 +501,48 @@ class ServerRulesTest {
             boxes.update(TICK, right);
         }
         assertEquals(2, box.count("BOX_PUSH"), "안 밀렸으면 계속 누를 때 0.25초 뒤 다시 보낸다");
+    }
+
+    @Test
+    void 철로_보강된_상자도_밀어_달라고_하고_남은_맞을_횟수째로_옮긴다() {
+        Outbox box = new Outbox();
+        GameWorld boxes = boxWorld(box, ".1b...2");
+
+        for (int i = 0; i < 18; i++) {
+            boxes.update(TICK, Map.of(ME, PlayerCommand.moving(Direction.RIGHT)));
+        }
+        assertEquals(1, box.count("BOX_PUSH " + ME + " 2,1 RIGHT"), box.sent.toString());
+
+        boxes.server().orElseThrow().boxMoved(2, 1, 3, 1);
+        assertEquals(Tile.HARD_BLOCK_2, boxes.map().tileAt(3, 1));
+        assertEquals(Tile.FLOOR, boxes.map().tileAt(2, 1));
+    }
+
+    @Test
+    void 몸이_걸친_칸으로_상자가_밀려_오면_그_칸을_벗어날_때까지_지나갈_수_있다() {
+        Outbox box = new Outbox();
+        GameWorld boxes = boxWorld(box, ".1.P..2");
+        Player mine = boxes.localPlayers().getFirst();
+        // 오른쪽으로 조금 걸어 몸이 (2,1) 칸에 걸친다
+        for (int i = 0; i < 4; i++) {
+            boxes.update(TICK, Map.of(ME, PlayerCommand.moving(Direction.RIGHT)));
+        }
+        assertTrue(mine.overlapsTile(2, 1));
+
+        // 그 사이 다른 사람이 (3,1)의 상자를 왼쪽으로 밀었다 (서버는 늦게 받은 MOVE로 칸이 비었다고 봤다)
+        boxes.server().orElseThrow().boxMoved(3, 1, 2, 1);
+        double x = mine.x();
+        for (int i = 0; i < 20; i++) {
+            boxes.update(TICK, Map.of(ME, PlayerCommand.moving(Direction.LEFT)));
+        }
+        assertTrue(mine.x() < x, "상자에 끼어 멈추지 않고 걸어 나간다");
+        assertFalse(mine.overlapsTile(2, 1));
+
+        // 벗어난 뒤에는 그 상자가 다시 길을 막는다
+        for (int i = 0; i < 30; i++) {
+            boxes.update(TICK, Map.of(ME, PlayerCommand.moving(Direction.RIGHT)));
+        }
+        assertFalse(mine.overlapsTile(2, 1));
     }
 
     @Test
