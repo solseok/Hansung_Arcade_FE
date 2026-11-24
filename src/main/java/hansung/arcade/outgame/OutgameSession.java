@@ -11,8 +11,9 @@ import java.util.Objects;
 import java.util.Random;
 
 /**
- * 한 컴퓨터의 오프라인 대기실 상태. 1P면 한 명, 2P면 두 명이 이 컴퓨터에서 함께 한다.
- * 다른 인원은 준비된 목업 참가자다. 서버 주소·포트는 사용자가 넣지 않고 설정(application.properties)에서 읽는다.
+ * 한 컴퓨터의 아웃게임 상태. 1P면 한 명, 2P면 두 명이 이 컴퓨터에서 함께 한다.
+ * 로그인은 온라인이면 서버가 받아들인 플레이어 번호를 들고 있고, 대기실의 다른 인원은 아직 준비된 목업 참가자다.
+ * 서버 주소·포트는 사용자가 넣지 않고 설정(application.properties, .env)에서 읽는다.
  *
  * <p>캐릭터와 팀(캐릭터 색)은 이 컴퓨터의 플레이어마다 따로 고른다. 번호(local)는 0이 1P, 1이 2P이고,
  * 번호를 받지 않는 메서드는 1P의 것이다. 2P는 처음에 1P와 구별되게 다른 캐릭터({@link #DEFAULT_CHARACTER_2P})·
@@ -28,6 +29,8 @@ public final class OutgameSession {
 
     public final LobbyService service;
     private List<String> nicknames = List.of("나");
+    /** 로그인한 플레이어 번호 (1P부터). 오프라인이면 1, 2 */
+    private List<Long> playerIds = List.of(1L);
     private Room room;
     /** 이 컴퓨터 플레이어마다(1P, 2P) 고른 캐릭터. 랜덤을 골랐으면 마지막으로 고른 캐릭터 */
     private final Mascot[] characters = {Mascot.DEFAULT, DEFAULT_CHARACTER_2P};
@@ -45,9 +48,19 @@ public final class OutgameSession {
     }
 
     /**
-     * 1P는 닉네임 하나, 2P는 둘로 로그인한다. 닉네임은 {@link NicknameRule}을 따르고, 2P의 두 닉네임은 달라야 한다.
+     * 1P는 닉네임 하나, 2P는 둘로 서버 없이 로그인한다. 규칙은 {@link #checkNicknames}와 같다.
      */
     public void login(String... nicknames) {
+        signedIn(OfflineLoginService.players(checkNicknames(nicknames)));
+    }
+
+    /**
+     * 로그인하기 전에 이 컴퓨터에서 하는 검사. 닉네임은 {@link NicknameRule}을 따르고, 2P의 두 닉네임은 달라야 한다.
+     *
+     * @return 다듬은 닉네임 (1P부터)
+     * @throws IllegalArgumentException 어긋나면. 메시지를 그대로 화면에 보여 줄 수 있다
+     */
+    public static List<String> checkNicknames(String... nicknames) {
         if (nicknames.length < 1 || nicknames.length > 2) {
             throw new IllegalArgumentException("1P 또는 2P로만 로그인할 수 있습니다.");
         }
@@ -58,11 +71,23 @@ public final class OutgameSession {
         if (valid.size() == 2 && valid.get(0).equals(valid.get(1))) {
             throw new IllegalArgumentException("1P와 2P 닉네임이 같습니다. 서로 다르게 입력해 주세요.");
         }
-        this.nicknames = List.copyOf(valid);
+        return List.copyOf(valid);
+    }
+
+    /** 로그인이 받아들여진 플레이어(1P부터)로 맞춘다. 닉네임은 서버가 다듬어 돌려준 값을 쓴다 */
+    public void signedIn(List<LoginService.LoginPlayer> players) {
+        if (players.isEmpty() || players.size() > 2) {
+            throw new IllegalArgumentException("로그인한 플레이어는 1~2명이어야 합니다: " + players.size());
+        }
+        nicknames = players.stream().map(LoginService.LoginPlayer::nickname).toList();
+        playerIds = players.stream().map(LoginService.LoginPlayer::playerId).toList();
     }
 
     /** 이 컴퓨터의 플레이어 닉네임. 1P부터 */
     public List<String> nicknames() { return nicknames; }
+
+    /** 이 컴퓨터의 플레이어 번호. 1P부터. 온라인이면 서버가 정한 번호다 */
+    public List<Long> playerIds() { return playerIds; }
 
     /** 1P 닉네임 */
     public String nickname() { return nicknames.getFirst(); }

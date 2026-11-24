@@ -22,8 +22,12 @@ import hansung.arcade.ingame.render.CharacterSprites;
 import hansung.arcade.ingame.render.ItemSprites;
 import hansung.arcade.ingame.render.Tileset;
 import hansung.arcade.outgame.GamePreviewScene;
+import hansung.arcade.network.ServerClient;
 import hansung.arcade.outgame.LoginPanel;
+import hansung.arcade.outgame.LoginService;
+import hansung.arcade.outgame.OfflineLoginService;
 import hansung.arcade.outgame.OutgameSession;
+import hansung.arcade.outgame.ServerLoginService;
 import hansung.arcade.outgame.audio.Sound;
 import hansung.arcade.outgame.lobby.LobbyPanel;
 import hansung.arcade.outgame.lobby.LobbyService;
@@ -38,8 +42,10 @@ import java.awt.event.WindowEvent;
 import java.util.List;
 
 /**
- * 5단계: 첫 화면을 조립해 창에 띄운다. 기본 화면은 목업 로그인이고(app.start-screen=login, lobby로 로비부터),
+ * 5단계: 첫 화면을 조립해 창에 띄운다. 기본 화면은 로그인이고(app.start-screen=login, lobby로 로비부터),
  * 로그인 → 로비 → 대기실 → 게임 → 결과 모달 → 대기실로 이어진다.
+ * 온라인 모드(network.mode=online)면 로그인은 서버에 하고, 연결이 끊기면 로그인 화면으로 돌아가 이유를 보여 준다.
+ * 로비·대기실·게임은 아직 목업이다.
  *
  * <p>app.start-screen=game 으로 실행하면 아웃게임 없이 인게임을 바로 띄운다. 이때 내 닉네임·캐릭터·팀·고정색은
  * 설정값 player.nickname, player.character, player.team, player.color 로, 경기 방식(개인전·팀전)은 game.match-mode 로 정한다.
@@ -82,7 +88,12 @@ public final class StartScreenStep implements BootStep {
                 LobbyService service = new MockLobbyService();
                 SceneManager scenes = new SceneManager(window::show);
                 OutgameSession session = new OutgameSession(service);
-                scenes.register("login", new LoginPanel(session, scenes));
+                ServerClient server = context.contains(ServerClient.class) ? context.get(ServerClient.class) : null;
+                LoginService login = server == null ? new OfflineLoginService() : new ServerLoginService(server);
+                scenes.register("login", new LoginPanel(session, scenes, login));
+                if (server != null) {
+                    server.onDisconnected(reason -> SwingUtilities.invokeLater(() -> scenes.show("login", reason.getMessage())));
+                }
                 scenes.register("lobby", new LobbyPanel(session, scenes));
                 scenes.register("waiting", new WaitingRoomPanel(session, scenes));
                 GamePreviewScene game = new GamePreviewScene(scenes, skin, characters, balloons, items, airplanes);

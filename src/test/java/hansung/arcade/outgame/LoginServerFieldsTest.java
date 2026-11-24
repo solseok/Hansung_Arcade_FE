@@ -12,6 +12,7 @@ import javax.swing.JTextField;
 import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -21,7 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * 1. 로그인 화면에서 서버 주소·포트 입력을 없앤다.
- * 서버 주소와 포트는 application.properties(나중에 .env로 덮어쓰기)에서 정하므로 사용자가 입력하지 않는다.
+ * 서버 주소와 포트는 application.properties의 자리표시자를 .env(SERVER_HOST·SERVER_PORT)로 채워 정하므로 사용자가 입력하지 않는다.
  */
 @ExtendWith(RunOnEdt.class)
 class LoginServerFieldsTest {
@@ -53,10 +54,12 @@ class LoginServerFieldsTest {
     }
 
     @Test
-    void 서버주소와_포트는_설정_파일에서_읽는다() {
-        GameProperties properties = GameProperties.load(HansungArcadeApplication.class, List.of());
+    void 서버주소와_포트는_설정_파일의_자리표시자를_env_값으로_채운다() {
+        // load(앵커, 인자)는 이 컴퓨터의 .env·환경 변수를 읽으므로, 정해 둔 값으로 채워 본다
+        GameProperties properties = GameProperties.load(HansungArcadeApplication.class, List.of(),
+                Map.of("SERVER_HOST", "arcade.example", "SERVER_PORT", "9000"));
 
-        assertFalse(properties.get("network.host").isBlank());
-        assertTrue(properties.getInt("network.port", -1) > 0);
+        assertEquals("arcade.example", properties.get("network.host"));
+        assertEquals(9000, properties.getInt("network.port"));
     }
 }

@@ -4,6 +4,7 @@ import hansung.arcade.outgame.audio.Sound;
 import hansung.arcade.core.game.Scene;
 import hansung.arcade.core.game.SceneManager;
 import hansung.arcade.ingame.hud.Box;
+import hansung.arcade.network.ServerException;
 import hansung.arcade.outgame.ui.GlossButton;
 import hansung.arcade.outgame.ui.OutgameFonts;
 import hansung.arcade.outgame.ui.OutgamePalette;
@@ -31,6 +32,8 @@ import java.awt.font.TextLayout;
 import java.awt.geom.Rectangle2D;
 import java.awt.event.WindowEvent;
 import java.awt.image.BufferedImage;
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * 로그인 (참고 로그인 화면 640x477 배치를 800x600으로 옮김: 가로 x1.25, 세로 x1.258).
@@ -47,6 +50,10 @@ import java.awt.image.BufferedImage;
  * 입력 영역은 그 칸 하나(2P면 둘)를 감쌀 만큼만 넓다. 규칙 안내 문구와 로고는 두지 않는다.
  * 1P면 칸 1개, 2P면 2개이고 2P면 입력 영역이 넓어지며 1P·2P 버튼이 바깥으로 간다.
  * 아이디·비밀번호·서버 선택은 없다 (서버 주소·포트는 설정 파일에서 읽는다).
+ *
+ * <p>[시작하기]는 먼저 이 컴퓨터에서 닉네임 규칙을 보고, 맞으면 {@link LoginService}로 로그인한다. 온라인이면 서버 답을
+ * 기다리는 동안 입력과 버튼을 막고 "접속 중" 안내를 띄우며, 서버가 거절하면(닉네임 중복 등) 서버 문구를 오류 줄에 보여 준다.
+ * 다른 화면에서 서버 연결이 끊겨 돌아올 때는 {@link #enter}로 받은 문구를 오류 줄에 보여 준다.</p>
  */
 public final class LoginPanel extends JPanel implements Scene {
 
@@ -73,9 +80,12 @@ public final class LoginPanel extends JPanel implements Scene {
     private static final int SECTION_HEIGHT = 64;
     private static final int SECTION_SIDE = 14;
     private static final int SECTION_GAP = 8;
-    /** 오류 문구 한 줄: 닉네임 칸 바로 아래 */
-    private static final int MESSAGE_TOP = 74;
-    private static final int MESSAGE_HEIGHT = 20;
+    /**
+     * 오류 문구 줄: 닉네임 칸 바로 아래 남은 자리 전부. 보통은 한 줄이고, 서버가 보낸 긴 문구가 한 줄에 다 들어가지 않으면
+     * 글자를 조금 줄여 두 줄로 그린다 ({@link MessageLine})
+     */
+    private static final int MESSAGE_TOP = 72;
+    private static final int MESSAGE_HEIGHT = 24;
     /** 닉네임 칸 안: 이름표·입력 칸 둘레 여백, 이름표 글자 좌우 여백, 입력 칸 커서 자리 */
     private static final int SECTION_PADDING = 6;
     private static final int LABEL_PADDING = 8;
@@ -85,15 +95,21 @@ public final class LoginPanel extends JPanel implements Scene {
     private static final int TAB_OVERLAP = 2;
     private static final int TAB_WIDTH = 110;
 
+    /** 서버 답을 기다리는 동안 오류 줄에 띄우는 안내 */
+    static final String CONNECTING_MESSAGE = "서버에 접속하는 중입니다…";
+
     private final OutgameSession session;
     private final SceneManager scenes;
+    private final LoginService loginService;
+    /** 서버 답을 기다리는 중 */
+    private boolean waiting;
     private final JToggleButton one = modeButton("1P", "mode-1p", OutgamePalette.PLAYER_ONE_TOP,
             OutgamePalette.PLAYER_ONE_BOTTOM, OutgamePalette.PLAYER_ONE_TEXT_OUTLINE);
     private final JToggleButton two = modeButton("2P", "mode-2p", OutgamePalette.PLAYER_TWO_TOP,
             OutgamePalette.PLAYER_TWO_BOTTOM, OutgamePalette.PLAYER_TWO_TEXT_OUTLINE);
     private final NicknameSection first = new NicknameSection(1);
     private final NicknameSection second = new NicknameSection(2);
-    private final TextLabel message = new TextLabel(" ", SwingConstants.CENTER);
+    private final MessageLine message = new MessageLine();
     private final RoundPanel form = new RoundPanel(OutgamePalette.LOGIN_PANEL_TOP, 10)
             .gradient(OutgamePalette.LOGIN_PANEL_BOTTOM)
             .shine(OutgamePalette.LOGIN_TAB_TOP, 1)
@@ -103,10 +119,16 @@ public final class LoginPanel extends JPanel implements Scene {
     private final RoundPanel socketOne = socket("mode-socket-1p");
     private final RoundPanel socketTwo = socket("mode-socket-2p");
 
+    /** 서버 없이 로그인하는 화면 */
     public LoginPanel(OutgameSession session, SceneManager scenes) {
+        this(session, scenes, new OfflineLoginService());
+    }
+
+    public LoginPanel(OutgameSession session, SceneManager scenes, LoginService loginService) {
         super(null);
         this.session = session;
         this.scenes = scenes;
+        this.loginService = loginService;
         setPreferredSize(new Dimension(800, 600));
         setBackground(OutgamePalette.LOGIN_BACKGROUND);
         setOpaque(true);
@@ -153,20 +175,61 @@ public final class LoginPanel extends JPanel implements Scene {
     }
 
     private void login() {
+        if (waiting) {
+            return;
+        }
+        List<String> nicknames;
         try {
-            if (two.isSelected()) {
-                session.login(first.field.getText(), second.field.getText());
-            } else {
-                session.login(first.field.getText());
-            }
+            nicknames = two.isSelected()
+                    ? OutgameSession.checkNicknames(first.field.getText(), second.field.getText())
+                    : OutgameSession.checkNicknames(first.field.getText());
         } catch (IllegalArgumentException exception) {
-            message.setText(exception.getMessage());
+            showError(exception.getMessage());
+            Sound.play("Bt_c_GameStartNotAble");
+            return;
+        }
+        CompletableFuture<List<LoginService.LoginPlayer>> result = loginService.login(nicknames);
+        if (result.isDone()) {
+            // 오프라인은 바로 끝나므로 기다리지 않고 로비로 간다
+            finishLogin(result);
+            return;
+        }
+        setWaiting(true);
+        result.whenComplete((players, failure) -> SwingUtilities.invokeLater(() -> finishLogin(result)));
+    }
+
+    /** EDT에서 로그인 결과를 반영한다. 성공하면 로비로, 실패하면 이유를 보여 주고 머문다 */
+    private void finishLogin(CompletableFuture<List<LoginService.LoginPlayer>> result) {
+        setWaiting(false);
+        try {
+            session.signedIn(result.join());
+        } catch (RuntimeException failure) {
+            showError(ServerException.from(failure).getMessage());
             Sound.play("Bt_c_GameStartNotAble");
             return;
         }
         message.setText(" ");
         Sound.play("Bt_c_Success");
         scenes.show("lobby", null);
+    }
+
+    /** 서버 답을 기다리는 동안 입력·버튼을 막고 안내를 띄운다 */
+    private void setWaiting(boolean value) {
+        waiting = value;
+        enter.setEnabled(!value);
+        one.setEnabled(!value);
+        two.setEnabled(!value);
+        first.field.setEditable(!value);
+        second.field.setEditable(!value);
+        if (value) {
+            message.setForeground(OutgamePalette.LOBBY_TEXT);
+            message.setText(CONNECTING_MESSAGE);
+        }
+    }
+
+    private void showError(String text) {
+        message.setForeground(OutgamePalette.ERROR_TEXT);
+        message.setText(text == null || text.isBlank() ? " " : text);
     }
 
     /**
@@ -384,6 +447,72 @@ public final class LoginPanel extends JPanel implements Scene {
         }
     }
 
+    /**
+     * 오류·안내 문구 줄. 한 줄에 들어가면 그대로, 넘치면 글자를 {@value #MIN_ONE_LINE}까지 줄여 보고,
+     * 그래도 넘치면 공백에서 두 줄로 나눠 두 줄이 다 들어가는 가장 큰 글자(최소 {@value #MIN_TWO_LINES})로 그린다.
+     * 서버 문구(예: 공백·특수문자 안내)는 1P 입력 영역보다 길 수 있어서다. getText()는 늘 문구 전체다.
+     */
+    static final class MessageLine extends TextLabel {
+        static final float MIN_ONE_LINE = 11f;
+        static final float MIN_TWO_LINES = 9f;
+
+        /** 그릴 글꼴과 줄 */
+        record Layout(Font font, List<String> lines) {
+        }
+
+        MessageLine() {
+            super(" ", SwingConstants.CENTER);
+        }
+
+        static Layout layout(String text, Font base, java.awt.font.FontRenderContext frc, float width, float height) {
+            for (float size = base.getSize2D(); size >= MIN_ONE_LINE; size -= 0.5f) {
+                Font font = base.deriveFont(size);
+                if (font.getStringBounds(text, frc).getWidth() <= width) {
+                    return new Layout(font, List.of(text));
+                }
+            }
+            List<String> lines = split(text, base, frc);
+            if (lines.size() == 1) {
+                return new Layout(base.deriveFont(MIN_ONE_LINE), lines);
+            }
+            for (float size = base.getSize2D(); size > MIN_TWO_LINES; size -= 0.5f) {
+                Font font = base.deriveFont(size);
+                java.awt.font.LineMetrics metrics = font.getLineMetrics(text, frc);
+                boolean fitsHeight = 2 * (metrics.getAscent() + metrics.getDescent()) <= height;
+                boolean fitsWidth = lines.stream().allMatch(line -> font.getStringBounds(line, frc).getWidth() <= width);
+                if (fitsHeight && fitsWidth) {
+                    return new Layout(font, lines);
+                }
+            }
+            return new Layout(base.deriveFont(MIN_TWO_LINES), lines);
+        }
+
+        /** 두 줄 폭이 가장 비슷해지는 공백에서 나눈다. 공백이 없으면 한 줄 그대로 */
+        private static List<String> split(String text, Font font, java.awt.font.FontRenderContext frc) {
+            int best = -1;
+            double bestGap = Double.MAX_VALUE;
+            for (int i = text.indexOf(' '); i > 0; i = text.indexOf(' ', i + 1)) {
+                double gap = Math.abs(font.getStringBounds(text.substring(0, i), frc).getWidth()
+                        - font.getStringBounds(text.substring(i + 1), frc).getWidth());
+                if (gap < bestGap) {
+                    bestGap = gap;
+                    best = i;
+                }
+            }
+            return best < 0 ? List.of(text) : List.of(text.substring(0, best), text.substring(best + 1));
+        }
+
+        @Override
+        protected void paintText(Graphics2D g, int w, int h) {
+            Layout layout = layout(getText(), getFont(), g.getFontRenderContext(), w, h);
+            int lineHeight = h / layout.lines().size();
+            for (int i = 0; i < layout.lines().size(); i++) {
+                Shapes.text(g, layout.lines().get(i), layout.font(), getForeground(), null, 0, null,
+                        0, i * lineHeight, w, lineHeight, CENTER);
+            }
+        }
+    }
+
     /** 파란 이름표. "1P"는 노랑, 나머지는 흰 글자 (참고 화면 "1P 아이디") */
     private static final class PlayerLabel extends TextLabel {
         private final String player;
@@ -412,9 +541,14 @@ public final class LoginPanel extends JPanel implements Scene {
         }
     }
 
+    /** @param data 다른 화면에서 서버 연결이 끊겨 돌아왔으면 그 이유 문구(String). 없으면 null */
     @Override
     public void enter(Object data) {
-        message.setText(" ");
+        if (data instanceof String reason) {
+            showError(reason);
+        } else {
+            message.setText(" ");
+        }
         // 창이 막 뜬 때는 아직 포커스를 받기 전일 수 있어, 화면이 다 붙은 뒤에 닉네임 칸으로 커서를 옮긴다
         SwingUtilities.invokeLater(first.field::requestFocusInWindow);
     }
