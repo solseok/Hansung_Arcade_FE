@@ -7,6 +7,7 @@ import hansung.arcade.ingame.entity.PlayerState;
 import hansung.arcade.ingame.map.Tile;
 import hansung.arcade.ingame.map.TileMap;
 
+import java.awt.Point;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -47,6 +48,33 @@ public final class BoxPusher {
      * @return 이번에 블럭을 밀었으면 그 미끄러짐
      */
     public Optional<SlidingBlock> push(Player player, Direction input, double dt, Obstacles occupied) {
+        return due(player, input, dt, occupied).map(box -> {
+            Tile tile = map.tileAt(box.x, box.y);
+            int toCol = box.x + input.dx();
+            int toRow = box.y + input.dy();
+            map.moveBlock(box.x, box.y, toCol, toRow);
+            SlidingBlock slide = new SlidingBlock(tile, box.x, box.y, toCol, toRow);
+            slides.add(slide);
+            return slide;
+        });
+    }
+
+    /**
+     * {@link #push}와 같은 조건으로 민 시간을 쌓되, 다 차면 블럭을 옮기지 않고 그 블럭의 칸을 돌려준다 (온라인: 서버에 BOX_PUSH를 보낸다).
+     * 블럭은 서버가 알릴 때 {@link #moveFromServer}로 옮긴다. 보낸 뒤 민 시간은 처음부터 다시 세므로, 서버가 거절해 안 밀렸으면
+     * 계속 누를 때 {@link #PUSH_SECONDS}초 뒤 다시 돌려준다.
+     *
+     * @return 이번에 밀어 달라고 보낼 블럭의 칸
+     */
+    public Optional<Point> pushRequest(Player player, Direction input, double dt, Obstacles occupied) {
+        return due(player, input, dt, occupied);
+    }
+
+    /**
+     * 막힌 채 민 시간을 쌓고, 다 찼고 밀려 갈 칸이 비었으면 미는 블럭의 칸을 돌려준다. 돌려주면 민 시간은 처음부터 다시 센다.
+     * 움직였거나, 방향을 바꿨거나, 손을 뗐으면 민 시간을 버린다.
+     */
+    private Optional<Point> due(Player player, Direction input, double dt, Obstacles occupied) {
         if (input == null || player.state() != PlayerState.NORMAL || player.isMoving()) {
             pushes.remove(player.id());
             return Optional.empty();
@@ -59,19 +87,30 @@ public final class BoxPusher {
         }
         Push previous = pushes.get(player.id());
         double time = previous != null && previous.isSame(input, col, row) ? previous.seconds() + dt : dt;
-        int toCol = col + input.dx();
-        int toRow = row + input.dy();
-        if (time < PUSH_SECONDS - TIME_SLACK || !canReceive(toCol, toRow, occupied)) {
+        if (time < PUSH_SECONDS - TIME_SLACK || !canReceive(col + input.dx(), row + input.dy(), occupied)) {
             // 밀려 갈 칸이 막혀 있으면 민 시간을 그대로 들고 있다가 칸이 비는 대로 민다
             pushes.put(player.id(), new Push(input, col, row, time));
             return Optional.empty();
         }
         pushes.remove(player.id());
-        Tile tile = map.tileAt(col, row);
-        map.moveBlock(col, row, toCol, toRow);
-        SlidingBlock slide = new SlidingBlock(tile, col, row, toCol, toRow);
-        slides.add(slide);
-        return Optional.of(slide);
+        return Optional.of(new Point(col, row));
+    }
+
+    /**
+     * 서버가 밀었다고 알린 블럭을 옮긴다 (온라인 BOX_MOVED). 맵 칸은 바로 옮기고 그림만 {@link #SLIDE_SECONDS}초 미끄러진다.
+     * 서버가 이미 밀 수 있는지 봤으므로 다시 보지 않는다.
+     *
+     * @return 옮겼는지. 이 컴퓨터의 맵이 서버와 어긋나(from에 밀리는 블럭이 없거나 to가 비지 않음) 옮기지 못했으면 false
+     */
+    public boolean moveFromServer(int fromCol, int fromRow, int toCol, int toRow) {
+        if (!map.isInside(fromCol, fromRow) || !map.tileAt(fromCol, fromRow).isPushable()
+                || !map.isInside(toCol, toRow) || !map.tileAt(toCol, toRow).isGround()) {
+            return false;
+        }
+        Tile tile = map.tileAt(fromCol, fromRow);
+        map.moveBlock(fromCol, fromRow, toCol, toRow);
+        slides.add(new SlidingBlock(tile, fromCol, fromRow, toCol, toRow));
+        return true;
     }
 
     /** 미끄러지는 그림을 dt초 흘린다. 다 미끄러졌거나 도중에 부서진 블럭은 목록에서 뺀다 */

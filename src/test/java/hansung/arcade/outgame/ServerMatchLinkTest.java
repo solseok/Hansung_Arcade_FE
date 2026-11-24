@@ -112,6 +112,19 @@ class ServerMatchLinkTest {
     }
 
     @Test
+    void 상자_이동_푸시로_맵_칸을_옮긴다() throws Exception {
+        world = GameWorld.online(MapLoader.parse("fixture/link-box", List.of("......", ".1P.2.", "......")), List.of(
+                new OnlineSeat(12, new PlayerProfile("부기", Mascot.SANGSANGBUGI, 1), 1, true),
+                new OnlineSeat(20, new PlayerProfile("냥이", Mascot.HANSUNGNYANGI, 2), 2, false)), link);
+        bind();
+
+        server.push("{\"type\":\"BOX_MOVED\",\"body\":{\"fromCol\":2,\"fromRow\":1,\"toCol\":3,\"toRow\":1}}");
+
+        until(() -> world.map().tileAt(3, 1) == Tile.PUSH_BOX);
+        assertEquals(Tile.FLOOR, world.map().tileAt(2, 1));
+    }
+
+    @Test
     void 비행기와_쓰는_아이템_푸시를_경기에_넣는다() throws Exception {
         bind();
         server.push("{\"type\":\"ROUND_BEGIN\",\"body\":{\"countdownMs\":0,\"timeLimitMs\":180000}}");
@@ -221,6 +234,11 @@ class ServerMatchLinkTest {
         link.pickUpItem(12, 7);
         JsonNode pickup = server.next(ServerMatchLink.ITEM_PICKUP).path("body");
         assertEquals(List.of(12, 7), List.of(pickup.path("playerId").asInt(), pickup.path("itemId").asInt()));
+
+        link.pushBox(12, 6, 7, Direction.RIGHT);
+        JsonNode box = server.next(ServerMatchLink.BOX_PUSH).path("body");
+        assertEquals(List.of(12, 6, 7), List.of(box.path("playerId").asInt(), box.path("col").asInt(), box.path("row").asInt()));
+        assertEquals("RIGHT", box.path("direction").asText());
 
         link.useItem(12, "spring_shoe");
         JsonNode use = server.next(ServerMatchLink.ITEM_USE).path("body");

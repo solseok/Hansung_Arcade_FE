@@ -48,11 +48,19 @@ class ServerRulesTest {
         final List<String> sent = new ArrayList<>();
         /** 보낸 MOVE의 자리 (x, y) */
         final List<double[]> moves = new ArrayList<>();
+        /** 보낸 MOVE의 방향·걷는 중인지 ("RIGHT false" 꼴) */
+        final List<String> moveStates = new ArrayList<>();
 
         @Override
         public void move(int playerId, double x, double y, Direction facing, boolean moving) {
             sent.add("MOVE " + playerId);
             moves.add(new double[]{x, y});
+            moveStates.add(facing + " " + moving);
+        }
+
+        @Override
+        public void pushBox(int playerId, int col, int row, Direction direction) {
+            sent.add("BOX_PUSH %d %d,%d %s".formatted(playerId, col, row, direction));
         }
 
         @Override
@@ -448,6 +456,67 @@ class ServerRulesTest {
         assertTrue(world.gear(me).activeItem().isEmpty());
         assertTrue(world.gear(other).activeItem().isEmpty());
         assertEquals(0, outbox.count("ITEM_USE"));
+    }
+
+    /** 1번 스폰(1,1) 오른쪽 바로 옆 (2,1)에 밀리는 상자가 있고 그 너머 (3,1)은 바닥이다. 나(12번)는 1번 스폰에 선다 */
+    private GameWorld boxWorld(Outbox box) {
+        GameWorld boxes = GameWorld.online(MapLoader.parse("fixture/box", List.of(
+                        ".......",
+                        ".1P...2",
+                        ".......")), List.of(
+                new OnlineSeat(ME, new PlayerProfile("부기", Mascot.SANGSANGBUGI, 1), 1, true),
+                new OnlineSeat(OTHER, new PlayerProfile("냥이", Mascot.HANSUNGNYANGI, 2), 2, false)), box);
+        boxes.server().orElseThrow().roundBegin(0, 180_000);
+        for (int i = 0; i < 130; i++) {
+            boxes.update(TICK, Map.of());
+        }
+        box.sent.clear();
+        box.moveStates.clear();
+        return boxes;
+    }
+
+    @Test
+    void 상자에_막혀_계속_밀면_옮기지_않고_멈춘_자리부터_보낸_뒤_밀어_달라고_한다() {
+        Outbox box = new Outbox();
+        GameWorld boxes = boxWorld(box);
+        Map<Integer, PlayerCommand> right = Map.of(ME, PlayerCommand.moving(Direction.RIGHT));
+
+        for (int i = 0; i < 18; i++) {
+            boxes.update(TICK, right);
+        }
+
+        int push = box.sent.indexOf("BOX_PUSH " + ME + " 2,1 RIGHT");
+        assertTrue(push > 0, box.sent.toString());
+        assertEquals("MOVE " + ME, box.sent.get(push - 1), "서버는 마지막 MOVE가 멈춰 그 방향을 보는지 본다");
+        assertEquals("RIGHT false", box.moveStates.getLast());
+        assertEquals(Tile.PUSH_BOX, boxes.map().tileAt(2, 1), "서버가 알릴 때까지 옮기지 않는다");
+        assertEquals(1, box.count("BOX_PUSH"));
+
+        for (int i = 0; i < 16; i++) {
+            boxes.update(TICK, right);
+        }
+        assertEquals(2, box.count("BOX_PUSH"), "안 밀렸으면 계속 누를 때 0.25초 뒤 다시 보낸다");
+    }
+
+    @Test
+    void 서버가_민_상자는_바로_옮기고_미끄러지는_모습을_보인다() {
+        Outbox box = new Outbox();
+        GameWorld boxes = boxWorld(box);
+
+        boxes.server().orElseThrow().boxMoved(2, 1, 3, 1);
+
+        assertEquals(Tile.FLOOR, boxes.map().tileAt(2, 1));
+        assertEquals(Tile.PUSH_BOX, boxes.map().tileAt(3, 1));
+        assertEquals(1, boxes.boxPusher().slides().size());
+        for (int i = 0; i < 15; i++) {
+            boxes.update(TICK, Map.of());
+        }
+        assertTrue(boxes.boxPusher().slides().isEmpty());
+
+        // 이 컴퓨터의 맵과 어긋난 알림(상자가 없는 칸)은 견디고 맵을 바꾸지 않는다
+        boxes.server().orElseThrow().boxMoved(2, 1, 1, 1);
+        assertEquals(Tile.FLOOR, boxes.map().tileAt(2, 1));
+        assertEquals(Tile.PUSH_BOX, boxes.map().tileAt(3, 1));
     }
 
     @Test

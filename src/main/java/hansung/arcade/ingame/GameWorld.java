@@ -333,7 +333,11 @@ public final class GameWorld {
         for (Player player : localPlayers) {
             PlayerCommand command = controls ? commands.getOrDefault(player.id(), PlayerCommand.IDLE) : PlayerCommand.IDLE;
             // 점프해 공중에 있는 동안에는 걷지 않는다
-            player.update(gear(player).isAirborne() ? null : command.move(), dt, obstaclesFor(player));
+            Direction move = gear(player).isAirborne() ? null : command.move();
+            player.update(move, dt, obstaclesFor(player));
+            // 상자에 막힌 채 계속 밀면 서버에 밀어 달라고 보낸다. 상자는 BOX_MOVED가 오면 옮긴다
+            boxPusher.pushRequest(player, move, dt, (col, row) -> occupancy.hasAny(col, row, BOX_BLOCKERS))
+                    .ifPresent(box -> server.requestBoxPush(player, box, move));
         }
         server.moveRemotePlayers(dt);
         balloonField.update(dt, allPlayers);
@@ -349,6 +353,8 @@ public final class GameWorld {
             }
             server.requestPickups();
         }
+        // 밀린 상자가 미끄러지는 그림을 흘린다
+        boxPusher.advance(dt);
         // 서버가 띄운 비행기를 날리고, 서버가 떨어뜨린 아이템을 내린다
         airDrop.update(dt, dropZone);
         List<Explosion> explosions = balloonField.takeNewExplosions();

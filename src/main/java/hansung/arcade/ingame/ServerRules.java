@@ -37,6 +37,8 @@ import java.util.Objects;
  *       블럭에서 나온 아이템과 터진 사람이 흩뿌린 아이템도 서버가 알려 준 칸에 놓는다.</li>
  *   <li>비행기는 AIRPLANE_APPEARED가 오면 띄우고(스스로 출현 시각을 세지 않는다), 아이템은 ITEM_DROPPED로 받은 것만
  *       떨어뜨려 닿으면 놓는다. 떨어지는 사이 그 아이템이 물줄기에 사라지거나 누가 먹으면 놓지 않는다.</li>
+ *   <li>상자 앞에 막혀 같은 방향을 {@link hansung.arcade.ingame.block.BoxPusher#PUSH_SECONDS}초 누르면 상자를 옮기지 않고
+ *       BOX_PUSH만 보낸다 (멈춘 자리·방향 MOVE 먼저). 상자는 BOX_MOVED가 오면 옮긴다.</li>
  *   <li>아이템 키를 누르면 손에 든 쓰는 아이템을 ITEM_USE로 보낸다. 바늘·보호막·스프링 신발의 효과와 남은 개수는
  *       ITEM_USED를 따른다.</li>
  *   <li>갇힘·구출·탈락·나감은 PLAYER_TRAPPED, PLAYER_RESCUED, PLAYER_POPPED, PLAYER_LEFT를 따르고, 승패는 GAME_OVER로 정한다.</li>
@@ -44,7 +46,7 @@ import java.util.Objects;
  *       시작 연출("Ready... Start!")도 끝나도록 연출을 늦춰 시작하고, 그때부터 조작과 경기 시계가 움직인다.</li>
  * </ul>
  *
- * <p>서버가 아직 다루지 않는 것(물풍선 밀기·던지기, 밀리는 상자)은 온라인에서 하지 않는다.
+ * <p>서버가 아직 다루지 않는 것(물풍선 밀기·던지기)은 온라인에서 하지 않는다.
  * 서버 메시지는 게임 루프와 같은 스레드(EDT)에서 넣는다.</p>
  */
 public final class ServerRules {
@@ -244,6 +246,18 @@ public final class ServerRules {
             sendMove(player);
             outbox.useItem(player.id(), item.id());
         });
+    }
+
+    /**
+     * player가 (box.x, box.y) 칸의 상자를 direction 쪽으로 밀어 달라고 서버에 보낸다. 서버는 마지막 MOVE가 멈춘 상태이고
+     * 그 방향을 보고 있는지 보므로, 멈춘 자리와 방향을 먼저 보낸다.
+     */
+    void requestBoxPush(Player player, Point box, Direction direction) {
+        if (!isPlaying() || world.gear(player).isAirborne()) {
+            return;
+        }
+        sendMoveAt(player, player.x(), player.y(), false);
+        outbox.pushBox(player.id(), box.x, box.y, direction);
     }
 
     /** 경기 중이면 {@link #MOVE_INTERVAL_SECONDS}초마다, 지난번 보낸 뒤 바뀐 플레이어의 자리만 보낸다 */
@@ -447,6 +461,13 @@ public final class ServerRules {
         remote.x = x;
         remote.y = y;
         remote.moving = false;
+    }
+
+    /** BOX_MOVED. 누군가 상자를 밀었다. 맵 칸은 바로 옮기고 미끄러지는 모습을 보인다 */
+    public void boxMoved(int fromCol, int fromRow, int toCol, int toRow) {
+        if (!world.boxPusher().moveFromServer(fromCol, fromRow, toCol, toRow)) {
+            log.warn("맵이 서버와 달라 상자를 옮기지 못했습니다: ({}, {}) → ({}, {})", fromCol, fromRow, toCol, toRow);
+        }
     }
 
     /** AIRPLANE_APPEARED. 비행기가 heading(RIGHT·LEFT) 쪽으로 맵 위를 가로지르기 시작했다. 떨어뜨릴 칸은 서버가 따로 알린다 */
