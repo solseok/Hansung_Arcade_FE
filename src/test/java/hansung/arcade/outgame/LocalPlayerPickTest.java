@@ -2,6 +2,7 @@ package hansung.arcade.outgame;
 
 import hansung.arcade.ingame.entity.Mascot;
 import hansung.arcade.outgame.lobby.MockLobbyService;
+import hansung.arcade.outgame.lobby.SampleRooms;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -14,7 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class LocalPlayerPickTest {
 
     private static OutgameSession twoPlayers() {
-        OutgameSession session = new OutgameSession(new MockLobbyService());
+        OutgameSession session = new OutgameSession(new MockLobbyService(SampleRooms.rooms()));
         session.login("부기", "꾸꾸");
         session.create("둘이서", 8);
         return session;
@@ -102,7 +103,7 @@ class LocalPlayerPickTest {
 
     @Test
     void 혼자_로그인했으면_2P는_고를_수_없다() {
-        OutgameSession session = new OutgameSession(new MockLobbyService());
+        OutgameSession session = new OutgameSession(new MockLobbyService(SampleRooms.rooms()));
         session.login("부기");
         session.create("혼자", 8);
 

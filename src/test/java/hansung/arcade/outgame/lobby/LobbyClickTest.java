@@ -110,7 +110,7 @@ class LobbyClickTest {
     private void open() throws Exception {
         assumeFalse(GraphicsEnvironment.isHeadless(), "화면이 없는 환경이라 실제 창 클릭은 확인하지 않습니다.");
         SwingUtilities.invokeAndWait(() -> {
-            session = new OutgameSession(new MockLobbyService());
+            session = new OutgameSession(new MockLobbyService(SampleRooms.rooms()));
             session.login("부기");
             frame = new JFrame("클릭 확인");
             SceneManager scenes = new SceneManager(view -> {

@@ -76,7 +76,7 @@ class AntialiasingTest {
 
     @Test
     void 대기실_자리의_캐릭터는_그림_그대로_1배() {
-        OutgameSession session = new OutgameSession(new MockLobbyService());
+        OutgameSession session = new OutgameSession(new MockLobbyService(SampleRooms.rooms()));
         session.login("부기");
         SceneManager scenes = new SceneManager(screen -> { });
         WaitingRoomPanel waiting = new WaitingRoomPanel(session, scenes);

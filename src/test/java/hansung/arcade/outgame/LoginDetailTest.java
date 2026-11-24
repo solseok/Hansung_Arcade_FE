@@ -3,6 +3,7 @@ package hansung.arcade.outgame;
 import hansung.arcade.core.game.SceneManager;
 import hansung.arcade.core.ui.RunOnEdt;
 import hansung.arcade.outgame.lobby.MockLobbyService;
+import hansung.arcade.outgame.lobby.SampleRooms;
 import hansung.arcade.outgame.ui.OutgamePalette;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -43,7 +44,7 @@ class LoginDetailTest {
     void setUp() {
         SceneManager scenes = new SceneManager(displayed::set);
         scenes.register("lobby", JLabel::new);
-        login = new LoginPanel(new OutgameSession(new MockLobbyService()), scenes);
+        login = new LoginPanel(new OutgameSession(new MockLobbyService(SampleRooms.rooms())), scenes);
         login.setSize(800, 600);
         SwingTree.layout(login);
     }

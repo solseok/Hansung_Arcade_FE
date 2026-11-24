@@ -6,7 +6,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/** 한 클라이언트의 입장 상태를 보관하는 오프라인 서비스. */
+/** 한 클라이언트의 입장 상태를 보관하는 오프라인 서비스. 방은 없이 시작하고, 이 컴퓨터에서 만든 방만 있다. */
 public final class MockLobbyService implements LobbyService {
     private final Map<Integer, Room> rooms = new LinkedHashMap<>();
     private Integer joinedRoom;
@@ -16,22 +16,12 @@ public final class MockLobbyService implements LobbyService {
     private int configuredCapacity;
 
     public MockLobbyService() {
-        add(new Room(1, "함께 한 판 해요", 1, 8, "캠프 08", Room.Status.WAITING));
-        add(new Room(2, "빌리지에서 만나요", 2, 6, "빌리지 10", Room.Status.WAITING));
-        add(new Room(3, "마지막 자리까지 완료", 8, 8, "패트릿 14", Room.Status.WAITING));
-        add(new Room(4, "신나는 캠프", 6, 8, "캠프 08", Room.Status.PLAYING));
-        add(new Room(5, "친구들과 대결", 6, 6, "빌리지 10", Room.Status.PLAYING));
-        // 8개씩 네 페이지: 대기방 페이지, 혼합 페이지, 마지막 게임중 페이지를 제공한다.
-        for (int number = 6; number <= 30; number++) {
-            add(
-                    new Room(
-                            number,
-                            "즐거운 한 판 " + number,
-                            1,
-                            8,
-                            "캠프 08",
-                            number % 3 == 0 ? Room.Status.PLAYING : Room.Status.WAITING));
-        }
+        this(List.of());
+    }
+
+    /** rooms가 미리 있는 로비 (테스트에서 목록·입장을 볼 때 쓴다) */
+    public MockLobbyService(List<Room> rooms) {
+        rooms.forEach(this::add);
     }
 
     private void add(Room room) {

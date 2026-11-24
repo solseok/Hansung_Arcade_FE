@@ -3,6 +3,7 @@ package hansung.arcade.outgame;
 import hansung.arcade.core.game.SceneManager;
 import hansung.arcade.core.ui.RunOnEdt;
 import hansung.arcade.outgame.lobby.MockLobbyService;
+import hansung.arcade.outgame.lobby.SampleRooms;
 import hansung.arcade.outgame.lobby.Room;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -41,7 +42,7 @@ class LoginModeTest {
 
     @BeforeEach
     void setUp() {
-        service = new MockLobbyService();
+        service = new MockLobbyService(SampleRooms.rooms());
         session = new OutgameSession(service);
         displayed = new AtomicReference<>();
         SceneManager scenes = new SceneManager(displayed::set);

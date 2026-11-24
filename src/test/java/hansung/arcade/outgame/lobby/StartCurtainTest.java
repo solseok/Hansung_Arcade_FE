@@ -38,7 +38,7 @@ class StartCurtainTest {
 
     @Test
     void 막은_평소에는_숨어_있고_모든_구역보다_위에_있다() {
-        OutgameSession session = new OutgameSession(new MockLobbyService());
+        OutgameSession session = new OutgameSession(new MockLobbyService(SampleRooms.rooms()));
         session.login("부기");
         WaitingRoomPanel waiting = new WaitingRoomPanel(session, new SceneManager(screen -> { }),
                 (parent, current) -> Optional.empty());
@@ -69,7 +69,7 @@ class StartCurtainTest {
 
     @Test
     void 막이_짙어지는_사이_대기실을_떠나면_막을_걷고_게임으로_넘어가지_않는다() {
-        OutgameSession session = new OutgameSession(new MockLobbyService());
+        OutgameSession session = new OutgameSession(new MockLobbyService(SampleRooms.rooms()));
         session.login("부기");
         SceneManager scenes = new SceneManager(screen -> { });
         WaitingRoomPanel waiting = new WaitingRoomPanel(session, scenes, (parent, current) -> Optional.empty());
@@ -91,7 +91,7 @@ class StartCurtainTest {
 
     @Test
     void 화면에_보이지_않는_대기실은_기다리지_않고_바로_게임으로_넘어간다() {
-        OutgameSession session = new OutgameSession(new MockLobbyService());
+        OutgameSession session = new OutgameSession(new MockLobbyService(SampleRooms.rooms()));
         session.login("부기");
         List<String> shown = new ArrayList<>();
         SceneManager scenes = new SceneManager(screen -> { });

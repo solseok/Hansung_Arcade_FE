@@ -56,7 +56,7 @@ class WaitingRoomDetailTest {
 
     @BeforeEach
     void setUp() {
-        session = new OutgameSession(new MockLobbyService());
+        session = new OutgameSession(new MockLobbyService(SampleRooms.rooms()));
         session.login("부기");
         scenes = new SceneManager(screen -> { });
         waiting = new WaitingRoomPanel(session, scenes, (parent, current) -> Optional.ofNullable(pick.get()));
@@ -192,10 +192,10 @@ class WaitingRoomDetailTest {
     }
 
     @Test
-    void 들어오면_안내가_있고_나갔다_오면_이전_채팅이_지워진다() {
+    void 들어오면_목업_안내_없이_비어_있고_나갔다_오면_이전_채팅이_지워진다() {
         enterAsHost();
         JTextComponent log = SwingTree.named(waiting, "chat-log", JTextComponent.class);
-        assertTrue(log.getText().contains("목업"), "들어올 때 안내가 없습니다: " + log.getText());
+        assertFalse(log.getText().contains("목업"), "목업 안내가 남아 있습니다: " + log.getText());
 
         JTextField input = SwingTree.named(waiting, "chat-input", JTextField.class);
         input.setText("이전 방 채팅");
@@ -205,7 +205,7 @@ class WaitingRoomDetailTest {
         button("leave").doClick();
         enterAsHost();
         assertFalse(log.getText().contains("이전 방 채팅"), "다른 방에 들어왔는데 이전 채팅이 남아 있습니다.");
-        assertTrue(log.getText().contains("목업"));
+        assertFalse(log.getText().contains("목업"));
     }
 
     @Test
