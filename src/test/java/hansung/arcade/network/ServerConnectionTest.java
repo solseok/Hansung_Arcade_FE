@@ -152,8 +152,46 @@ class ServerConnectionTest {
     }
 
     @Test
-    void 서버가_끊으면_끊김을_알리고_기다리던_요청은_실패한다() throws Exception {
+    void 보내는_메시지에는_공통_규칙의_필드만_있다() {
+        var request = Message.request("PING", 1, null).toJson();
+        var notice = Message.notice("BYE", null).toJson();
+
+        assertEquals("{\"type\":\"PING\",\"id\":1,\"body\":{}}", request);
+        assertEquals("{\"type\":\"BYE\",\"body\":{}}", notice);
+    }
+
+    @Test
+    void 서버가_한도를_넘는_줄을_보내면_끊는다() throws Exception {
         open();
+        CompletableFuture<ServerException> disconnected = new CompletableFuture<>();
+        connection.onDisconnect(disconnected::complete);
+
+        server.push("{\"type\":\"BIG\",\"body\":{\"x\":\"" + "가".repeat(Protocol.MAX_LINE_BYTES) + "\"}}");
+
+        assertEquals(ServerException.DISCONNECTED, disconnected.get(3, TimeUnit.SECONDS).code());
+        assertFalse(connection.isOpen());
+    }
+
+    @Test
+    void 받은_메시지_처리가_Error로_죽어도_연결을_닫고_끊김을_알린다() throws Exception {
+        open();
+        CompletableFuture<ServerException> disconnected = new CompletableFuture<>();
+        connection.onDisconnect(disconnected::complete);
+        connection.onPush("BOOM", body -> {
+            throw new AssertionError("처리 중 오류");
+        });
+
+        server.push("{\"type\":\"BOOM\",\"body\":{}}");
+
+        assertEquals(ServerException.DISCONNECTED, disconnected.get(3, TimeUnit.SECONDS).code());
+        assertFalse(connection.isOpen());
+    }
+
+    @Test
+    void 서버가_끊으면_끊김을_알리고_기다리던_요청은_실패한다() throws Exception {
+        // 응답 시간 초과(0.3초)와 끊김 감지가 겹치지 않게 응답 대기를 넉넉히 둔다
+        connection = ServerConnection.open(server.host(), server.port(),
+                new ServerConnection.Timing(1_000, 5_000, 1_000, 5_000));
         CompletableFuture<ServerException> disconnected = new CompletableFuture<>();
         connection.onDisconnect(disconnected::complete);
         CompletableFuture<JsonNode> waiting = connection.request("SILENT", null);

@@ -10,6 +10,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 /**
@@ -35,7 +36,7 @@ public final class ServerClient implements AutoCloseable {
         return thread;
     });
     private final List<Consumer<ServerException>> disconnectListeners = new CopyOnWriteArrayList<>();
-    private volatile ServerConnection current;
+    private final AtomicReference<ServerConnection> current = new AtomicReference<>();
 
     public ServerClient(NetworkSettings settings) {
         this(settings, ServerConnection::open);
@@ -59,29 +60,37 @@ public final class ServerClient implements AutoCloseable {
             disconnect();
             ServerConnection connection = opener.open(settings.host(), settings.port());
             connection.onDisconnect(reason -> {
-                if (current == connection) {
-                    current = null;
+                // 지금 들고 있는 연결일 때만 알린다 (그사이 새로 접속했으면 옛 연결의 끊김은 알리지 않는다)
+                if (current.compareAndSet(connection, null)) {
                     disconnectListeners.forEach(listener -> listener.accept(reason));
                 }
             });
-            current = connection;
+            ServerConnection previous = current.getAndSet(connection);
+            if (previous != null) {
+                previous.close();
+            }
             return connection;
         }, connector);
     }
 
     /** 지금 열려 있는 연결 */
     public Optional<ServerConnection> connection() {
-        ServerConnection connection = current;
+        ServerConnection connection = current.get();
         return connection != null && connection.isOpen() ? Optional.of(connection) : Optional.empty();
     }
 
     /** 들고 있는 연결을 BYE를 보내고 닫는다. 이렇게 닫은 것은 끊김으로 알리지 않는다 */
     public void disconnect() {
-        ServerConnection connection = current;
-        current = null;
+        ServerConnection connection = current.getAndSet(null);
         if (connection != null) {
             connection.close();
         }
+    }
+
+    /** connection만 BYE를 보내고 닫는다. 그사이 다른 연결로 바뀌었으면 그 연결은 그대로 둔다 */
+    public void disconnect(ServerConnection connection) {
+        current.compareAndSet(connection, null);
+        connection.close();
     }
 
     /**
@@ -95,7 +104,7 @@ public final class ServerClient implements AutoCloseable {
     /** 게임을 끝낼 때: BYE를 보내고 닫는다 */
     @Override
     public void close() {
-        if (current != null) {
+        if (current.get() != null) {
             log.info("게임을 끝내며 서버 연결을 닫습니다.");
         }
         disconnect();
