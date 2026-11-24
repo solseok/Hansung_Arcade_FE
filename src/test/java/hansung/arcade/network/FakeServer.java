@@ -83,6 +83,18 @@ public final class FakeServer implements AutoCloseable {
         throw new AssertionError(type + " 메시지가 오지 않았습니다.");
     }
 
+    /** PING을 뺀 다음 메시지 (다른 type을 건너뛰지 않는다. 보내지 말아야 할 메시지가 갔는지 볼 때 쓴다) */
+    public JsonNode nextMessage() throws InterruptedException {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(3);
+        while (System.nanoTime() < deadline) {
+            JsonNode message = received.poll(50, TimeUnit.MILLISECONDS);
+            if (message != null && !"PING".equals(message.path("type").asText())) {
+                return message;
+            }
+        }
+        throw new AssertionError("메시지가 오지 않았습니다.");
+    }
+
     public static String ok(JsonNode request, String body) {
         return "{\"type\":\"%s\",\"id\":%d,\"ok\":true,\"body\":%s}"
                 .formatted(request.path("type").asText(), request.path("id").asLong(), body);

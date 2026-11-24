@@ -44,7 +44,7 @@ class ServerLobbyServiceTest {
     void setUp() throws Exception {
         server = new FakeServer();
         client = new ServerClient(new NetworkSettings(NetworkMode.ONLINE, server.host(), server.port()),
-                (host, port) -> ServerConnection.open(host, port, new ServerConnection.Timing(1_000, 1_000, 5_000, 15_000)));
+                (host, port) -> ServerConnection.open(host, port, new ServerConnection.Timing(3_000, 5_000, 5_000, 15_000)));
         lobby = new ServerLobbyService(client, Runnable::run);
         lobby.signedIn(List.of(12L));
         client.connect().get(3, TimeUnit.SECONDS);
@@ -252,6 +252,95 @@ class ServerLobbyServiceTest {
         GameResult result = (GameResult) events.get(2);
         assertEquals(new GameResult.Standing(12, "상상부기", GameResult.Outcome.WIN, 2, 1), result.standings().getFirst());
         assertEquals("게임 중에는 할 수 없습니다.", events.get(3));
+    }
+
+    @Test
+    void GAME_STARTED를_받으면_방을_게임_중으로_두고_먼저_알린다() throws Exception {
+        server.respond(request -> FakeServer.ok(request, compact(STATE)));
+        lobby.join(3, 1);
+        List<String> order = new CopyOnWriteArrayList<>();
+        lobby.listen(new ServerLobbyService.Listener() {
+            @Override
+            public void roomStateChanged(RoomState state) {
+                order.add("state:" + state.room().status().name());
+            }
+
+            @Override
+            public void gameStarted(ServerLobbyService.GameStarted started) {
+                order.add("started");
+            }
+        });
+
+        server.push("{\"type\":\"GAME_STARTED\",\"body\":{\"mapId\":\"camp/camp08\",\"players\":[]}}");
+
+        until(() -> order.size() == 2);
+        assertEquals(List.of("state:PLAYING", "started"), order);
+        assertEquals(Room.Status.PLAYING, lobby.state().room().status());
+    }
+
+    @Test
+    void 게임_중에_나가면_GAME_EXIT를_보낸다() throws Exception {
+        server.respond(request -> FakeServer.ok(request, compact(STATE.replace("WAITING", "PLAYING"))));
+        lobby.join(3, 1);
+
+        lobby.leave();
+
+        server.next("GAME_EXIT");
+        assertNull(lobby.state());
+    }
+
+    @Test
+    void 이미_방에_있다고_거절되면_나간_뒤_한_번_다시_들어간다() throws Exception {
+        java.util.concurrent.atomic.AtomicInteger joins = new java.util.concurrent.atomic.AtomicInteger();
+        server.respond(request -> switch (request.path("type").asText()) {
+            case "ROOM_JOIN" -> joins.incrementAndGet() == 1
+                    ? FakeServer.fail(request, "ALREADY_IN_ROOM", "이미 방에 입장해 있습니다.")
+                    : FakeServer.ok(request, compact(STATE));
+            case "ROOM_LEAVE" -> FakeServer.ok(request, "{}");
+            default -> null;
+        });
+
+        Room room = lobby.join(3, 1);
+
+        assertEquals(3, room.number());
+        server.next("ROOM_JOIN");
+        server.next("ROOM_LEAVE");
+        server.next("ROOM_JOIN");
+    }
+
+    @Test
+    void 목록을_받을_때_서버가_아직_방에_두고_있으면_빼낸_뒤_다시_받는다() throws Exception {
+        java.util.concurrent.atomic.AtomicInteger lists = new java.util.concurrent.atomic.AtomicInteger();
+        server.respond(request -> switch (request.path("type").asText()) {
+            case "ROOM_LIST" -> lists.incrementAndGet() == 1
+                    ? FakeServer.fail(request, "WRONG_STATE", "방 안에서는 목록을 볼 수 없습니다.")
+                    : FakeServer.ok(request, compact(ROOMS));
+            case "ROOM_LEAVE" -> FakeServer.ok(request, "{}");
+            default -> null;
+        });
+
+        lobby.reload();
+
+        assertEquals(2, lobby.rooms().size());
+        server.next("ROOM_LEAVE");
+    }
+
+    @Test
+    void 입장_응답이_늦으면_나가기를_보내_두고_실패한다() throws Exception {
+        ServerClient slow = new ServerClient(new NetworkSettings(NetworkMode.ONLINE, server.host(), server.port()),
+                (host, port) -> ServerConnection.open(host, port, new ServerConnection.Timing(3_000, 200, 5_000, 15_000)));
+        try {
+            ServerLobbyService slowLobby = new ServerLobbyService(slow, Runnable::run);
+            slow.connect().get(3, TimeUnit.SECONDS);
+
+            assertThrows(IllegalStateException.class, () -> slowLobby.join(3, 1));
+
+            JsonNode leave = server.next("ROOM_LEAVE");
+            assertFalse(leave.has("id"), "응답을 기다리지 않는 나가기");
+            assertNull(slowLobby.state());
+        } finally {
+            slow.close();
+        }
     }
 
     @Test

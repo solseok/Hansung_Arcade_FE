@@ -253,27 +253,31 @@ public final class OutgameSession {
     public void select(int local, Mascot character) {
         characters[checkPlaying(local)] = Objects.requireNonNull(character);
         randomCharacters[local] = false;
-        ready = false;
         if (online != null) {
+            // 준비가 풀리는지는 서버가 정한다 (같은 캐릭터를 다시 고르면 서버는 준비를 그대로 둔다)
             online.selectCharacter(playerIds.get(local), character.id());
+        } else {
+            ready = false;
         }
     }
 
     /** local번째(0이 1P) 플레이어가 ?(랜덤 캐릭터)를 고른다. 게임을 시작할 때 다섯 캐릭터 중 하나로 정한다 */
     public void selectRandomCharacter(int local) {
         randomCharacters[checkPlaying(local)] = true;
-        ready = false;
         if (online != null) {
             online.selectCharacter(playerIds.get(local), RoomState.RANDOM_CHARACTER);
+        } else {
+            ready = false;
         }
     }
 
     /** local번째(0이 1P) 플레이어의 팀(캐릭터 색)을 바꾼다. 바꾸면 준비가 풀린다. 온라인이면 SELECT_TEAM을 보낸다 */
     public void selectTeam(int local, Team team) {
         teams[checkPlaying(local)] = Objects.requireNonNull(team);
-        ready = false;
         if (online != null) {
             online.selectTeam(playerIds.get(local), team);
+        } else {
+            ready = false;
         }
     }
 
@@ -457,6 +461,9 @@ public final class OutgameSession {
         if (local.isEmpty()) {
             throw new IllegalStateException("시작한 경기에 이 컴퓨터의 플레이어가 없습니다.");
         }
+        if (!GameMaps.ids().contains(started.mapId())) {
+            throw new IllegalStateException("이 게임에 없는 맵입니다: " + started.mapId());
+        }
         local.addAll(others);
         return new GameStartInfo(started.mapId(), local, local.size() - others.size());
     }
@@ -466,11 +473,28 @@ public final class OutgameSession {
                 Mascot.fromId(player.character()), Team.valueOf(player.team()).label());
     }
 
-    public void leave() {
-        service.leave();
+    /** 게임 화면에서 나간다 (온라인: GAME_EXIT). 서버는 방에서 빼므로 이 컴퓨터도 방을 떠난 상태가 된다 */
+    public void exitGame() {
+        online().ifPresent(ServerLobbyService::exitGame);
         roomState = null;
         room = null;
         participantReady.clear();
         ready = false;
+    }
+
+    /**
+     * 방에서 나간다. 온라인이면 서버가 거절해도 이 컴퓨터는 방을 떠난 상태가 된다.
+     *
+     * @throws IllegalStateException 서버가 나가기를 거절했으면 (방은 이미 떠난 상태다)
+     */
+    public void leave() {
+        try {
+            service.leave();
+        } finally {
+            roomState = null;
+            room = null;
+            participantReady.clear();
+            ready = false;
+        }
     }
 }

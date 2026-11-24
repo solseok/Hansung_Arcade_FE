@@ -41,7 +41,7 @@ class OnlineSessionTest {
     void setUp() throws Exception {
         server = new FakeServer();
         client = new ServerClient(new NetworkSettings(NetworkMode.ONLINE, server.host(), server.port()),
-                (host, port) -> ServerConnection.open(host, port, new ServerConnection.Timing(1_000, 1_000, 5_000, 15_000)));
+                (host, port) -> ServerConnection.open(host, port, new ServerConnection.Timing(3_000, 5_000, 5_000, 15_000)));
         session = new OutgameSession(new ServerLobbyService(client, Runnable::run));
         session.signedIn(List.of(new LoginService.LoginPlayer(12, "상상부기"), new LoginService.LoginPlayer(13, "꾸꾸")));
         client.connect().get(3, TimeUnit.SECONDS);
@@ -100,16 +100,18 @@ class OnlineSessionTest {
     void 고르기는_서버로_보내고_방장은_READY를_보내지_않는다() throws Exception {
         enterAsHost(true);
 
+        server.next("ROOM_CREATE");
         session.select(Mascot.KKOKKO);
         session.selectRandomCharacter();
         session.selectTeam(Team.PINK);
         session.setReady(true);
-
-        assertEquals("kkokko", server.next("SELECT_CHARACTER").path("body").path("character").asText());
-        assertEquals("random", server.next("SELECT_CHARACTER").path("body").path("character").asText());
-        assertEquals("PINK", server.next("SELECT_TEAM").path("body").path("team").asText());
         session.chat("안녕");
-        assertEquals("안녕", server.next("CHAT").path("body").path("text").asText(), "READY는 건너뛰고 CHAT이 온다");
+
+        // 다른 type을 건너뛰지 않고 차례대로 본다: 방장의 READY는 나가지 않는다
+        assertEquals("kkokko", server.nextMessage().path("body").path("character").asText());
+        assertEquals("random", server.nextMessage().path("body").path("character").asText());
+        assertEquals("PINK", server.nextMessage().path("body").path("team").asText());
+        assertEquals("CHAT", server.nextMessage().path("type").asText());
     }
 
     @Test
@@ -127,6 +129,52 @@ class OnlineSessionTest {
         session.applyRoomState(hansung.arcade.outgame.lobby.RoomState.from(read(HOST_STATE.formatted(true))));
         assertEquals(Mascot.KKUKKU, session.character(1));
         assertEquals(Team.MINT, session.team(1));
+    }
+
+    @Test
+    void 온라인에서는_고르기만으로_준비를_풀지_않고_서버_값을_따른다() {
+        server.respond(request -> FakeServer.ok(request, HOST_STATE.formatted(true)
+                .replace("\"hostId\":12", "\"hostId\":20")
+                .replace("\"slot\":0,\"character\":\"kkukku\",\"team\":\"MINT\",\"ready\":false",
+                        "\"slot\":0,\"character\":\"kkukku\",\"team\":\"MINT\",\"ready\":true")));
+        session.enter(session.join(3));
+        assertTrue(session.ready());
+
+        session.select(Mascot.KKUKKU);
+
+        assertTrue(session.ready(), "같은 캐릭터를 다시 골라도 서버는 준비를 그대로 둔다");
+    }
+
+    @Test
+    void 나가기가_거절돼도_방을_떠난_상태가_된다() throws Exception {
+        enterAsHost(true);
+        server.respond(request -> FakeServer.fail(request, "WRONG_STATE", "방에 있지 않습니다."));
+
+        IllegalStateException failure = org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,
+                session::leave);
+
+        assertEquals("방에 있지 않습니다.", failure.getMessage());
+        assertNull(session.room());
+        assertTrue(session.seats().isEmpty());
+    }
+
+    @Test
+    void 게임에서_나가면_GAME_EXIT를_보내고_방을_떠난다() throws Exception {
+        enterAsHost(true);
+
+        session.exitGame();
+
+        server.next("GAME_EXIT");
+        assertNull(session.room());
+    }
+
+    @Test
+    void 모르는_맵으로_시작하면_열지_않는다() {
+        enterAsHost(true);
+
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class, () -> session.startInfo(
+                new ServerLobbyService.GameStarted("moon/moon01",
+                        List.of(new ServerLobbyService.StartedPlayer(12, "상상부기", "kkukku", "MINT", 0)))));
     }
 
     @Test

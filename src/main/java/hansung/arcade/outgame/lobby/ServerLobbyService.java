@@ -47,11 +47,14 @@ public final class ServerLobbyService implements LobbyService {
     public static final String READY = "READY";
     public static final String CHAT = "CHAT";
     public static final String LOADED = "LOADED";
+    public static final String GAME_EXIT = "GAME_EXIT";
     public static final String LOBBY_ROOMS = "LOBBY_ROOMS";
     public static final String ROOM_STATE = "ROOM_STATE";
     public static final String CHAT_MESSAGE = "CHAT_MESSAGE";
     public static final String GAME_STARTED = "GAME_STARTED";
     public static final String GAME_OVER = "GAME_OVER";
+    /** 서버가 이미 방에 있다고 거절할 때의 code */
+    static final String ALREADY_IN_ROOM = "ALREADY_IN_ROOM";
 
     private static final Logger log = LoggerFactory.getLogger(ServerLobbyService.class);
 
@@ -105,9 +108,9 @@ public final class ServerLobbyService implements LobbyService {
     private final ServerClient client;
     private final Executor ui;
     private final List<Listener> listeners = new CopyOnWriteArrayList<>();
-    private List<Long> playerIds = List.of();
-    private List<Room> rooms = List.of();
-    private RoomState state;
+    private volatile List<Long> playerIds = List.of();
+    private volatile List<Room> rooms = List.of();
+    private volatile RoomState state;
 
     /**
      * @param ui 푸시를 넘길 곳. 게임에서는 {@code SwingUtilities::invokeLater}
@@ -138,7 +141,14 @@ public final class ServerLobbyService implements LobbyService {
             listeners.forEach(listener -> listener.chatReceived(line));
         });
         onPush(GAME_STARTED, body -> {
+            if (state == null) {
+                return;
+            }
             GameStarted started = Message.read(body, GameStarted.class);
+            // 서버는 게임을 시작해도 방 사람들에게 ROOM_STATE를 보내지 않는다. 끝나면 대기 중 ROOM_STATE가 온다
+            RoomState playing = state.withStatus(Room.Status.PLAYING);
+            state = playing;
+            listeners.forEach(listener -> listener.roomStateChanged(playing));
             listeners.forEach(listener -> listener.gameStarted(started));
         });
         onPush(GAME_OVER, body -> {
@@ -181,10 +191,20 @@ public final class ServerLobbyService implements LobbyService {
         state = null;
     }
 
-    /** ROOM_LIST로 목록을 새로 받는다 */
+    /** ROOM_LIST로 목록을 새로 받는다. 서버가 아직 나를 방에 두고 있으면(나가기가 어긋남) 빼낸 뒤 다시 받는다 */
     @Override
     public void reload() {
-        rooms = RoomState.rooms(call(ROOM_LIST, null));
+        JsonNode body;
+        try {
+            body = client.call(ROOM_LIST, null);
+        } catch (ServerException e) {
+            if (!"WRONG_STATE".equals(e.code())) {
+                throw new IllegalStateException(e.getMessage(), e);
+            }
+            leaveQuietly();
+            body = call(ROOM_LIST, null);
+        }
+        rooms = RoomState.rooms(body);
     }
 
     @Override
@@ -200,22 +220,49 @@ public final class ServerLobbyService implements LobbyService {
     /** @param seats 쓰지 않는다. 함께 들어가는 인원은 서버가 로그인한 인원으로 안다 */
     @Override
     public Room join(int roomNumber, int seats) {
-        return enter(call(ROOM_JOIN, Map.of("roomNumber", roomNumber)));
+        return enter(ROOM_JOIN, Map.of("roomNumber", roomNumber));
     }
 
     @Override
     public Room create(String title, int capacity, int seats) {
-        return enter(call(ROOM_CREATE, Map.of("title", title, "capacity", capacity)));
+        return enter(ROOM_CREATE, Map.of("title", title, "capacity", capacity));
     }
 
     @Override
     public Room quickJoin(int seats) {
-        return enter(call(ROOM_QUICK_JOIN, null));
+        return enter(ROOM_QUICK_JOIN, null);
     }
 
-    private Room enter(JsonNode body) {
-        state = RoomState.from(body);
+    /**
+     * 방에 들어간다. 서버는 이미 방에 있다고 하면(앞서 나가기가 어긋난 경우) 나가기를 보내고 한 번 다시 들어간다.
+     * 응답이 늦어 시간이 지나면, 서버가 이미 앉혔을 수 있으므로 나가기를 보내 두고 실패로 알린다.
+     */
+    private Room enter(String type, Object body) {
+        JsonNode response;
+        try {
+            response = client.call(type, body);
+        } catch (ServerException e) {
+            if (ALREADY_IN_ROOM.equals(e.code())) {
+                leaveQuietly();
+                response = call(type, body);
+            } else {
+                if (ServerException.TIMEOUT.equals(e.code())) {
+                    client.send(ROOM_LEAVE, null);
+                }
+                throw new IllegalStateException(e.getMessage(), e);
+            }
+        }
+        state = RoomState.from(response);
         return state.room();
+    }
+
+    /** 서버가 아직 나를 방에 두고 있을 때 빼낸다. 대기 중이면 ROOM_LEAVE, 게임 중이면 GAME_EXIT */
+    private void leaveQuietly() {
+        try {
+            client.call(ROOM_LEAVE, null);
+        } catch (ServerException e) {
+            client.send(GAME_EXIT, null);
+        }
     }
 
     /** 이 컴퓨터의 플레이어가 방장인지 (ROOM_STATE의 hostId) */
@@ -242,13 +289,31 @@ public final class ServerLobbyService implements LobbyService {
         return state.room();
     }
 
+    /**
+     * 방에서 나간다. 게임 중이면 GAME_EXIT(응답 없음), 대기 중이면 ROOM_LEAVE를 보낸다.
+     * 서버가 거절하거나 응답이 늦어도 이 컴퓨터는 방을 떠난 것으로 한다. 서버가 아직 방에 두고 있으면
+     * 로비에서 목록을 받을 때({@link #reload}) 다시 빼낸다.
+     *
+     * @throws IllegalStateException 서버가 나가기를 거절했으면 (그래도 방은 떠난 상태다)
+     */
     @Override
     public void leave() {
-        if (state == null) {
+        RoomState leaving = state;
+        state = null;
+        if (leaving == null) {
+            return;
+        }
+        if (leaving.room().status() == Room.Status.PLAYING) {
+            client.send(GAME_EXIT, null);
             return;
         }
         call(ROOM_LEAVE, null);
+    }
+
+    /** 게임 화면에서 나간다 (GAME_EXIT). 서버는 방에서 빼고, 이 컴퓨터는 로비로 간다 */
+    public void exitGame() {
         state = null;
+        client.send(GAME_EXIT, null);
     }
 
     /**

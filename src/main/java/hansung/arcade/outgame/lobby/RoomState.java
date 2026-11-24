@@ -93,6 +93,12 @@ public record RoomState(Room room, String mapId, long hostId, List<Seat> seats) 
                 .toList();
     }
 
+    /** 방 상태만 바꾼 사본 (서버는 게임을 시작해도 방 사람들에게 ROOM_STATE를 보내지 않아, GAME_STARTED를 받을 때 게임 중으로 둔다) */
+    public RoomState withStatus(Room.Status status) {
+        Room changed = new Room(room.number(), room.title(), room.players(), room.capacity(), room.map(), status);
+        return new RoomState(changed, mapId, hostId, seats);
+    }
+
     /** playerId의 자리. 없으면 null */
     public Seat seatOf(long playerId) {
         return seats.stream().filter(seat -> seat.playerId() == playerId).findFirst().orElse(null);
