@@ -49,8 +49,12 @@ public final class GameProperties {
             log.info("{}에서 값 {}개를 읽었습니다.", DotEnv.DEFAULT_PATH, dotEnv.size());
         }
         Map<String, String> env = new HashMap<>(dotEnv);
-        // 환경 변수가 .env보다 앞선다
-        env.putAll(System.getenv());
+        // 환경 변수가 .env보다 앞선다. 다만 비어 있는 환경 변수(export SERVER_HOST=)로 .env 값을 지우지는 않는다
+        System.getenv().forEach((name, value) -> {
+            if (!value.isBlank()) {
+                env.put(name, value);
+            }
+        });
         return load(resourceAnchor, args, env);
     }
 
