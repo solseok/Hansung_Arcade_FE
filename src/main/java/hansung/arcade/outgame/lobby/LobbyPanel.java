@@ -132,7 +132,12 @@ public final class LobbyPanel extends JPanel implements Scene {
             @Override
             public void roomsChanged() {
                 if (showing) {
+                    // 다른 사람 때문에 다시 그려도 방금 보여 준 안내(입장 거절 등)는 남긴다
+                    String kept = message.getText();
                     refresh();
+                    if (!kept.isBlank() && !session.service.rooms().isEmpty()) {
+                        message.setText(kept);
+                    }
                 }
             }
         }));
@@ -226,11 +231,15 @@ public final class LobbyPanel extends JPanel implements Scene {
         return this;
     }
 
+    /** @param data 대기실에서 나오다 생긴 안내(String). 없으면 null */
     @Override
     public void enter(Object data) {
         showing = true;
         nickname.setText(String.join(" · ", session.nicknames()) + " 님");
         reload();
+        if (data instanceof String notice && !notice.isBlank()) {
+            message.setText(notice);
+        }
     }
 
     @Override

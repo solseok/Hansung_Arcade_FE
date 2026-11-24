@@ -107,6 +107,13 @@ public final class StartScreenStep implements BootStep {
                 game.setSoundSink(sound -> Sound.play(sound.key()));
                 game.setOnGameStart(theme -> Sound.playBgm(Sound.bgmForMap(theme)));
                 scenes.register("game", game);
+                if (session.isOnline()) {
+                    // 온라인: 결과는 서버가 정하고, 인게임 나가기는 서버 경기에서 빠져 로비로 간다
+                    game.setOnline(() -> {
+                        session.exitGame();
+                        scenes.show("lobby", null);
+                    });
+                }
                 session.online().ifPresent(online -> online.listen(new ServerLobbyService.Listener() {
                     @Override
                     public void gameOver(hansung.arcade.outgame.GameResult result) {

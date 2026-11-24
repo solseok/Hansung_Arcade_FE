@@ -159,9 +159,7 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
 
             @Override
             public void chatReceived(ServerLobbyService.ChatLine line) {
-                if (!showing) {
-                    return;
-                }
+                // 게임 화면에 있는 동안 온 채팅·안내도 쌓아 두어, 대기실로 돌아오면 보인다
                 if (line.notice()) {
                     chat.systemMessage(line.text());
                 } else {
@@ -171,21 +169,34 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
 
             @Override
             public void serverError(String message) {
-                if (showing) {
-                    chat.systemMessage(message);
+                chat.systemMessage(message);
+            }
+
+            @Override
+            public void gameOver(hansung.arcade.outgame.GameResult result) {
+                // 시작 페이드 중에 경기가 끝났으면(상대가 바로 나감 등) 게임 화면으로 가지 않는다
+                if (showing && curtain.isFading()) {
+                    curtain.clear();
+                    chat.systemMessage("경기가 시작되자마자 끝났습니다.");
                 }
             }
 
             @Override
             public void gameStarted(ServerLobbyService.GameStarted started) {
-                if (!showing) {
-                    return;
-                }
                 GameStartInfo start;
                 try {
                     start = session.startInfo(started);
                 } catch (RuntimeException e) {
-                    chat.systemMessage("게임을 열지 못했습니다: " + e.getMessage());
+                    // 게임을 열 수 없으면 서버 경기에서 빠진다 (LOADED를 못 보내 방에서 빠지기를 기다리지 않게)
+                    session.exitGame();
+                    chat.clear();
+                    scenes.show("lobby", "게임을 열지 못했습니다: " + e.getMessage());
+                    return;
+                }
+                if (!showing) {
+                    // 결과 모달 등 다른 화면에 있으면 페이드 없이 바로 게임으로 간다
+                    scenes.show("game", start);
+                    server.loaded();
                     return;
                 }
                 if (!session.isHost()) {
@@ -348,9 +359,11 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
                     return;
                 }
                 Sound.play("Bt_c_GameStart");
-                // 온라인이면 GAME_STARTED를 받을 때 모두 함께 어두워진 뒤 게임 화면으로 간다
                 if (start != null) {
                     fadeOutThen(() -> scenes.show("game", start));
+                } else {
+                    // 온라인: GAME_STARTED를 받을 때 모두 함께 어두워진 뒤 게임 화면으로 간다. 그 사이 다시 누르지 못하게 끈다
+                    ready.setEnabled(false);
                 }
                 return;
             }
@@ -377,14 +390,15 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
         leave.setName("leave");
         leave.setClickSound("Bt_c_Out");
         leave.addActionListener(event -> {
+            // 서버가 거절해도(이미 방에서 빠짐 등) 로비로 간다. 이유는 로비 안내 줄에 보인다
+            String failure = null;
             try {
                 session.leave();
             } catch (IllegalStateException e) {
-                chat.systemMessage(e.getMessage());
-                return;
+                failure = e.getMessage();
             }
             chat.clear();
-            scenes.show("lobby", null);
+            scenes.show("lobby", failure);
         });
         place(bottom, BOTTOM_BAR, leave, LEAVE);
     }
@@ -493,7 +507,7 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
 
     /** 고른 맵을 보여 준다. 실제 맵은 그림이 미리보기 칸을 꽉 채우고, 랜덤 맵은 보라 액자 안에 물음표 카드를 둔다 */
     private void showMap() {
-        GameMaps.GameMap map = GameMaps.byId(session.mapId());
+        GameMaps.GameMap map = GameMaps.byIdOrDefault(session.mapId());
         if (!map.id().equals(thumbnailMapId)) {
             if (thumbnail != null) {
                 thumbnail.getParent().remove(thumbnail);

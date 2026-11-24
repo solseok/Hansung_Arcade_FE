@@ -57,6 +57,9 @@ public final class GamePreviewScene implements Scene {
     private GameStartInfo start;
     private long endedAt;
     private Runnable onGameOver = () -> { };
+    private final JButton finish;
+    /** 인게임 나가기. null이면 대기실로 돌아간다 (오프라인) */
+    private Runnable onExit;
     private Consumer<GameSound> soundSink = sound -> { };
     private Consumer<String> onGameStart = theme -> { };
 
@@ -77,10 +80,20 @@ public final class GamePreviewScene implements Scene {
             scenes.show("waiting", null);
         });
         view.add(layers, BorderLayout.CENTER);
-        JButton finish = new GlossButton("목업 경기 끝내기", GlossButton.BLUE);
+        finish = new GlossButton("목업 경기 끝내기", GlossButton.BLUE);
+        finish.setName("mock-finish");
         finish.setPreferredSize(new Dimension(HudLayout.WIDTH, 28));
         finish.addActionListener(event -> endGame(mockResult()));
         view.add(finish, BorderLayout.SOUTH);
+    }
+
+    /**
+     * 온라인으로 쓴다: 경기 결과는 서버가 GAME_OVER로 정하므로 목업 경기 끝내기 버튼을 숨기고,
+     * 인게임 나가기는 onExit(서버에 GAME_EXIT를 보내고 로비로)를 부른다.
+     */
+    public void setOnline(Runnable onExit) {
+        this.onExit = onExit;
+        finish.setVisible(false);
     }
 
     /** 경기가 끝났을 때 한 번 불린다 (끝나는 소리 등) */
@@ -154,7 +167,7 @@ public final class GamePreviewScene implements Scene {
         game = new InGamePanel(world, Tileset.forTheme(map.theme()), skin, sprites, balloons, items, airplanes);
         game.setSoundSink(soundSink);
         // 나가기: 경기를 그만두고 대기방으로 돌아간다 (방장이면 방을 다시 대기 중으로 돌린다)
-        game.setOnExit(() -> scenes.show("waiting", null));
+        game.setOnExit(onExit != null ? onExit : () -> scenes.show("waiting", null));
         game.setBounds(0, 0, HudLayout.WIDTH, HudLayout.HEIGHT);
         layers.add(game, JLayeredPane.DEFAULT_LAYER);
         view.revalidate();
