@@ -45,6 +45,8 @@ public final class LobbyPanel extends JPanel implements Scene {
     private final ArrowButton previous = new ArrowButton("이전쪽", ArrowButton.Direction.LEFT);
     private final ArrowButton next = new ArrowButton("다음쪽", ArrowButton.Direction.RIGHT);
     private int page;
+    /** 이 화면이 떠 있는지. 확인 창이 떠 있는 동안 연결이 끊겨 다른 화면으로 갔으면 입장하지 않는다 */
+    private boolean showing;
 
     public LobbyPanel(OutgameSession session, SceneManager scenes) {
         this(session, scenes, EntryPrompt.dialog());
@@ -122,7 +124,11 @@ public final class LobbyPanel extends JPanel implements Scene {
     }
 
     private void createRoom() {
-        creator.create(this).ifPresent(request -> enterRoom(() -> session.create(request.title(), request.capacity())));
+        creator.create(this).ifPresent(request -> {
+            if (showing) {
+                enterRoom(() -> session.create(request.title(), request.capacity()));
+            }
+        });
     }
 
     private void onCardClicked(Room room) {
@@ -134,7 +140,7 @@ public final class LobbyPanel extends JPanel implements Scene {
             message.setText(room.number() + "번 방은 자리가 가득 찼습니다.");
             return;
         }
-        if (prompt.confirm(this, room)) {
+        if (prompt.confirm(this, room) && showing) {
             enterRoom(() -> session.join(room.number()));
         }
     }
@@ -193,7 +199,13 @@ public final class LobbyPanel extends JPanel implements Scene {
 
     @Override
     public void enter(Object data) {
+        showing = true;
         nickname.setText(String.join(" · ", session.nicknames()) + " 님");
         refresh();
+    }
+
+    @Override
+    public void exit() {
+        showing = false;
     }
 }

@@ -69,6 +69,18 @@ class ServerLoginServiceTest {
     }
 
     @Test
+    void 서버가_보낸_인원이_다르면_잘못된_응답으로_실패하고_연결을_닫는다() throws Exception {
+        server.respond(request -> FakeServer.ok(request, "{\"players\":[]}"));
+
+        var result = new ServerLoginService(client).login(List.of("부기"));
+
+        CompletionException thrown = assertThrows(CompletionException.class, () -> result.orTimeout(3, TimeUnit.SECONDS).join());
+        assertEquals("BAD_RESPONSE", ServerException.from(thrown).code());
+        server.next("BYE");
+        assertFalse(client.connection().isPresent());
+    }
+
+    @Test
     void 다시_로그인하면_이전_연결을_닫고_새로_접속한다() throws Exception {
         server.respond(request -> FakeServer.ok(request, "{\"players\":[{\"playerId\":1,\"nickname\":\"부기\"}]}"));
         ServerLoginService login = new ServerLoginService(client);
