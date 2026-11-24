@@ -47,7 +47,7 @@ class ServerMatchLinkTest {
                 (host, port) -> ServerConnection.open(host, port, new ServerConnection.Timing(1_000, 1_000, 5_000, 15_000)));
         link = new ServerMatchLink(client, Runnable::run);
         client.connect().get(3, TimeUnit.SECONDS);
-        world = GameWorld.online(MapLoader.parse("fixture/link", List.of("...B..", ".1..2.", "......")), List.of(
+        world = GameWorld.online(MapLoader.parse("fixture/link", List.of("...B.P", ".1..2.", "......")), List.of(
                 new OnlineSeat(12, new PlayerProfile("부기", Mascot.SANGSANGBUGI, 1), 1, true),
                 new OnlineSeat(20, new PlayerProfile("냥이", Mascot.HANSUNGNYANGI, 2), 2, false)), link);
     }
@@ -139,6 +139,20 @@ class ServerMatchLinkTest {
     }
 
     @Test
+    void 상자_이동_푸시를_경기에_넣는다() throws Exception {
+        bind();
+        server.push("{\"type\":\"ROUND_BEGIN\",\"body\":{\"countdownMs\":0,\"timeLimitMs\":180000}}");
+        until(() -> world.server().orElseThrow().isPlaying());
+
+        server.push("{\"type\":\"BOX_MOVED\",\"body\":{\"fromCol\":5,\"fromRow\":0,\"toCol\":5,\"toRow\":1}}");
+
+        // 맵 칸을 옮긴 뒤 미끄러짐을 더하므로, 미끄러짐이 보이면 칸도 다 옮겨졌다
+        until(() -> world.boxPusher().slidingInto(5, 1).isPresent());
+        assertEquals(Tile.PUSH_BOX, world.map().tileAt(5, 1));
+        assertEquals(Tile.FLOOR, world.map().tileAt(5, 0));
+    }
+
+    @Test
     void 경기_중_채팅은_맵_위에_올리고_서버_안내는_올리지_않는다() throws Exception {
         bind();
         server.push("{\"type\":\"CHAT_MESSAGE\",\"body\":{\"senderId\":0,\"sender\":\"\",\"text\":\"냥이님이 나갔습니다.\"}}");
@@ -226,6 +240,12 @@ class ServerMatchLinkTest {
         JsonNode use = server.next(ServerMatchLink.ITEM_USE).path("body");
         assertEquals(12, use.path("playerId").asInt());
         assertEquals("spring_shoe", use.path("item").asText());
+
+        link.pushBox(12, 6, 7, Direction.RIGHT);
+        JsonNode push = server.next(ServerMatchLink.BOX_PUSH).path("body");
+        assertEquals(List.of(12, 6, 7), List.of(push.path("playerId").asInt(), push.path("col").asInt(),
+                push.path("row").asInt()));
+        assertEquals("RIGHT", push.path("direction").asText());
 
         link.chat(12, "안녕");
         JsonNode chat = server.next(ServerMatchLink.CHAT).path("body");

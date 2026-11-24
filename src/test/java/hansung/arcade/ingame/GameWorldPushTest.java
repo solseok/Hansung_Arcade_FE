@@ -199,6 +199,17 @@ class GameWorldPushTest {
     }
 
     @Test
+    void 철로_보강된_상자도_밀리고_남은_맞을_횟수째_옮겨진다() {
+        GameWorld world = solo("1b..");
+        Player me = world.localPlayer();
+
+        walk(world, me, Direction.RIGHT, REACH_TICKS + PUSH_TICKS);
+
+        assertEquals(Tile.FLOOR, world.map().tileAt(1, 0));
+        assertEquals(Tile.HARD_BLOCK_2, world.map().tileAt(2, 0));
+    }
+
+    @Test
     void 미끄러지는_중인_상자는_다시_밀리지_않는다() {
         GameWorld world = solo("1P...");
         Player me = world.localPlayer();

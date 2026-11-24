@@ -2,6 +2,7 @@ package hansung.arcade.ingame;
 
 import hansung.arcade.ingame.airplane.AirDrop;
 import hansung.arcade.ingame.airplane.DropZone;
+import hansung.arcade.ingame.airplane.FallingItem;
 import hansung.arcade.ingame.balloon.BalloonField;
 import hansung.arcade.ingame.balloon.Explosion;
 import hansung.arcade.ingame.block.BoxPusher;
@@ -333,10 +334,17 @@ public final class GameWorld {
         for (Player player : localPlayers) {
             PlayerCommand command = controls ? commands.getOrDefault(player.id(), PlayerCommand.IDLE) : PlayerCommand.IDLE;
             // 점프해 공중에 있는 동안에는 걷지 않는다
-            player.update(gear(player).isAirborne() ? null : command.move(), dt, obstaclesFor(player));
+            Direction move = gear(player).isAirborne() ? null : command.move();
+            player.update(move, dt, obstaclesFor(player));
+            // 상자는 서버가 민다. 다 밀었으면 밀어 달라고 보내고, 옮기는 것은 BOX_MOVED가 온 뒤다.
+            // 서버는 비행기가 떨어뜨린 순간부터 그 칸에 아이템이 있다고 보므로 떨어지는 중인 칸으로도 밀지 않는다
+            boxPusher.requestPush(player, move, dt, (col, row) -> occupancy.hasAny(col, row, BOX_BLOCKERS)
+                            || isItemFallingInto(col, row))
+                    .ifPresent(request -> server.requestBoxPush(player, request));
         }
         server.moveRemotePlayers(dt);
         balloonField.update(dt, allPlayers);
+        boxPusher.advance(dt);
         if (controls) {
             for (Player player : localPlayers) {
                 PlayerCommand command = commands.getOrDefault(player.id(), PlayerCommand.IDLE);
@@ -470,9 +478,23 @@ public final class GameWorld {
         }
     }
 
-    /** player가 들어갈 수 없는 칸: 맵의 막힌 칸과, player가 지나갈 수 없는 물풍선 칸 */
+    /** 비행기가 떨어뜨린 아이템이 (col, row) 칸으로 떨어지는 중인지 */
+    private boolean isItemFallingInto(int col, int row) {
+        for (FallingItem falling : airDrop.fallingItems()) {
+            if (falling.drop().col() == col && falling.drop().row() == row) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * player가 들어갈 수 없는 칸: 맵의 막힌 칸과, player가 지나갈 수 없는 물풍선 칸.
+     * 서버가 몸 위로 밀어 넣은 상자 칸은 그 칸을 벗어날 때까지 지나갈 수 있다 ({@link BoxPusher#lets}).
+     */
     private Obstacles obstaclesFor(Player player) {
-        return (col, row) -> map.isSolid(col, row) || balloonField.blocks(player, col, row);
+        return (col, row) -> map.isSolid(col, row) && !boxPusher.lets(player, col, row)
+                || balloonField.blocks(player, col, row);
     }
 
     /**

@@ -20,6 +20,12 @@ public interface ServerOutbox {
     /** ITEM_USE. 손에 든 쓰는 아이템(needle, shield, spring_shoe)을 쓴다. 서버가 받아들이면 ITEM_USED가 온다 */
     void useItem(int playerId, String item);
 
+    /**
+     * BOX_PUSH. (col, row)의 밀리는 상자를 direction 쪽으로 한 칸 밀어 달라고 한다. 서버가 받아들이면 BOX_MOVED가 온다.
+     * 서버는 마지막 MOVE가 멈춘 채 direction을 보고 상자 바로 앞 칸에 있을 때만 민다.
+     */
+    void pushBox(int playerId, int col, int row, Direction direction);
+
     /** CHAT. 서버가 방 전체에 CHAT_MESSAGE로 돌려준다 */
     void chat(int playerId, String text);
 }

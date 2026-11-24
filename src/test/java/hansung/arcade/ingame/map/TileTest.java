@@ -3,6 +3,9 @@ package hansung.arcade.ingame.map;
 import hansung.arcade.ingame.entity.Direction;
 import org.junit.jupiter.api.Test;
 
+import java.util.EnumSet;
+import java.util.Set;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -47,9 +50,10 @@ class TileTest {
     }
 
     @Test
-    void 밀리는_블럭은_상자뿐이다() {
+    void 밀리는_블럭은_상자와_철로_보강된_상자다() {
+        Set<Tile> pushable = EnumSet.of(Tile.PUSH_BOX, Tile.HARD_BLOCK_3, Tile.HARD_BLOCK_2, Tile.HARD_BLOCK_1);
         for (Tile tile : Tile.values()) {
-            assertEquals(tile == Tile.PUSH_BOX, tile.isPushable(), tile.name());
+            assertEquals(pushable.contains(tile), tile.isPushable(), tile.name());
         }
     }
 
