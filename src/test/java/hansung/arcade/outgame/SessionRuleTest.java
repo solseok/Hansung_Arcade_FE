@@ -79,7 +79,8 @@ class SessionRuleTest {
         OutgameSession session = new OutgameSession(new MockLobbyService());
         session.login("부기", "꾸꾸");
         session.create("둘이서", 8);
-        session.selectRandomCharacter();
+        session.selectRandomCharacter(0);
+        session.selectRandomCharacter(1);
 
         boolean differed = false;
         for (int i = 0; i < 60 && !differed; i++) {

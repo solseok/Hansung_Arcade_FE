@@ -1,24 +1,70 @@
 package hansung.arcade.outgame.audio;
 
+import javazoom.jl.decoder.Bitstream;
+import javazoom.jl.decoder.Decoder;
+import javazoom.jl.decoder.Header;
+import javazoom.jl.decoder.SampleBuffer;
 import javazoom.jl.player.Player;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import java.io.BufferedInputStream;
-import java.io.InputStream;
 
-/** MP3 재생은 데몬 스레드에서 수행하며 화면 전환 시 이전 트랙을 닫는다. */
+import javax.sound.sampled.AudioFormat;
+import javax.sound.sampled.AudioSystem;
+import javax.sound.sampled.Clip;
+import javax.sound.sampled.LineEvent;
+import javax.sound.sampled.LineUnavailableException;
+import java.io.BufferedInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.util.Collection;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+/**
+ * 소리. 곡은 resources/sounds/{이름}.mp3 이다.
+ *
+ * <p>BGM은 데몬 스레드에서 MP3를 풀어 가며 되풀이해 틀고, 화면이 바뀌면 이전 곡을 닫는다.</p>
+ *
+ * <p>효과음은 처음 낼 때 MP3를 한 번 PCM으로 풀어 두고({@link #preload}로 미리 풀 수 있다), 낼 때마다 Clip을 새로 열어
+ * 여러 소리가 겹쳐 나게 한다. 물풍선이 터지는 중에 아이템을 먹어도 앞 소리가 끊기지 않는다.
+ * 한꺼번에 {@value #MAX_EFFECTS}개보다 많이 울리고 있으면 새 소리는 내지 않는다.
+ * Clip을 여는 일은 EDT를 막지 않도록 효과음 전용 데몬 스레드에서 한다.</p>
+ */
 public final class Sound {
     private static final Logger LOG = LoggerFactory.getLogger(Sound.class);
+    /** 아웃게임 버튼을 누를 때 나는 짧은 소리 */
+    public static final String CLICK = "Bt_c_Pop";
+    /** 한꺼번에 울릴 수 있는 효과음 수 */
+    static final int MAX_EFFECTS = 16;
+
     private static final Track BGM = new Track();
-    private static final Track EFFECT = new Track();
-    private static final Track CLICK = new Track();
+    private static final ExecutorService EFFECTS = Executors.newSingleThreadExecutor(task -> {
+        Thread thread = new Thread(task, "sound-effects");
+        thread.setDaemon(true);
+        return thread;
+    });
+    /** 풀어 둔 효과음. 읽지 못한 소리는 빈 값으로 남겨 다시 읽으려 하지 않는다 */
+    private static final Map<String, Optional<Pcm>> PCM = new ConcurrentHashMap<>();
+    /** 지금 울리고 있는 효과음 */
+    private static final Set<Clip> PLAYING = ConcurrentHashMap.newKeySet();
+    /** 소리 장치를 열지 못했다고 이미 알렸는지. 장치가 없는 환경에서 효과음마다 경고가 쌓이지 않게 한다 */
+    private static final AtomicBoolean DEVICE_WARNED = new AtomicBoolean();
+    /** 앱이 쓰는 기본 Clip */
+    static final ClipSource SYSTEM_CLIPS = AudioSystem::getClip;
+    private static volatile ClipSource clips = SYSTEM_CLIPS;
     private static boolean muted;
     private static String bgm;
 
     private Sound() { }
 
     /**
-     * 화면 이름(SceneManager에 등록한 이름)에 맞는 BGM 곡 이름. 결과는 게임 화면 위 모달이라 게임 곡을 그대로 쓴다.
+     * 화면 이름(SceneManager에 등록한 이름)에 맞는 BGM 곡 이름. 게임 화면은 맵마다 곡이 달라서 {@link #bgmForMap}을 쓴다.
      *
      * @throws IllegalArgumentException 곡을 정하지 않은 화면이면
      */
@@ -27,8 +73,23 @@ public final class Sound {
             case "login" -> "01. login";
             case "lobby" -> "02. lobby";
             case "waiting" -> "03. room";
-            case "game" -> "Village";
             default -> throw new IllegalArgumentException("Unknown screen: " + screen);
+        };
+    }
+
+    /**
+     * 맵 테마(맵 폴더 이름: camp, patrit, village)에 맞는 게임 BGM 곡 이름. 곡이 없는 테마면 빌리지 곡을 쓴다
+     * (새 테마를 넣고 곡을 빠뜨려도 게임은 시작되게).
+     */
+    public static String bgmForMap(String theme) {
+        return switch (theme) {
+            case "camp" -> "Camp";
+            case "patrit" -> "Patrit";
+            case "village" -> "Village";
+            default -> {
+                LOG.warn("맵 테마 '{}'의 BGM이 없어 빌리지 곡을 틉니다.", theme);
+                yield "Village";
+            }
         };
     }
 
@@ -43,15 +104,22 @@ public final class Sound {
         }
     }
 
+    /** 효과음을 낸다. 앞서 낸 효과음과 겹쳐 난다 */
     public static synchronized void play(String key) {
         if (!muted) {
-            EFFECT.start(key, false);
+            EFFECTS.execute(() -> playNow(key));
         }
     }
 
-    public static synchronized void click() {
-        if (!muted) {
-            CLICK.start("Ntc_Count1", false);
+    /** 아웃게임 버튼 클릭음 */
+    public static void click() {
+        play(CLICK);
+    }
+
+    /** 효과음들을 미리 PCM으로 풀어 둔다. 처음 낼 때 늦게 나지 않게 화면에 들어가기 전에 부른다 */
+    public static void preload(Collection<String> keys) {
+        for (String key : keys) {
+            EFFECTS.execute(() -> pcm(key));
         }
     }
 
@@ -65,8 +133,7 @@ public final class Sound {
         }
         muted = value;
         BGM.stop();
-        EFFECT.stop();
-        CLICK.stop();
+        stopEffects();
         if (!muted && bgm != null) {
             BGM.start(bgm, true);
         }
@@ -74,9 +141,136 @@ public final class Sound {
 
     public static synchronized void stopAll() {
         BGM.stop();
-        EFFECT.stop();
-        CLICK.stop();
+        stopEffects();
         bgm = null;
+    }
+
+    private static void stopEffects() {
+        for (Clip clip : PLAYING) {
+            clip.close();
+        }
+        PLAYING.clear();
+    }
+
+    /**
+     * 효과음 스레드에서 Clip을 열어 낸다. 다 울리면 닫는다. 열거나 틀지 못한 Clip은 바로 닫고 울리는 소리로 세지 않는다
+     * (세어 두면 {@value #MAX_EFFECTS}번 실패한 뒤로 효과음이 영영 나지 않는다).
+     */
+    static void playNow(String key) {
+        // 줄 서 있는 사이 음소거됐으면 내지 않는다
+        if (isMuted()) {
+            return;
+        }
+        Optional<Pcm> pcm = pcm(key);
+        if (pcm.isEmpty() || PLAYING.size() >= MAX_EFFECTS) {
+            return;
+        }
+        Clip clip = null;
+        try {
+            clip = clips.open();
+            start(clip, pcm.get());
+        } catch (Exception | LinkageError exception) {
+            if (clip != null) {
+                PLAYING.remove(clip);
+                clip.close();
+            }
+            if (DEVICE_WARNED.compareAndSet(false, true)) {
+                LOG.warn("효과음을 낼 소리 장치를 열지 못했습니다: {}", key, exception);
+            }
+        }
+    }
+
+    private static void start(Clip clip, Pcm pcm) throws LineUnavailableException {
+        clip.open(pcm.format(), pcm.data(), 0, pcm.data().length);
+        AtomicBoolean finished = new AtomicBoolean();
+        clip.addLineListener(event -> {
+            if (event.getType() == LineEvent.Type.STOP && finished.compareAndSet(false, true)) {
+                PLAYING.remove(clip);
+                // 리스너 안에서 바로 닫으면 일부 JDK에서 멈출 수 있어 효과음 스레드로 넘긴다
+                EFFECTS.execute(clip::close);
+            }
+        });
+        // 음소거(setMuted)가 울리는 소리를 다 닫는 것과 엇갈리지 않게 같은 잠금 안에서 확인하고 튼다
+        synchronized (Sound.class) {
+            if (muted) {
+                clip.close();
+                return;
+            }
+            PLAYING.add(clip);
+            clip.start();
+        }
+    }
+
+    /** 지금 울리고 있는 효과음 수 */
+    static int playingCount() {
+        return PLAYING.size();
+    }
+
+    /** 효과음 스레드에 줄 서 있는 일을 다 할 때까지 기다린다 (테스트가 앞 테스트의 소리와 섞이지 않게) */
+    static void awaitEffects() throws Exception {
+        EFFECTS.submit(() -> { }).get(10, TimeUnit.SECONDS);
+    }
+
+    /** 효과음 Clip을 얻는 곳. 테스트는 실패하는 Clip으로 바꿔 끼운다 */
+    @FunctionalInterface
+    interface ClipSource {
+        Clip open() throws LineUnavailableException;
+    }
+
+    static void useClips(ClipSource source) {
+        clips = source;
+    }
+
+    private static Optional<Pcm> pcm(String key) {
+        return PCM.computeIfAbsent(key, Sound::decode);
+    }
+
+    /** resources/sounds/{key}.mp3 를 16비트 PCM으로 푼다. 읽지 못하면 빈 값 */
+    static Optional<Pcm> decode(String key) {
+        try (InputStream raw = Sound.class.getResourceAsStream("/sounds/" + key + ".mp3")) {
+            if (raw == null) {
+                LOG.warn("사운드 리소스 없음: {}", key);
+                return Optional.empty();
+            }
+            Bitstream bits = new Bitstream(new BufferedInputStream(raw));
+            Decoder decoder = new Decoder();
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            int rate = 0;
+            int channels = 0;
+            try {
+                Header header;
+                while ((header = bits.readFrame()) != null) {
+                    SampleBuffer samples = (SampleBuffer) decoder.decodeFrame(header, bits);
+                    rate = decoder.getOutputFrequency();
+                    channels = decoder.getOutputChannels();
+                    short[] buffer = samples.getBuffer();
+                    int length = samples.getBufferLength();
+                    for (int i = 0; i < length; i++) {
+                        out.write(buffer[i] & 0xFF);
+                        out.write((buffer[i] >> 8) & 0xFF);
+                    }
+                    bits.closeFrame();
+                }
+            } finally {
+                bits.close();
+            }
+            if (rate <= 0 || channels <= 0 || out.size() == 0) {
+                LOG.warn("사운드를 풀지 못했습니다(빈 MP3): {}", key);
+                return Optional.empty();
+            }
+            return Optional.of(new Pcm(new AudioFormat(rate, 16, channels, true, false), out.toByteArray()));
+        } catch (Exception exception) {
+            LOG.warn("사운드를 풀지 못했습니다: {}", key, exception);
+            return Optional.empty();
+        }
+    }
+
+    /** 풀어 둔 효과음 한 개: 16비트 부호 있는 리틀 엔디언 PCM */
+    record Pcm(AudioFormat format, byte[] data) {
+        /** 소리 길이(초) */
+        double seconds() {
+            return data.length / (double) (format.getFrameSize() * format.getFrameRate());
+        }
     }
 
     private static final class Track {

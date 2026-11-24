@@ -211,6 +211,36 @@ class BalloonFieldTest {
     }
 
     @Test
+    void 바닥_가시_칸에_놓은_물풍선은_바로_터진다() {
+        // ! 는 바닥 가시. 지나갈 수 있는 바닥이다
+        TileMap map = MapLoader.parse("fixture/spike", List.of("1.!.2"));
+        BalloonField field = new BalloonField(map);
+        Player me = playerAt(1, Mascot.SANGSANGBUGI, 2, 0);
+        List<Player> players = List.of(me);
+
+        WaterBalloon balloon = field.place(me, players).orElseThrow();
+
+        assertEquals(2, balloon.col());
+        assertTrue(field.balloons().isEmpty());
+        List<Explosion> burst = field.takeNewExplosions();
+        assertEquals(1, burst.size());
+        assertEquals(2, burst.get(0).col());
+        assertTrue(field.isWet(2, 0));
+    }
+
+    @Test
+    void 가시가_아닌_바닥에_놓은_물풍선은_그대로_있는다() {
+        TileMap map = MapLoader.parse("fixture/spike", List.of("1.!.2"));
+        BalloonField field = new BalloonField(map);
+        Player me = playerAt(1, Mascot.SANGSANGBUGI, 1, 0);
+
+        field.place(me, List.of(me)).orElseThrow();
+
+        assertEquals(1, field.balloons().size());
+        assertTrue(field.takeNewExplosions().isEmpty());
+    }
+
+    @Test
     void 여러_물줄기가_덮은_칸의_주인은_가까이에서_터진_것부터_거리가_같으면_늦게_터진_것부터다() {
         // 1P는 1열, 2P는 5열, 3P는 2열 아랫줄. 상찌는 물줄기 2칸으로 시작한다
         TileMap map = MapLoader.parse("fixture/open", List.of(".1....", "......", "......"));

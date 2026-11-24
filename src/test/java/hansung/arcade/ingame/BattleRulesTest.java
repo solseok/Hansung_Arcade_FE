@@ -10,6 +10,7 @@ import hansung.arcade.ingame.item.PlayerGear;
 import hansung.arcade.ingame.map.TileMap;
 import hansung.arcade.ingame.match.Match;
 import hansung.arcade.ingame.match.MatchMode;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -75,6 +76,110 @@ class BattleRulesTest {
         assertEquals(PlayerState.TRAPPED, first.state());
         assertEquals(second.id(), first.trapperId().orElseThrow());
         assertEquals(PlayerState.NORMAL, second.state());
+    }
+
+    /** 걸치기: 크아 개발자 설명대로 충돌 박스가 물줄기와 66% 이상 겹칠 때만 갇힌다. 박스는 36 x 36px, 칸은 40px */
+    @Nested
+    class 걸치기 {
+
+        @Test
+        void 네_칸이_만나는_곳에_서면_십자_물줄기가_세_칸을_덮어도_갇히지_않는다() {
+            Player me = join(1, 0, 0);
+            Player other = join(2, 5, 5);
+            // 1·2열과 1·2줄이 만나는 점에 선다. 박스가 네 칸에 25%씩 들어간다
+            me.placeAt(2 * TileMap.TILE_SIZE, 2 * TileMap.TILE_SIZE);
+            // 크아 영상처럼 1시 방향 칸(2,1)에서 터져 가로로 (1,1), 세로로 (2,2)까지 덮었다
+            wet(2, 1, other.id());
+            wet(1, 1, other.id());
+            wet(2, 2, other.id());
+            wet(3, 1, other.id());
+            wet(2, 0, other.id());
+
+            rules(new Match(MatchMode.SOLO, players)).settle();
+
+            assertEquals(PlayerState.NORMAL, me.state());
+        }
+
+        @Test
+        void 세로_물줄기에_몸이_64퍼센트_걸치면_몸_가운데가_물줄기_칸에_있어도_갇히지_않는다() {
+            Player me = join(1, 0, 0);
+            Player other = join(2, 5, 5);
+            wetColumn(1, other.id());
+            // 박스 57~93px: 1열(40~80px)에 23px = 64%. 몸 가운데(75px)는 1열이다
+            me.placeAt(75, TileMap.centerY(1));
+            assertEquals(1, me.col());
+
+            rules(new Match(MatchMode.SOLO, players)).settle();
+
+            assertEquals(PlayerState.NORMAL, me.state());
+        }
+
+        @Test
+        void 세로_물줄기에_몸이_67퍼센트_걸치면_갇힌다() {
+            Player me = join(1, 0, 0);
+            Player other = join(2, 5, 5);
+            wetColumn(1, other.id());
+            // 박스 56~92px: 1열에 24px = 67%
+            me.placeAt(74, TileMap.centerY(1));
+
+            rules(new Match(MatchMode.SOLO, players)).settle();
+
+            assertEquals(PlayerState.TRAPPED, me.state());
+            assertEquals(other.id(), me.trapperId().orElseThrow());
+        }
+
+        @Test
+        void 가로_물줄기도_같다() {
+            Player me = join(1, 0, 0);
+            Player other = join(2, 5, 5);
+            for (int col = 0; col < 4; col++) {
+                wet(col, 1, other.id());
+            }
+            me.placeAt(TileMap.centerX(1), 75);
+            Match match = new Match(MatchMode.SOLO, players);
+            rules(match).settle();
+            assertEquals(PlayerState.NORMAL, me.state());
+
+            me.placeAt(TileMap.centerX(1), 74);
+            rules(match).settle();
+            assertEquals(PlayerState.TRAPPED, me.state());
+        }
+
+        @Test
+        void 물줄기_두_칸에_나란히_걸치면_한_줄_전체가_젖어_갇힌다() {
+            Player me = join(1, 0, 0);
+            Player other = join(2, 5, 5);
+            // 가로 물줄기 위에서 두 칸에 반씩 걸쳐도 그 줄에는 몸이 다 들어가 있다
+            wet(1, 1, other.id());
+            wet(2, 1, other.id());
+            me.placeAt(2 * TileMap.TILE_SIZE, TileMap.centerY(1));
+
+            rules(new Match(MatchMode.SOLO, players)).settle();
+
+            assertEquals(PlayerState.TRAPPED, me.state());
+        }
+
+        @Test
+        void 여러_사람의_물줄기에_맞으면_많이_겹친_칸의_주인이_가둔_사람이다() {
+            Player me = join(1, 0, 0);
+            Player left = join(2, 5, 5);
+            Player right = join(3, 6, 6);
+            wet(1, 1, left.id());
+            wet(2, 1, right.id());
+            // 박스 66~102px: 2열에 22px, 1열에 14px. 줄 하나가 다 젖어 갇히고, 2열 주인이 가둔 사람이다
+            me.placeAt(84, TileMap.centerY(1));
+            Match match = new Match(MatchMode.SOLO, players);
+
+            rules(match).settle();
+            assertEquals(right.id(), me.trapperId().orElseThrow());
+        }
+
+        /** col열 0~3줄을 owners의 물줄기로 덮는다 */
+        private void wetColumn(int col, int... owners) {
+            for (int row = 0; row < 4; row++) {
+                wet(col, row, owners);
+            }
+        }
     }
 
     @Test
@@ -182,8 +287,9 @@ class BattleRulesTest {
 
     /** 1P는 (2, 0) 칸 아래쪽 끝, 2P는 바로 밑 (2, 1) 칸 위쪽 끝에 세워 반 칸 안으로 붙인다. 1P 칸만 1P의 물줄기가 덮는다 */
     private void touchingAcrossCells(Player first, Player second) {
-        first.placeAt(TileMap.centerX(2), TileMap.TILE_SIZE - 5);
-        second.placeAt(TileMap.centerX(2), TileMap.TILE_SIZE + 5);
+        // 1P는 0번 줄에 몸이 72% 들어가 물줄기에 맞고(66% 이상), 2P는 1번 줄에 서서 칸 경계 너머로 1P에 닿는다
+        first.placeAt(TileMap.centerX(2), TileMap.TILE_SIZE - 8);
+        second.placeAt(TileMap.centerX(2), TileMap.TILE_SIZE + 8);
         assertEquals(0, first.row());
         assertEquals(1, second.row());
         assertTrue(second.touches(first));

@@ -27,7 +27,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * 2인 모드의 1P·2P 표시를 빈 그림에 그려, 누구 머리 위에 어떤 자리로 그리는지 확인한다.
+ * 캐릭터 머리 위 닉네임을 빈 그림에 그려, 누구 머리 위에 어떤 자리로 그리는지 확인한다.
  * 돋움체가 없는 PC와 CI에서도 돌도록 Java 기본 고정폭 글꼴을 쓴다.
  */
 class PlayerTagViewTest {
@@ -43,34 +43,37 @@ class PlayerTagViewTest {
     private final PlayerTagView view = new PlayerTagView(text);
 
     @Test
-    void 표시는_1P부터_차례로_붙인다() {
-        assertEquals("1P", PlayerTagView.tagOf(0));
-        assertEquals("2P", PlayerTagView.tagOf(1));
+    void 표시는_플레이어의_닉네임이다() {
+        GameWorld world = new GameWorld(MAP, List.of(ONE, TWO));
+        assertEquals("one", PlayerTagView.nicknameOf(world.localPlayers().get(0)));
+        assertEquals("two", PlayerTagView.nicknameOf(world.localPlayers().get(1)));
     }
 
     @Test
-    void 두_명이면_각자의_머리_위에_자기_표시를_그린다() {
+    void 두_명이면_각자의_머리_위에_자기_닉네임을_그린다() {
         GameWorld world = new GameWorld(MAP, List.of(ONE, TWO));
         BufferedImage screen = paint(world);
 
         Player first = world.localPlayers().get(0);
         Player second = world.localPlayers().get(1);
-        Box firstTag = tagBox(world, first, "1P");
-        Box secondTag = tagBox(world, second, "2P");
+        Box firstTag = tagBox(world, first, "one");
+        Box secondTag = tagBox(world, second, "two");
         // 글자 칸 아래 끝은 캐릭터 위치에서 52px 위다
         assertEquals(screenY(world, first) - PLAYER_TAG_ABOVE_PLAYER, firstTag.bottom());
 
-        // 각 자리에 그 표시 글자가 그대로 찍히고, 그 밖에는 아무것도 그리지 않는다
-        int inFirst = assertTagAt(screen, "1P", firstTag);
-        int inSecond = assertTagAt(screen, "2P", secondTag);
+        // 각 자리에 그 닉네임이 그대로 찍히고, 그 밖에는 아무것도 그리지 않는다
+        int inFirst = assertTagAt(screen, "one", firstTag);
+        int inSecond = assertTagAt(screen, "two", secondTag);
         assertEquals(inFirst + inSecond, countDrawn(screen, new Box(0, 0, screen.getWidth(), screen.getHeight())));
     }
 
     @Test
-    void 혼자_하면_표시를_그리지_않는다() {
-        BufferedImage screen = paint(new GameWorld(MAP, ONE));
+    void 혼자_해도_내_머리_위에_닉네임을_그린다() {
+        GameWorld world = new GameWorld(MAP, ONE);
+        BufferedImage screen = paint(world);
 
-        assertEquals(0, countDrawn(screen, new Box(0, 0, screen.getWidth(), screen.getHeight())));
+        int drawn = assertTagAt(screen, "one", tagBox(world, world.localPlayer(), "one"));
+        assertEquals(drawn, countDrawn(screen, new Box(0, 0, screen.getWidth(), screen.getHeight())));
     }
 
     @Test
@@ -82,8 +85,8 @@ class PlayerTagViewTest {
         second.eliminate();
         BufferedImage screen = paint(world);
 
-        assertTrue(countDrawn(screen, tagBox(world, first, "1P").inset(-OutlineText.MARGIN)) > 20);
-        assertEquals(0, countDrawn(screen, tagBox(world, second, "2P").inset(-OutlineText.MARGIN)));
+        assertTrue(countDrawn(screen, tagBox(world, first, "one").inset(-OutlineText.MARGIN)) > 20);
+        assertEquals(0, countDrawn(screen, tagBox(world, second, "two").inset(-OutlineText.MARGIN)));
     }
 
     @Test
@@ -92,8 +95,8 @@ class PlayerTagViewTest {
         world.sendChat("hi");
         BufferedImage screen = paint(world);
 
-        assertEquals(0, countDrawn(screen, tagBox(world, world.localPlayers().get(0), "1P").inset(-OutlineText.MARGIN)));
-        assertTrue(countDrawn(screen, tagBox(world, world.localPlayers().get(1), "2P").inset(-OutlineText.MARGIN)) > 20);
+        assertEquals(0, countDrawn(screen, tagBox(world, world.localPlayers().get(0), "one").inset(-OutlineText.MARGIN)));
+        assertTrue(countDrawn(screen, tagBox(world, world.localPlayers().get(1), "two").inset(-OutlineText.MARGIN)) > 20);
     }
 
     @Test
@@ -146,10 +149,10 @@ class PlayerTagViewTest {
         ItemEffects.apply(first, world.gear(first), ItemType.TANK);
         BufferedImage screen = paint(world);
 
-        Box firstTag = tagBox(world, first, "1P");
+        Box firstTag = tagBox(world, first, "one");
         assertEquals(screenY(world, first) - PLAYER_TAG_ABOVE_PLAYER - WorldRenderer.TANK_SEAT, firstTag.bottom());
-        int inFirst = assertTagAt(screen, "1P", firstTag);
-        int inSecond = assertTagAt(screen, "2P", tagBox(world, world.localPlayers().get(1), "2P"));
+        int inFirst = assertTagAt(screen, "one", firstTag);
+        int inSecond = assertTagAt(screen, "two", tagBox(world, world.localPlayers().get(1), "two"));
         assertEquals(inFirst + inSecond, countDrawn(screen, new Box(0, 0, screen.getWidth(), screen.getHeight())));
     }
 

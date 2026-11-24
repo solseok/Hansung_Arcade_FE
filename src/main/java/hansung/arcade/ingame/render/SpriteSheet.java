@@ -41,6 +41,11 @@ public final class SpriteSheet {
         }
     }
 
+    /** 그림 전체 (마젠타 배경은 투명). 원본 픽셀을 공유한다 */
+    public BufferedImage image() {
+        return image;
+    }
+
     /** frameWidth 폭으로 왼쪽부터 자른 프레임들. 원본 픽셀을 공유한다. */
     public List<BufferedImage> frames(int frameWidth) {
         if (frameWidth <= 0 || image.getWidth() % frameWidth != 0) {

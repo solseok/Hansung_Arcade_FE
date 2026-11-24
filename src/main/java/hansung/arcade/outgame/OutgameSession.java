@@ -7,24 +7,37 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Random;
 
 /**
  * 한 컴퓨터의 아웃게임 상태. 1P면 한 명, 2P면 두 명이 이 컴퓨터에서 함께 한다.
  * 로그인은 온라인이면 서버가 받아들인 플레이어 번호를 들고 있고, 대기실의 다른 인원은 아직 준비된 목업 참가자다.
  * 서버 주소·포트는 사용자가 넣지 않고 설정(application.properties, .env)에서 읽는다.
+ *
+ * <p>캐릭터와 팀(캐릭터 색)은 이 컴퓨터의 플레이어마다 따로 고른다. 번호(local)는 0이 1P, 1이 2P이고,
+ * 번호를 받지 않는 메서드는 1P의 것이다. 2P는 처음에 1P와 구별되게 다른 캐릭터({@link #DEFAULT_CHARACTER_2P})·
+ * 다른 팀({@link #DEFAULT_TEAM_2P})으로 시작한다.</p>
  */
 public final class OutgameSession {
+    /** 이 컴퓨터에서 함께 할 수 있는 최대 인원 */
+    public static final int MAX_LOCAL_PLAYERS = 2;
+    /** 2P가 처음 고른 캐릭터 */
+    public static final Mascot DEFAULT_CHARACTER_2P = Mascot.HANSUNGNYANGI;
+    /** 2P가 처음 고른 팀 */
+    public static final Team DEFAULT_TEAM_2P = Team.BLUE;
+
     public final LobbyService service;
     private List<String> nicknames = List.of("나");
     /** 로그인한 플레이어 번호 (1P부터). 오프라인이면 1, 2 */
     private List<Long> playerIds = List.of(1L);
     private Room room;
-    private Mascot character = Mascot.DEFAULT;
+    /** 이 컴퓨터 플레이어마다(1P, 2P) 고른 캐릭터. 랜덤을 골랐으면 마지막으로 고른 캐릭터 */
+    private final Mascot[] characters = {Mascot.DEFAULT, DEFAULT_CHARACTER_2P};
     /** ?(랜덤)를 골랐으면 true. 실제 캐릭터는 게임을 시작할 때 정한다 */
-    private boolean randomCharacter;
+    private final boolean[] randomCharacters = new boolean[MAX_LOCAL_PLAYERS];
     private final Random random = new Random();
-    private Team team = Team.RED;
+    private final Team[] teams = {Team.RED, DEFAULT_TEAM_2P};
     private String mapId = GameMaps.DEFAULT_ID;
     private boolean ready;
     /** 목업 참가자(이 컴퓨터 밖의 사람)의 준비 상태. 서버가 붙으면 서버에서 받은 값으로 바꾼다 */
@@ -115,31 +128,74 @@ public final class OutgameSession {
     }
 
     public Room room() { return room; }
-    /** 고른 캐릭터. 랜덤을 골랐으면 마지막으로 고른 캐릭터이고, 실제 캐릭터는 {@link #start}에서 정한다 */
-    public Mascot character() { return character; }
-    public boolean randomCharacter() { return randomCharacter; }
-    public Team team() { return team; }
+    /** 1P가 고른 캐릭터. 랜덤을 골랐으면 마지막으로 고른 캐릭터이고, 실제 캐릭터는 {@link #start}에서 정한다 */
+    public Mascot character() { return character(0); }
+    public boolean randomCharacter() { return randomCharacter(0); }
+    public Team team() { return team(0); }
+
+    /** local번째(0이 1P) 플레이어가 고른 캐릭터. 랜덤을 골랐으면 마지막으로 고른 캐릭터다 */
+    public Mascot character(int local) { return characters[checkLocal(local)]; }
+
+    /** local번째(0이 1P) 플레이어가 ?(랜덤)를 골랐는지 */
+    public boolean randomCharacter(int local) { return randomCharacters[checkLocal(local)]; }
+
+    /** local번째(0이 1P) 플레이어가 고른 팀 */
+    public Team team(int local) { return teams[checkLocal(local)]; }
     public String mapId() { return mapId; }
     public boolean ready() { return ready; }
     public void setReady(boolean value) { ready = value; }
 
-    /** 캐릭터를 바꾼다. 바꾸면 준비가 풀리고 랜덤도 풀린다. */
+    /** 1P의 캐릭터를 바꾼다. 바꾸면 준비가 풀리고 랜덤도 풀린다. */
     public void select(Mascot character) {
-        this.character = character;
-        randomCharacter = false;
-        ready = false;
+        select(0, character);
     }
 
-    /** ?(랜덤 캐릭터)를 고른다. 게임을 시작할 때 다섯 캐릭터 중 하나로 정한다 */
+    /** 1P가 ?(랜덤 캐릭터)를 고른다. 게임을 시작할 때 다섯 캐릭터 중 하나로 정한다 */
     public void selectRandomCharacter() {
-        randomCharacter = true;
+        selectRandomCharacter(0);
+    }
+
+    /** 1P의 팀을 바꾼다. 바꾸면 준비가 풀린다. */
+    public void selectTeam(Team team) {
+        selectTeam(0, team);
+    }
+
+    /**
+     * local번째(0이 1P) 플레이어의 캐릭터를 바꾼다. 바꾸면 준비가 풀리고 그 플레이어의 랜덤도 풀린다.
+     *
+     * @throws IllegalArgumentException 이 컴퓨터에 그 플레이어가 없으면 (1P로 로그인했는데 2P를 고르는 등)
+     */
+    public void select(int local, Mascot character) {
+        characters[checkPlaying(local)] = Objects.requireNonNull(character);
+        randomCharacters[local] = false;
         ready = false;
     }
 
-    /** 팀을 바꾼다. 바꾸면 준비가 풀린다. */
-    public void selectTeam(Team team) {
-        this.team = team;
+    /** local번째(0이 1P) 플레이어가 ?(랜덤 캐릭터)를 고른다. 게임을 시작할 때 다섯 캐릭터 중 하나로 정한다 */
+    public void selectRandomCharacter(int local) {
+        randomCharacters[checkPlaying(local)] = true;
         ready = false;
+    }
+
+    /** local번째(0이 1P) 플레이어의 팀(캐릭터 색)을 바꾼다. 바꾸면 준비가 풀린다. */
+    public void selectTeam(int local, Team team) {
+        teams[checkPlaying(local)] = Objects.requireNonNull(team);
+        ready = false;
+    }
+
+    private static int checkLocal(int local) {
+        if (local < 0 || local >= MAX_LOCAL_PLAYERS) {
+            throw new IllegalArgumentException("이 컴퓨터의 플레이어 번호는 0(1P) 또는 1(2P)입니다: " + local);
+        }
+        return local;
+    }
+
+    private int checkPlaying(int local) {
+        checkLocal(local);
+        if (local >= localPlayers()) {
+            throw new IllegalArgumentException("%dP는 이 컴퓨터에서 함께 하고 있지 않습니다.".formatted(local + 1));
+        }
+        return local;
     }
 
     /**
@@ -174,7 +230,7 @@ public final class OutgameSession {
     public List<GameStartInfo.PlayerInfo> players() {
         List<GameStartInfo.PlayerInfo> players = new ArrayList<>();
         for (int i = 0; i < nicknames.size(); i++) {
-            players.add(new GameStartInfo.PlayerInfo(i + 1, nicknames.get(i), character, team.label()));
+            players.add(new GameStartInfo.PlayerInfo(i + 1, nicknames.get(i), characters[i], teams[i].label()));
         }
         for (int id = nicknames.size() + 1; id <= room.players(); id++) {
             players.add(new GameStartInfo.PlayerInfo(id, "목업 " + id,
@@ -222,9 +278,9 @@ public final class OutgameSession {
             throw new IllegalStateException("모든 참가자가 준비해야 시작할 수 있습니다.");
         }
         List<GameStartInfo.PlayerInfo> players = new ArrayList<>(players());
-        if (randomCharacter) {
-            // 2P면 두 사람이 각자 따로 뽑는다
-            for (int i = 0; i < localPlayers(); i++) {
+        // 랜덤을 고른 사람만 각자 따로 뽑는다
+        for (int i = 0; i < localPlayers(); i++) {
+            if (randomCharacters[i]) {
                 Mascot picked = Mascot.values()[random.nextInt(Mascot.values().length)];
                 GameStartInfo.PlayerInfo local = players.get(i);
                 players.set(i, new GameStartInfo.PlayerInfo(local.id(), local.nickname(), picked, local.team()));

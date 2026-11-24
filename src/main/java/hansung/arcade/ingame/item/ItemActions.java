@@ -32,15 +32,26 @@ public final class ItemActions {
      * 던질 물풍선이 없거나 장갑이 없으면 선 칸에 물풍선을 놓는다. 점프해 공중에 있으면 아무것도 하지 않는다.
      *
      * @param players 맵 위의 모든 플레이어
+     * @return 물풍선을 놓았는지·던졌는지 (효과음을 고를 때 쓴다)
      */
-    public void pressBalloonKey(Player player, PlayerGear gear, List<Player> players) {
+    public BalloonKeyResult pressBalloonKey(Player player, PlayerGear gear, List<Player> players) {
         if (gear.isAirborne()) {
-            return;
+            return BalloonKeyResult.NOTHING;
         }
         if (gear.canThrowBalloons() && player.state() == PlayerState.NORMAL && throwNearby(player)) {
-            return;
+            return BalloonKeyResult.THROWN;
         }
-        balloonField.place(player, players);
+        return balloonField.place(player, players).isPresent() ? BalloonKeyResult.PLACED : BalloonKeyResult.NOTHING;
+    }
+
+    /** 물풍선 키를 눌러 일어난 일 */
+    public enum BalloonKeyResult {
+        /** 아무 일도 없었다 (공중에 있거나, 갇혔거나, 놓을 수 있는 개수가 찼거나, 칸이 막혔다) */
+        NOTHING,
+        /** 선 칸에 물풍선을 놓았다 */
+        PLACED,
+        /** 장갑으로 물풍선을 던졌다 */
+        THROWN
     }
 
     private boolean throwNearby(Player player) {
@@ -57,15 +68,18 @@ public final class ItemActions {
     /**
      * player가 move 쪽으로 걸으려다 막혔을 때 부른다. 물풍선을 밀 수 있고 바로 앞(몸 가운데 칸의 다음 칸)이
      * 가만히 놓인 물풍선이면 그 방향으로 민다.
+     *
+     * @return 물풍선을 밀었는지
      */
-    public void kick(Player player, PlayerGear gear, Direction move) {
+    public boolean kick(Player player, PlayerGear gear, Direction move) {
         if (move == null || !gear.canPushBalloons() || gear.isAirborne()
                 || player.state() != PlayerState.NORMAL || player.isMoving()) {
-            return;
+            return false;
         }
-        restingAt(player.col() + move.dx(), player.row() + move.dy())
+        return restingAt(player.col() + move.dx(), player.row() + move.dy())
                 .filter(balloon -> !balloon.lets(player))
-                .ifPresent(balloon -> balloonField.push(balloon, move));
+                .map(balloon -> balloonField.push(balloon, move))
+                .orElse(false);
     }
 
     /**

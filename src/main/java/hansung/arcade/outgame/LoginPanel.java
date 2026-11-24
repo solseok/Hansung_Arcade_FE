@@ -1,5 +1,6 @@
 package hansung.arcade.outgame;
 
+import hansung.arcade.outgame.audio.Sound;
 import hansung.arcade.core.game.Scene;
 import hansung.arcade.core.game.SceneManager;
 import hansung.arcade.ingame.hud.Box;
@@ -144,6 +145,8 @@ public final class LoginPanel extends JPanel implements Scene {
         form.add(message);
 
         enter.setFont(OutgameFonts.label(16));
+        // 시작하기는 로그인이 되는지에 따라 다른 소리를 낸다
+        enter.setClickSound(null);
         enter.addActionListener(event -> login());
         add(enter);
         first.field.addActionListener(event -> enter.doClick());
@@ -182,6 +185,7 @@ public final class LoginPanel extends JPanel implements Scene {
                     : OutgameSession.checkNicknames(first.field.getText());
         } catch (IllegalArgumentException exception) {
             showError(exception.getMessage());
+            Sound.play("Bt_c_GameStartNotAble");
             return;
         }
         CompletableFuture<List<LoginService.LoginPlayer>> result = loginService.login(nicknames);
@@ -202,10 +206,12 @@ public final class LoginPanel extends JPanel implements Scene {
             players = result.join();
         } catch (RuntimeException failure) {
             showError(ServerException.from(failure).getMessage());
+            Sound.play("Bt_c_GameStartNotAble");
             return;
         }
         session.signedIn(players);
         message.setText(" ");
+        Sound.play("Bt_c_Success");
         scenes.show("lobby", null);
     }
 

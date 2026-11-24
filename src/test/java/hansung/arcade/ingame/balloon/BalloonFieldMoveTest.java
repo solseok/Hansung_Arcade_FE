@@ -171,6 +171,33 @@ class BalloonFieldMoveTest {
     }
 
     @Test
+    void 미끄러지다_바닥_가시_칸에_들어가면_터진다() {
+        BalloonField field = new BalloonField(MapLoader.parse("fixture/spike", List.of("1...!....B")));
+        WaterBalloon pushed = placeAt(field, 1, 1);
+
+        field.push(pushed, Direction.RIGHT);
+        ticks(field, List.of(), 30);
+
+        assertTrue(field.balloons().isEmpty());
+        assertEquals(4, field.explosions().get(0).col());
+    }
+
+    @Test
+    void 던진_물풍선이_바닥_가시_칸에_내려앉으면_바로_터진다() {
+        BalloonField field = new BalloonField(MapLoader.parse("fixture/spike", List.of("1......!...")));
+        WaterBalloon thrown = placeAt(field, 1, 1);
+
+        assertTrue(field.throwBalloon(thrown, Direction.RIGHT));
+        ticks(field, List.of(), 10);
+        // 나는 동안은 가시 위를 지나도 터지지 않는다
+        assertTrue(field.explosions().isEmpty());
+        ticks(field, List.of(), 20);
+
+        assertTrue(field.balloons().isEmpty());
+        assertEquals(7, field.explosions().get(0).col());
+    }
+
+    @Test
     void 던진_물풍선은_원래_칸을_0번째로_6칸째에_내려앉는다() {
         BalloonField field = new BalloonField(MapLoader.parse("fixture/throw", List.of("1..........")));
         WaterBalloon balloon = placeAt(field, 1, 1);

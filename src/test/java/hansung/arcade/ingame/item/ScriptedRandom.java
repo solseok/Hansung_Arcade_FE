@@ -30,15 +30,21 @@ public final class ScriptedRandom implements RandomGenerator {
         return of(NO_DROP);
     }
 
-    /** 블럭이 부서질 때마다 item이 나온다 (물풍선·물줄기·롤러 신발 중 하나) */
+    /** 블럭이 부서질 때마다 item이 나온다. "무엇인지" 난수는 {@link ItemDrops#WEIGHTS}에서 item 구간의 가운데 값이다 */
     public static ScriptedRandom alwaysDrops(ItemType item) {
-        double pick = switch (item) {
-            case BUBBLE -> 0.0;
-            case FLUID -> 0.5;
-            case ROLLER_SHOE -> 0.9;
-            default -> throw new IllegalArgumentException("블럭에서 나오지 않는 아이템입니다: " + item);
-        };
-        return of(DROPS, pick);
+        return of(DROPS, pickFor(item));
+    }
+
+    /** {@link ItemDrops}가 item을 고르는 "무엇인지" 난수 [0, 1): item 구간의 가운데 값 */
+    public static double pickFor(ItemType item) {
+        int bound = 0;
+        for (var entry : ItemDrops.WEIGHTS.entrySet()) {
+            if (entry.getKey() == item) {
+                return (bound + entry.getValue() / 2.0) / 100;
+            }
+            bound += entry.getValue();
+        }
+        throw new IllegalArgumentException("블럭에서 나오지 않는 아이템입니다: " + item);
     }
 
     @Override

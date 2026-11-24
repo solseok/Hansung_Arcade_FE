@@ -1,5 +1,6 @@
 package hansung.arcade.outgame.audio;
 
+import hansung.arcade.outgame.GameMaps;
 import javazoom.jl.decoder.Bitstream;
 import javazoom.jl.decoder.Header;
 import org.junit.jupiter.api.Test;
@@ -44,6 +45,41 @@ class BgmTest {
             songs.add(Sound.bgmFor(screen));
         }
         assertEquals(SCREENS.size(), songs.size(), "같은 곡을 쓰는 화면이 있습니다: " + songs);
+    }
+
+    @Test
+    void 게임_화면은_맵마다_다른_곡을_튼다() {
+        assertEquals("Camp", Sound.bgmForMap("camp"));
+        assertEquals("Patrit", Sound.bgmForMap("patrit"));
+        assertEquals("Village", Sound.bgmForMap("village"));
+        Set<String> songs = new HashSet<>();
+        for (String id : GameMaps.ids()) {
+            songs.add(Sound.bgmForMap(id.substring(0, id.indexOf('/'))));
+        }
+        assertEquals(3, songs.size(), "맵 곡이 겹칩니다: " + songs);
+    }
+
+    @Test
+    void 곡이_없는_맵_테마는_빌리지_곡으로_대신한다() {
+        assertEquals("Village", Sound.bgmForMap("unknown"));
+    }
+
+    @Test
+    void 맵_곡도_리소스에_있고_MP3로_읽힌다() throws Exception {
+        for (String theme : List.of("camp", "patrit", "village")) {
+            assertReadable(theme, Sound.bgmForMap(theme));
+        }
+    }
+
+    private static void assertReadable(String screen, String key) throws Exception {
+        try (InputStream raw = Sound.class.getResourceAsStream("/sounds/" + key + ".mp3")) {
+            assertNotNull(raw, screen + " 화면의 곡 파일이 없습니다: " + key);
+            Bitstream bits = new Bitstream(new BufferedInputStream(raw));
+            Header first = bits.readFrame();
+            bits.close();
+            assertNotNull(first, screen + " 화면의 곡을 MP3로 읽지 못했습니다: " + key);
+            assertTrue(first.frequency() > 0, key);
+        }
     }
 
     @Test
