@@ -237,7 +237,8 @@ public final class ServerRules {
      */
     void requestItemUse(Player player) {
         world.gear(player).activeItem().ifPresent(item -> {
-            if (!isPlaying()) {
+            // 공중에서는 어떤 아이템도 쓸 수 없고, 중간 자리를 MOVE로 보내면 안 된다
+            if (!isPlaying() || !player.isAlive() || world.gear(player).isAirborne()) {
                 return;
             }
             sendMove(player);
@@ -257,15 +258,20 @@ public final class ServerRules {
         sinceMove = 0;
         for (Player player : world.localPlayers()) {
             Sent last = sent.get(player.id());
-            if (player.isAlive() && (last == null || !last.same(player))) {
+            // 뛰는 동안은 착지 칸을 이미 보냈다. 중간 자리를 보내면 서버가 공중 시간이 끝날 때 그 칸에서 가둘 수 있다
+            if (player.isAlive() && !world.gear(player).isAirborne() && (last == null || !last.same(player))) {
                 sendMove(player);
             }
         }
     }
 
     private void sendMove(Player player) {
-        outbox.move(player.id(), player.x(), player.y(), player.facing(), player.isMoving());
-        sent.put(player.id(), new Sent(player.x(), player.y(), player.facing(), player.isMoving()));
+        sendMoveAt(player, player.x(), player.y(), player.isMoving());
+    }
+
+    private void sendMoveAt(Player player, double x, double y, boolean moving) {
+        outbox.move(player.id(), x, y, player.facing(), moving);
+        sent.put(player.id(), new Sent(x, y, player.facing(), moving));
     }
 
     /** 1P가 친 채팅을 서버로 보낸다. 다듬고 나서 비어 있으면 보내지 않는다. 화면에는 서버가 돌려준 글로 뜬다 */
@@ -362,6 +368,8 @@ public final class ServerRules {
         Player player = world.player((int) playerId);
         if (player != null && player.isAlive()) {
             player.eliminate();
+            // 서버는 터진 사람의 손을 비우고 따로 알리지 않는다
+            world.gear(player).holdFromServer(null, 0);
             world.addSound(GameSound.DIE);
         }
         if (killerId != null && world.player(killerId.intValue()) != null) {
@@ -418,10 +426,27 @@ public final class ServerRules {
                 if (col != null && row != null) {
                     gear.jumpFromServer(player, col, row);
                     world.addSound(GameSound.SPRING);
+                    land(player, TileMap.centerX(col), TileMap.centerY(row));
                 }
             }
             default -> log.warn("쓰는 아이템이 아닌데 썼다고 왔습니다: {}", item);
         }
+    }
+
+    /**
+     * 스프링 신발로 뛴 player가 (x, y)에 내려앉는다고 서버·화면 양쪽에 맞춘다. 이 컴퓨터의 플레이어면 착지 자리를 바로 MOVE로 보낸다.
+     * 서버는 공중 시간이 끝날 때 마지막 MOVE 칸에서 물줄기를 보므로, 뛰는 중간 자리가 남아 있으면 엉뚱한 칸에서 갇힐 수 있다.
+     * 다른 컴퓨터의 플레이어면 따라갈 자리를 착지 칸으로 둔다. 그래야 내려앉은 뒤 늦게 받은 중간 자리로 끌려가지 않는다.
+     */
+    private void land(Player player, double x, double y) {
+        Remote remote = remotes.get(player.id());
+        if (remote == null) {
+            sendMoveAt(player, x, y, false);
+            return;
+        }
+        remote.x = x;
+        remote.y = y;
+        remote.moving = false;
     }
 
     /** AIRPLANE_APPEARED. 비행기가 heading(RIGHT·LEFT) 쪽으로 맵 위를 가로지르기 시작했다. 떨어뜨릴 칸은 서버가 따로 알린다 */
@@ -466,6 +491,7 @@ public final class ServerRules {
             Player player = world.player((int) id);
             if (player != null) {
                 player.leaveMatch();
+                world.gear(player).holdFromServer(null, 0);
                 mine |= world.localPlayers().contains(player);
             }
         }

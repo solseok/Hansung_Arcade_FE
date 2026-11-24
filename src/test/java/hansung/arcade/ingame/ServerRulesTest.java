@@ -46,10 +46,13 @@ class ServerRulesTest {
     /** 서버로 보낸 것을 한 줄씩 적어 둔다 */
     private static final class Outbox implements ServerOutbox {
         final List<String> sent = new ArrayList<>();
+        /** 보낸 MOVE의 자리 (x, y) */
+        final List<double[]> moves = new ArrayList<>();
 
         @Override
         public void move(int playerId, double x, double y, Direction facing, boolean moving) {
             sent.add("MOVE " + playerId);
+            moves.add(new double[]{x, y});
         }
 
         @Override
@@ -391,19 +394,44 @@ class ServerRulesTest {
         server.itemUsed(ME, "spring_shoe", 400L, 3, 1, null, 0);
         assertTrue(world.gear(me).isAirborne());
         assertTrue(world.takeSounds().contains(GameSound.SPRING));
-        ticks(10, Map.of(ME, PlayerCommand.moving(Direction.DOWN)));
+        // 서버는 공중 시간이 끝날 때 마지막 MOVE 칸을 보므로 착지 자리를 바로 보내고, 뛰는 동안은 더 보내지 않는다
+        assertEquals("MOVE " + ME, outbox.sent.getLast());
+        assertEquals(TileMap.centerX(3), outbox.moves.getLast()[0], 1e-9);
+        assertEquals(TileMap.centerY(1), outbox.moves.getLast()[1], 1e-9);
+        outbox.sent.clear();
+        ticks(10, Map.of(ME, new PlayerCommand(Direction.DOWN, true, false)));
         assertEquals(1, me.row(), "공중에서는 걷지 않는다");
+        assertTrue(outbox.sent.isEmpty(), "뛰는 동안은 MOVE·BALLOON_PLACE를 보내지 않는다: " + outbox.sent);
 
         ticks(20);
         assertFalse(world.gear(me).isAirborne());
         assertEquals(TileMap.centerX(3), me.x(), 1e-9);
         assertEquals(TileMap.centerY(1), me.y(), 1e-9);
+        assertTrue(outbox.sent.isEmpty(), "내려앉은 자리는 이미 보냈다: " + outbox.sent);
 
-        // 다른 컴퓨터의 플레이어도 뛰는 동안은 받은 자리 대신 점프를 따라 움직인다
+        // 다른 컴퓨터의 플레이어도 뛰는 동안은 받은 자리 대신 점프를 따라 움직이고, 내려앉은 뒤 뛰기 전 자리로 끌려가지 않는다
         server.itemUsed(OTHER, "spring_shoe", 400L, 3, 2, null, 0);
         ticks(12);
         assertTrue(world.gear(other).isAirborne());
         assertNotEquals(TileMap.centerX(1), other.x(), "점프가 자리를 옮긴다");
+        ticks(30);
+        assertEquals(TileMap.centerX(3), other.x(), 1e-9);
+        assertEquals(TileMap.centerY(2), other.y(), 1e-9);
+    }
+
+    @Test
+    void 터지거나_나간_사람은_손에_든_아이템이_비고_아이템_키도_보내지_않는다() {
+        play();
+        server.itemTaken(5, ME, "needle", new Stats(1, 1, 5), "needle", 3);
+        server.itemTaken(6, OTHER, "shield", new Stats(2, 1, 4), "shield", 1);
+
+        server.playerPopped(ME, null, "TIMEOUT");
+        server.playersLeft(List.of((long) OTHER), "EXIT");
+        ticks(1, Map.of(ME, new PlayerCommand(null, false, true)));
+
+        assertTrue(world.gear(me).activeItem().isEmpty());
+        assertTrue(world.gear(other).activeItem().isEmpty());
+        assertEquals(0, outbox.count("ITEM_USE"));
     }
 
     @Test
