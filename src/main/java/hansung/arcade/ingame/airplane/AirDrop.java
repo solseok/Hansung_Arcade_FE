@@ -60,6 +60,8 @@ public final class AirDrop {
     private final List<FallingItem> falling = new ArrayList<>();
     private int launches;
     private int releases;
+    /** 출현 시각을 세어 스스로 비행기를 띄우는지. 온라인은 서버가 알릴 때만 띄운다 ({@link #followServer}) */
+    private boolean scheduled = true;
 
     /**
      * @param map    비행기가 가로지를 맵
@@ -77,7 +79,7 @@ public final class AirDrop {
      * @param zone 경기 시계·칸 점유·바닥 아이템을 보여 주는 게임
      */
     public void update(double dt, DropZone zone) {
-        if (!zone.isMatchOver()) {
+        if (scheduled && !zone.isMatchOver()) {
             for (int seconds : APPEARANCES) {
                 if (zone.clock().justReached(seconds)) {
                     launch(plan());
@@ -97,8 +99,12 @@ public final class AirDrop {
             FallingItem item = it.next();
             item.advance(dt);
             if (item.hasLanded()) {
-                land(item.drop(), zone);
                 it.remove();
+                if (item.landed() != null) {
+                    item.landed().run();
+                } else {
+                    land(item.drop(), zone);
+                }
             }
         }
     }
@@ -136,6 +142,33 @@ public final class AirDrop {
         flights.add(new Flight(plan, map));
         launches++;
         log.debug("비행기 출현: {} 쪽으로, 떨어뜨릴 칸 {}", plan.heading(), plan.drops());
+    }
+
+    /**
+     * 서버를 따른다 (온라인). 출현 시각을 세지 않고 {@link #launch}로 띄운 비행기만 날리며(떨어뜨릴 칸 없이 띄운다),
+     * 아이템은 {@link #dropFromServer}로 서버가 떨어뜨린 것만 떨어진다.
+     */
+    public void followServer() {
+        scheduled = false;
+    }
+
+    /**
+     * 서버가 떨어뜨린 아이템을 (col, row) 칸 위에서 떨어뜨린다 (온라인, ITEM_DROPPED). 떨어지는 높이는 오프라인과 같아서
+     * 서버의 fallMs와 같은 시간에 닿는다. 닿으면 칸을 보지 않고 landed를 부른다 (서버는 이미 놓인 것으로 본다).
+     *
+     * @return 떨어지는 아이템. 서버가 도중에 없앴으면 {@link #cancel}로 지운다
+     */
+    public FallingItem dropFromServer(int col, int row, ItemType item, Runnable landed) {
+        FallingItem falling = new FallingItem(new Drop(col, row, item), TileMap.centerY(row) - Flight.CRUISE_Y,
+                Objects.requireNonNull(landed));
+        this.falling.add(falling);
+        releases++;
+        return falling;
+    }
+
+    /** 떨어지는 중인 item을 칸에 닿기 전에 지운다 (온라인: 떨어지는 사이 물줄기에 사라졌거나 누가 먹었다) */
+    public void cancel(FallingItem item) {
+        falling.remove(item);
     }
 
     /** 비행기가 칸 위를 지나는 순간. 칸이 비어 있고 경기가 진행 중이면 떨어뜨린다 */

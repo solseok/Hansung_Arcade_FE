@@ -15,11 +15,23 @@ public final class FallingItem {
 
     private final Drop drop;
     private final double startHeight;
+    /** 닿았을 때 할 일 (온라인: 서버가 정한 아이템을 놓는다). null이면 {@link AirDrop}이 칸을 보고 놓는다 */
+    private final Runnable landed;
     private double age;
 
     FallingItem(Drop drop, double startHeight) {
+        this(drop, startHeight, null);
+    }
+
+    FallingItem(Drop drop, double startHeight, Runnable landed) {
         this.drop = drop;
         this.startHeight = Math.max(MIN_HEIGHT, startHeight);
+        this.landed = landed;
+    }
+
+    /** 닿았을 때 할 일. 없으면 null */
+    Runnable landed() {
+        return landed;
     }
 
     void advance(double dt) {

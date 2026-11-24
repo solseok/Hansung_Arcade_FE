@@ -27,6 +27,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** 온라인 경기: 판정은 서버가 하고, 이 컴퓨터는 내 플레이어를 움직여 보내고 서버가 알린 대로 그린다 */
@@ -59,6 +60,11 @@ class ServerRulesTest {
         @Override
         public void pickUpItem(int playerId, int itemId) {
             sent.add("ITEM_PICKUP %d %d".formatted(playerId, itemId));
+        }
+
+        @Override
+        public void useItem(int playerId, String item) {
+            sent.add("ITEM_USE %d %s".formatted(playerId, item));
         }
 
         @Override
@@ -229,7 +235,7 @@ class ServerRulesTest {
         assertEquals("MOVE " + ME, outbox.sent.get(pickup - 1), "서버는 마지막 MOVE 칸을 보므로 자리부터 보낸다");
         assertTrue(world.items().at(me.col(), me.row()).isPresent(), "서버가 받아들일 때까지 그대로 있다");
 
-        server.itemTaken(7, ME, "fluid", new Stats(2, 3, 6));
+        server.itemTaken(7, ME, "fluid", new Stats(2, 3, 6), null, 0);
 
         assertTrue(world.items().all().isEmpty());
         assertEquals(2, me.balloons());
@@ -285,6 +291,119 @@ class ServerRulesTest {
         ticks(1);
         assertEquals(startX + 5 * TileMap.TILE_SIZE, other.x(), 1e-9);
         assertFalse(other.isMoving());
+    }
+
+    @Test
+    void 비행기는_서버가_알릴_때만_띄우고_떨어뜨린_아이템은_닿은_뒤에_놓는다() {
+        play();
+        ticks(62 * 60);
+        assertEquals(0, world.airDrop().launches(), "온라인은 1:59가 돼도 스스로 띄우지 않는다");
+
+        server.airplaneAppeared(1, "RIGHT");
+        assertEquals(1, world.airDrop().flights().size());
+        assertEquals(Direction.RIGHT, world.airDrop().flights().getFirst().heading());
+        assertTrue(world.takeSounds().contains(GameSound.AIRPLANE));
+
+        server.itemDropped(1, 9, 2, 2, "bubble", 200);
+        assertEquals(1, world.airDrop().fallingItems().size());
+        assertTrue(world.items().at(2, 2).isEmpty(), "떨어지는 동안은 아직 칸에 없다");
+        assertTrue(world.takeSounds().contains(GameSound.AIR_DROP));
+
+        ticks(60);
+        assertTrue(world.airDrop().fallingItems().isEmpty());
+        assertEquals(ItemType.BUBBLE, world.items().at(2, 2).orElseThrow().type());
+        assertEquals(0, world.airDrop().launches() - 1, "떨어뜨린 아이템 때문에 비행기를 더 띄우지 않는다");
+    }
+
+    @Test
+    void 떨어지는_사이_물줄기에_사라지거나_누가_먹은_아이템은_놓지_않는다() {
+        play();
+        server.itemDropped(1, 9, 2, 2, "bubble", 200);
+        server.itemDropped(1, 10, 0, 2, "shoe", 200);
+
+        server.balloonExploded(List.of(), List.of(), List.of(), List.of(9));
+        server.itemTaken(10, OTHER, "shoe", new Stats(2, 1, 4), null, 0);
+        ticks(60);
+
+        assertTrue(world.airDrop().fallingItems().isEmpty());
+        assertTrue(world.items().all().isEmpty());
+    }
+
+    @Test
+    void 내_발밑에_떨어진_아이템은_닿은_뒤에_줍겠다고_보낸다() {
+        play();
+        server.itemDropped(1, 11, me.col(), me.row(), "fluid", 200);
+
+        ticks(3);
+        assertEquals(0, outbox.count("ITEM_PICKUP"), "떨어지는 동안은 보내지 않는다");
+        ticks(60);
+        assertEquals(1, outbox.count("ITEM_PICKUP " + ME + " 11"), outbox.sent.toString());
+    }
+
+    @Test
+    void 손에_든_쓰는_아이템은_서버를_따르고_아이템_키는_쓰겠다고_보내기만_한다() {
+        play();
+        server.itemTaken(5, ME, "shield", new Stats(1, 1, 5), "shield", 2);
+        assertEquals(ItemType.SHIELD, world.gear(me).activeItem().orElseThrow());
+        assertEquals(2, world.gear(me).activeCount());
+
+        ticks(1, Map.of(ME, new PlayerCommand(null, false, true)));
+
+        assertEquals(List.of("MOVE " + ME, "ITEM_USE " + ME + " shield"), outbox.sent.subList(0, 2));
+        assertFalse(world.gear(me).isShielded(), "서버가 받아들일 때까지 쓰지 않는다");
+        assertEquals(2, world.gear(me).activeCount());
+
+        server.itemUsed(ME, "shield", 3_000L, null, null, "shield", 1);
+        assertTrue(world.gear(me).isShielded());
+        assertEquals(1, world.gear(me).activeCount());
+        assertTrue(world.takeSounds().contains(GameSound.SHIELD));
+        ticks(3 * 60 + 5);
+        assertFalse(world.gear(me).isShielded());
+    }
+
+    @Test
+    void 손에_든_것이_없으면_아이템_키를_눌러도_보내지_않는다() {
+        play();
+
+        ticks(1, Map.of(ME, new PlayerCommand(null, false, true)));
+
+        assertEquals(0, outbox.count("ITEM_USE"));
+    }
+
+    @Test
+    void 바늘을_쓰면_갇힌_물풍선을_깨고_빠져나온다() {
+        play();
+        server.balloonPlaced(3, OTHER, 5, 2, 1, 2_000);
+        server.balloonExploded(List.of(new Blast(3, 5, 2, 1, 0, 0, 0)), List.of(), List.of(), List.of());
+        server.playerTrapped(ME, 3, 5_000);
+        assertEquals(PlayerState.TRAPPED, me.state());
+
+        server.itemUsed(ME, "needle", null, null, null, null, 0);
+
+        assertEquals(PlayerState.ESCAPING, me.state());
+        assertTrue(world.gear(me).activeItem().isEmpty());
+    }
+
+    @Test
+    void 스프링_신발을_쓰면_서버가_정한_칸으로_뛰어_내려앉는다() {
+        play();
+
+        server.itemUsed(ME, "spring_shoe", 400L, 3, 1, null, 0);
+        assertTrue(world.gear(me).isAirborne());
+        assertTrue(world.takeSounds().contains(GameSound.SPRING));
+        ticks(10, Map.of(ME, PlayerCommand.moving(Direction.DOWN)));
+        assertEquals(1, me.row(), "공중에서는 걷지 않는다");
+
+        ticks(20);
+        assertFalse(world.gear(me).isAirborne());
+        assertEquals(TileMap.centerX(3), me.x(), 1e-9);
+        assertEquals(TileMap.centerY(1), me.y(), 1e-9);
+
+        // 다른 컴퓨터의 플레이어도 뛰는 동안은 받은 자리 대신 점프를 따라 움직인다
+        server.itemUsed(OTHER, "spring_shoe", 400L, 3, 2, null, 0);
+        ticks(12);
+        assertTrue(world.gear(other).isAirborne());
+        assertNotEquals(TileMap.centerX(1), other.x(), "점프가 자리를 옮긴다");
     }
 
     @Test

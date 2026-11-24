@@ -17,6 +17,9 @@ public interface ServerOutbox {
     /** ITEM_PICKUP. 서버가 받아들이면 ITEM_TAKEN이 온다 */
     void pickUpItem(int playerId, int itemId);
 
+    /** ITEM_USE. 손에 든 쓰는 아이템(needle, shield, spring_shoe)을 쓴다. 서버가 받아들이면 ITEM_USED가 온다 */
+    void useItem(int playerId, String item);
+
     /** CHAT. 서버가 방 전체에 CHAT_MESSAGE로 돌려준다 */
     void chat(int playerId, String text);
 }

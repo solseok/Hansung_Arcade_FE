@@ -126,6 +126,30 @@ public final class PlayerGear {
         }
     }
 
+    /**
+     * 손에 든 쓰는 아이템을 서버가 알려 준 대로 맞춘다 (온라인 ITEM_TAKEN·ITEM_USED의 heldItem·heldCount).
+     * item이 없거나 count가 0이면 칸을 비운다.
+     */
+    public void holdFromServer(ItemType item, int count) {
+        if (item == null || count <= 0 || !item.isActive()) {
+            activeItem = null;
+            activeCount = 0;
+            return;
+        }
+        activeItem = item;
+        activeCount = Math.min(MAX_ACTIVE_COUNT, count);
+    }
+
+    /** 서버가 보호막을 썼다고 알렸다 (온라인). seconds초 동안 물줄기를 막는 모습을 보인다 */
+    public void raiseShieldFromServer(double seconds) {
+        shieldLeft = seconds;
+    }
+
+    /** 서버가 스프링 신발을 썼다고 알렸다 (온라인). player를 지금 자리에서 (toCol, toRow) 칸 가운데로 뛰게 한다 */
+    public void jumpFromServer(Player player, int toCol, int toRow) {
+        startJump(player, toCol, toRow);
+    }
+
     /** 보호막을 쓰는 중인지 */
     public boolean isShielded() {
         return shieldLeft > TIME_SLACK;

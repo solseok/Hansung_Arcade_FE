@@ -112,6 +112,33 @@ class ServerMatchLinkTest {
     }
 
     @Test
+    void 비행기와_쓰는_아이템_푸시를_경기에_넣는다() throws Exception {
+        bind();
+        server.push("{\"type\":\"ROUND_BEGIN\",\"body\":{\"countdownMs\":0,\"timeLimitMs\":180000}}");
+        until(() -> world.server().orElseThrow().isPlaying());
+
+        server.push("{\"type\":\"AIRPLANE_APPEARED\",\"body\":{\"airplaneId\":1,\"heading\":\"LEFT\"}}");
+        server.push("{\"type\":\"ITEM_DROPPED\",\"body\":{\"airplaneId\":1,\"itemId\":4,\"col\":0,\"row\":2,"
+                + "\"item\":\"shoe\",\"fallMs\":381}}");
+        until(() -> world.airDrop().fallingItems().size() == 1);
+        assertEquals(1, world.airDrop().flights().size());
+
+        server.push("{\"type\":\"ITEM_TAKEN\",\"body\":{\"itemId\":9,\"playerId\":12,\"item\":\"shield\","
+                + "\"stats\":{\"balloons\":1,\"waterRange\":1,\"speedLevel\":5},\"heldItem\":\"shield\",\"heldCount\":2}}");
+        until(() -> world.gear(player(12)).activeCount() == 2);
+        server.push("{\"type\":\"ITEM_USED\",\"body\":{\"playerId\":12,\"item\":\"shield\",\"durationMs\":3000,"
+                + "\"heldItem\":\"shield\",\"heldCount\":1}}");
+        until(() -> world.gear(player(12)).isShielded());
+        assertEquals(1, world.gear(player(12)).activeCount());
+
+        // 아이템을 쓰기 전 서버(heldCount가 없음)에서 온 ITEM_TAKEN은 손을 비운다
+        server.push("{\"type\":\"ITEM_TAKEN\",\"body\":{\"itemId\":4,\"playerId\":12,\"item\":\"shoe\","
+                + "\"stats\":{\"balloons\":1,\"waterRange\":1,\"speedLevel\":5},\"heldItem\":null}}");
+        until(() -> world.gear(player(12)).activeItem().isEmpty());
+        assertTrue(world.airDrop().fallingItems().isEmpty(), "떨어지던 아이템을 누가 먹으면 지운다");
+    }
+
+    @Test
     void 경기_중_채팅은_맵_위에_올리고_서버_안내는_올리지_않는다() throws Exception {
         bind();
         server.push("{\"type\":\"CHAT_MESSAGE\",\"body\":{\"senderId\":0,\"sender\":\"\",\"text\":\"냥이님이 나갔습니다.\"}}");
@@ -194,6 +221,11 @@ class ServerMatchLinkTest {
         link.pickUpItem(12, 7);
         JsonNode pickup = server.next(ServerMatchLink.ITEM_PICKUP).path("body");
         assertEquals(List.of(12, 7), List.of(pickup.path("playerId").asInt(), pickup.path("itemId").asInt()));
+
+        link.useItem(12, "spring_shoe");
+        JsonNode use = server.next(ServerMatchLink.ITEM_USE).path("body");
+        assertEquals(12, use.path("playerId").asInt());
+        assertEquals("spring_shoe", use.path("item").asText());
 
         link.chat(12, "안녕");
         JsonNode chat = server.next(ServerMatchLink.CHAT).path("body");
