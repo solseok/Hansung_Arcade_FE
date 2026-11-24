@@ -40,10 +40,25 @@ public final class Match {
     private final Map<Integer, Integer> kills = new LinkedHashMap<>();
     private final Map<Integer, Integer> saves = new LinkedHashMap<>();
     private final int startingSides;
+    /** 이 컴퓨터가 승패를 가리는지. 온라인은 서버가 가리고 GAME_OVER로 알리므로 시계만 흐른다 */
+    private final boolean judging;
     private MatchResult result;
 
     /** @param players 이번 판의 플레이어 전원. 판 중간에 들어오는 플레이어는 없다 */
     public Match(MatchMode mode, List<Player> players) {
+        this(mode, players, true);
+    }
+
+    /**
+     * 승패를 서버가 가리는 경기 (온라인). {@link #update}는 시계만 흘리고 끝내지 않는다.
+     * 서버가 끝났다고 알리면 {@link #stopClock}으로 시계를 멈춘다. kill·save는 서버가 알려 준 대로 기록한다.
+     */
+    public static Match judgedByServer(MatchMode mode, List<Player> players) {
+        return new Match(mode, players, false);
+    }
+
+    private Match(MatchMode mode, List<Player> players, boolean judging) {
+        this.judging = judging;
         this.mode = Objects.requireNonNull(mode);
         this.players = players.stream().sorted(Comparator.comparingInt(Player::id)).toList();
         for (Player player : this.players) {
@@ -60,9 +75,14 @@ public final class Match {
     /** 시계를 dt초만큼 흘리고 승패를 가린다. 끝난 뒤에는 시계도 결과도 바뀌지 않는다. */
     public void update(double dt) {
         clock.advance(dt);
-        if (result == null) {
+        if (judging && result == null) {
             judge();
         }
+    }
+
+    /** 시계를 멈춘다. 서버가 경기가 끝났다고 알렸을 때 부른다 (온라인) */
+    public void stopClock() {
+        clock.stop();
     }
 
     /**

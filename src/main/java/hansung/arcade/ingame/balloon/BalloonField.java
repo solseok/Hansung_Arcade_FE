@@ -12,8 +12,10 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Deque;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * 맵 위의 물풍선과 물줄기. Swing에 의존하지 않는다.
@@ -340,6 +342,69 @@ public final class BalloonField {
             explode(balloon);
         }
         return Optional.of(balloon);
+    }
+
+    /**
+     * 서버가 놓았다고 알린 물풍선을 (col, row) 칸에 놓는다 (온라인). 놓을 수 있는지는 서버가 이미 정했으므로 다시 보지 않는다.
+     * 이 물풍선은 시간이 지나도 스스로 터지지 않고 {@link #burstFromServer}로 터진다.
+     * 놓는 순간 그 칸에 몸이 걸쳐 있는 플레이어는 그 칸을 벗어날 때까지 지나갈 수 있다.
+     *
+     * @param players 맵 위의 모든 플레이어
+     */
+    public WaterBalloon placeFromServer(int ownerId, int col, int row, int range, List<Player> players) {
+        List<Integer> passers = players.stream().filter(p -> p.overlapsTile(col, row)).map(Player::id).toList();
+        WaterBalloon balloon = new WaterBalloon(ownerId, col, row, range, passers, true);
+        balloons.add(balloon);
+        return balloon;
+    }
+
+    /**
+     * 서버가 알린 폭발 하나. 물줄기가 상하좌우로 실제로 뻗은 칸 수를 받는다 (막히면 물풍선 범위보다 짧다).
+     *
+     * @param balloon 터진 물풍선. 이 컴퓨터가 모르는 물풍선이면 null
+     */
+    public record ServerBurst(WaterBalloon balloon, int ownerId, int col, int row, int up, int down, int left, int right) {
+
+        int reach(Direction direction) {
+            return switch (direction) {
+                case UP -> up;
+                case DOWN -> down;
+                case LEFT -> left;
+                case RIGHT -> right;
+            };
+        }
+    }
+
+    /**
+     * 서버가 한꺼번에 터뜨린 물풍선들을 터뜨린다 (온라인, 연쇄 포함). 물풍선을 맵에서 빼고, 알려 준 길이만큼 물줄기를 그린다.
+     * 물줄기 끝 칸 다음이 같이 터진 다른 물풍선 칸이면 그 칸에 이어지므로 끝 모양을 붙이지 않는다.
+     * 블럭이 어떻게 됐는지는 서버가 따로 알려 주므로 여기서는 블럭을 맞히지 않는다.
+     */
+    public void burstFromServer(List<ServerBurst> bursts) {
+        Set<Point> centers = new HashSet<>();
+        for (ServerBurst burst : bursts) {
+            centers.add(new Point(burst.col(), burst.row()));
+            if (burst.balloon() != null) {
+                balloons.remove(burst.balloon());
+            }
+        }
+        for (ServerBurst burst : bursts) {
+            List<WaterCell> cells = new ArrayList<>();
+            cells.add(new WaterCell(burst.col(), burst.row(), Part.CENTER, null));
+            for (Direction direction : Direction.values()) {
+                int reach = burst.reach(direction);
+                for (int step = 1; step <= reach; step++) {
+                    int col = burst.col() + direction.dx() * step;
+                    int row = burst.row() + direction.dy() * step;
+                    boolean joined = centers.contains(new Point(col + direction.dx(), row + direction.dy()));
+                    Part part = step < reach || joined ? Part.MIDDLE : Part.END;
+                    cells.add(new WaterCell(col, row, part, direction));
+                }
+            }
+            Explosion explosion = new Explosion(burst.ownerId(), burst.col(), burst.row(), cells, List.of());
+            explosions.add(explosion);
+            fresh.add(explosion);
+        }
     }
 
     /** (col, row) 칸의 물풍선을 바로 터뜨린다. 물풍선이 없으면 아무 일도 없다 */

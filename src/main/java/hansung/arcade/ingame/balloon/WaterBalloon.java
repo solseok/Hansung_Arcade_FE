@@ -44,8 +44,15 @@ public final class WaterBalloon {
     private Flight flight;
     /** 마지막으로 던져진 방향. 내려앉을 칸이 막혔을 때 같은 방향으로 더 날아간다 */
     private Direction flightDirection;
+    /** 언제 터질지 서버가 정하는지 (온라인). 그러면 시간이 지나도 스스로 터지지 않고 서버가 알릴 때 터진다 */
+    private final boolean serverTimed;
 
     WaterBalloon(int ownerId, int col, int row, int range, Collection<Integer> passers) {
+        this(ownerId, col, row, range, passers, false);
+    }
+
+    WaterBalloon(int ownerId, int col, int row, int range, Collection<Integer> passers, boolean serverTimed) {
+        this.serverTimed = serverTimed;
         this.ownerId = ownerId;
         this.col = col;
         this.row = row;
@@ -125,7 +132,7 @@ public final class WaterBalloon {
     }
 
     boolean isDue() {
-        return age >= FUSE_SECONDS - TIME_SLACK;
+        return !serverTimed && age >= FUSE_SECONDS - TIME_SLACK;
     }
 
     /** 이 칸에서 몸이 완전히 빠져나간 플레이어는 다시 들어오지 못한다 */

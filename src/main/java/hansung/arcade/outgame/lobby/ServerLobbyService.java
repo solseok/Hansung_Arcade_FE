@@ -152,7 +152,7 @@ public final class ServerLobbyService implements LobbyService {
             listeners.forEach(listener -> listener.gameStarted(started));
         });
         onPush(GAME_OVER, body -> {
-            GameResult result = result(Message.read(body, GameOverBody.class));
+            GameResult result = readGameOver(body);
             listeners.forEach(listener -> listener.gameOver(result));
         });
         onPush(Protocol.ERROR, body -> {
@@ -316,6 +316,11 @@ public final class ServerLobbyService implements LobbyService {
         client.send(GAME_EXIT, null);
     }
 
+    /** 서버가 이미 경기와 방에서 뺐다 (로딩 시간 초과). 아무것도 보내지 않고 들고 있던 방만 잊는다 */
+    public void forgetRoom() {
+        state = null;
+    }
+
     /**
      * 캐릭터를 고른다. 지금 서버는 playerId를 보지 않고 이 연결의 플레이어(1P·2P) 모두에 적용한다.
      * 서버가 플레이어별 선택을 받게 되면 그대로 쓰이도록 고른 사람의 번호를 함께 보낸다.
@@ -359,7 +364,9 @@ public final class ServerLobbyService implements LobbyService {
         }
     }
 
-    private static GameResult result(GameOverBody body) {
+    /** GAME_OVER body를 결과 모달에 넘길 결과로 읽는다 */
+    public static GameResult readGameOver(JsonNode json) {
+        GameOverBody body = Message.read(json, GameOverBody.class);
         List<GameResult.Standing> standings = body.standings() == null ? List.of() : body.standings().stream()
                 .map(standing -> new GameResult.Standing((int) standing.playerId(), standing.nickname(),
                         GameResult.Outcome.valueOf(standing.outcome()), standing.kills(), standing.saves()))

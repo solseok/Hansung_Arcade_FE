@@ -85,14 +85,7 @@ public final class Player {
      * @param obstacles 들어갈 수 없는 칸 (맵의 막힌 칸과 놓인 물풍선 등)
      */
     public void update(Direction input, double dt, Obstacles obstacles) {
-        stateTime += dt;
-        if (state == PlayerState.ESCAPING && stateTime >= ESCAPE_SECONDS - TIME_SLACK) {
-            // 바늘 그림 마지막 장이 정면으로 서 있는 모습이라 그대로 이어지게 아래를 본다
-            changeState(PlayerState.NORMAL);
-            facing = Direction.DOWN;
-        } else if (state == PlayerState.DYING && stateTime >= DYING_JUMP_SECONDS + DYING_BLINK_SECONDS - TIME_SLACK) {
-            changeState(PlayerState.GONE);
-        }
+        advanceState(dt);
         moving = false;
         if (input == null || !canMove()) {
             walkTime = 0;
@@ -109,6 +102,38 @@ public final class Player {
             remaining -= step;
         }
         walkTime = moving ? walkTime + dt : 0;
+    }
+
+    /**
+     * 다른 컴퓨터의 플레이어를 서버가 알려 준 자리로 옮긴다 (온라인). 상태 시간은 {@link #update}처럼 흐르고,
+     * 빠져나오는 중·탈락한 뒤에는 자리를 옮기지 않는다. 막힌 칸은 보지 않는다 (그 컴퓨터가 이미 피해서 움직였다).
+     *
+     * @param walking 걷는 그림을 보일지 (서버가 알려 준 moving, 또는 따라가는 중)
+     */
+    public void followServer(double x, double y, Direction facing, boolean walking, double dt) {
+        advanceState(dt);
+        if (!canMove()) {
+            moving = false;
+            walkTime = 0;
+            return;
+        }
+        this.x = x;
+        this.y = y;
+        this.facing = Objects.requireNonNull(facing);
+        moving = walking;
+        walkTime = walking ? walkTime + dt : 0;
+    }
+
+    /** 상태 시간을 dt초 흘리고, 빠져나오는 연출·탈락 연출이 끝났으면 다음 상태로 넘긴다 */
+    private void advanceState(double dt) {
+        stateTime += dt;
+        if (state == PlayerState.ESCAPING && stateTime >= ESCAPE_SECONDS - TIME_SLACK) {
+            // 바늘 그림 마지막 장이 정면으로 서 있는 모습이라 그대로 이어지게 아래를 본다
+            changeState(PlayerState.NORMAL);
+            facing = Direction.DOWN;
+        } else if (state == PlayerState.DYING && stateTime >= DYING_JUMP_SECONDS + DYING_BLINK_SECONDS - TIME_SLACK) {
+            changeState(PlayerState.GONE);
+        }
     }
 
     private boolean canMove() {
@@ -294,6 +319,37 @@ public final class Player {
         }
         changeState(PlayerState.ESCAPING);
         return true;
+    }
+
+    /**
+     * 서버가 가뒀다고 알렸다 (온라인). 서버는 빠져나오는 시간이 이 컴퓨터보다 조금 먼저 끝날 수 있으므로
+     * 빠져나오는 중이어도 가둔다. 이미 갇혔거나 탈락했으면 아무 일도 없다.
+     *
+     * @return 이번에 갇혔는지
+     */
+    public boolean trapByServer(int ownerId) {
+        if (state == PlayerState.ESCAPING) {
+            changeState(PlayerState.NORMAL);
+        }
+        return trap(ownerId);
+    }
+
+    /**
+     * 경기에서 나갔다 (나가기, 끊김). 탈락 연출 없이 바로 맵에서 사라지고, 다시 돌아오지 않는다.
+     */
+    public void leaveMatch() {
+        alive = false;
+        changeState(PlayerState.GONE);
+    }
+
+    /**
+     * 능력치를 서버가 알려 준 값으로 맞춘다 (온라인에서 아이템을 먹었을 때). 캐릭터의 범위를 벗어나는 값은 범위 끝으로 맞춘다.
+     */
+    public void syncStats(int balloons, int waterRange, int speedLevel) {
+        Mascot mascot = profile.mascot();
+        this.balloons = mascot.balloons().clamp(balloons);
+        this.waterRange = mascot.waterRange().clamp(waterRange);
+        this.speedLevel = Math.clamp(speedLevel, SpeedLevel.MIN, mascot.speed().max());
     }
 
     /** 갇힌 채 {@link #TRAP_SECONDS}초가 지나 탈락할 때가 됐는지 */

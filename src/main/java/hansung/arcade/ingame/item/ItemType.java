@@ -46,6 +46,20 @@ public enum ItemType {
         return id;
     }
 
+    /**
+     * id(bubble, roller_shoe …)에 해당하는 아이템. 서버 메시지의 item 값을 읽을 때 쓴다.
+     *
+     * @throws IllegalArgumentException 모르는 id
+     */
+    public static ItemType fromId(String id) {
+        for (ItemType type : values()) {
+            if (type.id.equals(id)) {
+                return type;
+            }
+        }
+        throw new IllegalArgumentException("모르는 아이템입니다: " + id);
+    }
+
     public Kind kind() {
         return kind;
     }

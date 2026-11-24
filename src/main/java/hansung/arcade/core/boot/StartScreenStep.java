@@ -28,6 +28,7 @@ import hansung.arcade.outgame.LoginService;
 import hansung.arcade.outgame.OfflineLoginService;
 import hansung.arcade.outgame.OutgameSession;
 import hansung.arcade.outgame.ServerLoginService;
+import hansung.arcade.outgame.ServerMatchLink;
 import hansung.arcade.outgame.audio.Sound;
 import hansung.arcade.outgame.lobby.LobbyPanel;
 import hansung.arcade.outgame.lobby.LobbyService;
@@ -46,8 +47,9 @@ import java.util.List;
  * 5단계: 첫 화면을 조립해 창에 띄운다. 기본 화면은 로그인이고(app.start-screen=login, lobby로 로비부터),
  * 로그인 → 로비 → 대기실 → 게임 → 결과 모달 → 대기실로 이어진다.
  * 온라인 모드(network.mode=online)면 로그인·로비·대기실은 서버에 하고({@link ServerLobbyService}),
- * 연결이 끊기면 로그인 화면으로 돌아가 이유를 보여 준다. 게임 화면은 서버가 정한 맵·참가자로 열지만
- * 경기 안(이동·물풍선)은 아직 이 컴퓨터에서만 돌고, 서버가 GAME_OVER를 보내면 그 결과로 끝낸다.
+ * 연결이 끊기면 로그인 화면으로 돌아가 이유를 보여 준다. 게임 화면은 서버가 정한 맵·참가자·스폰으로 열고,
+ * 경기 판정(물풍선·갇힘·아이템·승패)도 서버를 따른다({@link ServerMatchLink}). 서버가 GAME_OVER를 보내면 그 결과로 끝낸다
+ * (게임 화면을 띄우기 전에 온 GAME_OVER도 띄우자마자 반영한다).
  *
  * <p>app.start-screen=game 으로 실행하면 아웃게임 없이 인게임을 바로 띄운다. 이때 내 닉네임·캐릭터·팀·고정색은
  * 설정값 player.nickname, player.character, player.team, player.color 로, 경기 방식(개인전·팀전)은 game.match-mode 로 정한다.
@@ -107,20 +109,18 @@ public final class StartScreenStep implements BootStep {
                 game.setSoundSink(sound -> Sound.play(sound.key()));
                 game.setOnGameStart(theme -> Sound.playBgm(Sound.bgmForMap(theme)));
                 scenes.register("game", game);
-                if (session.isOnline()) {
-                    // 온라인: 결과는 서버가 정하고, 인게임 나가기는 서버 경기에서 빠져 로비로 간다
+                if (server != null) {
+                    // 온라인: 판정·결과(GAME_OVER)는 서버가 정하고, 인게임 나가기는 서버 경기에서 빠져 로비로 간다
                     game.setOnline(() -> {
                         session.exitGame();
                         scenes.show("lobby", null);
                     });
+                    // 서버가 로딩 시간 초과로 뺐으면 이미 방에서도 빠졌으므로 GAME_EXIT 없이 로비로 간다
+                    game.connect(new ServerMatchLink(server, SwingUtilities::invokeLater), () -> {
+                        session.droppedFromGame();
+                        scenes.show("lobby", "게임 화면을 제때 띄우지 못해 경기에서 빠졌습니다.");
+                    });
                 }
-                session.online().ifPresent(online -> online.listen(new ServerLobbyService.Listener() {
-                    @Override
-                    public void gameOver(hansung.arcade.outgame.GameResult result) {
-                        // 게임 화면이 아니면(이미 돌아왔으면) 아무 일도 하지 않는다
-                        game.endGame(result);
-                    }
-                }));
                 scenes.onShow(name -> {
                     // 게임 화면의 곡은 맵을 알아야 정하므로 위 setOnGameStart가 튼다
                     if (!name.equals("game")) {

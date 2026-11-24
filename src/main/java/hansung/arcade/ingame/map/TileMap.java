@@ -106,6 +106,17 @@ public final class TileMap {
     }
 
     /**
+     * (col, row) 칸을 서버가 알려 준 모습으로 맞춘다 (온라인에서 블럭이 맞았을 때). 바닥 타일이면 블럭을 치워 바닥을 드러내고,
+     * 그 밖의 타일이면 그 블럭을 놓는다. 맵 밖이면 아무 일도 없다.
+     */
+    public void setBlock(int col, int row, Tile tile) {
+        if (!isInside(col, row)) {
+            return;
+        }
+        blocks[row][col] = tile.isGround() ? null : tile;
+    }
+
+    /**
      * (col, row) 칸에 놓인 밀리는 블럭({@link Tile#isPushable()})을 (toCol, toRow) 칸으로 옮긴다.
      * 블럭 층에서만 옮기므로 떠난 칸에는 그 칸의 바닥이 드러나고, 블럭 밑은 도착한 칸의 바닥이 된다.
      *

@@ -73,6 +73,9 @@ import java.util.random.RandomGenerator;
  * <p>경기({@link Match})가 끝나면 이동 입력과 물풍선 놓기는 더 받지 않고, 물줄기도 보이기만 할 뿐 아무도 가두지 않는다.
  * 그래도 시간({@link #elapsedSeconds()})은 계속 흘러서 채팅이 사라지고, 이미 놓인 물풍선이 터지고, 탈락 연출도 끝까지 이어진다.
  * 끝날 때 갇혀 있던 사람은 결과가 바뀌지 않도록 갇힌 채로 남는다.</p>
+ *
+ * <p>온라인 경기({@link #online})는 판정을 서버가 한다. 위 규칙 가운데 이 컴퓨터의 플레이어가 움직이는 것만 여기서 하고,
+ * 물풍선·물줄기·블럭·아이템·갇힘·승패는 서버가 알려 준 대로 맞춘다 ({@link ServerRules}).</p>
  */
 public final class GameWorld {
 
@@ -98,6 +101,10 @@ public final class GameWorld {
     private final Player localPlayer;
     /** 이 컴퓨터에서 조작하는 플레이어들. 1P, 2P 순서 */
     private final List<Player> localPlayers;
+    /** 맵 위의 모든 플레이어. 오프라인이면 이 컴퓨터의 플레이어뿐이다 */
+    private final List<Player> allPlayers;
+    /** 온라인 경기면 서버가 정한 일을 맞추는 규칙. 오프라인이면 null */
+    private final ServerRules server;
     private final ChatLog chatLog = new ChatLog();
     private final SpeechBubbles speechBubbles = new SpeechBubbles();
     private final Match match;
@@ -161,11 +168,64 @@ public final class GameWorld {
             gears.put(i + 1, new PlayerGear());
         }
         this.localPlayers = List.copyOf(players);
+        this.allPlayers = localPlayers;
         this.localPlayer = localPlayers.get(0);
         this.occupancy = new CellOccupancy(balloonField, items, localPlayers, this::gear);
         // 플레이어를 모두 만든 뒤에 경기를 연다 (경기 중에 플레이어를 더하지 않는다)
         this.match = new Match(mode, players());
         this.battleRules = new BattleRules(localPlayers, match, this::gear, balloonField::wetOwnersAt);
+        this.server = null;
+    }
+
+    /**
+     * 서버가 판정하는 온라인 경기. 플레이어는 서버가 정한 번호·스폰 자리에서 시작하고, 이 컴퓨터의 플레이어(local)만 키로 움직인다.
+     * 승패는 팀으로 가린다 (서버 규칙). 서버가 라운드를 열 때(ROUND_BEGIN)까지는 검은 화면에서 기다린다.
+     *
+     * @param seats  경기에 들어온 모든 플레이어 (GAME_STARTED). 이 컴퓨터의 플레이어는 1P, 2P 순서로 있어야 한다
+     * @param outbox 이 컴퓨터의 플레이어가 한 일을 서버로 보낼 곳
+     * @throws IllegalArgumentException 이 컴퓨터의 플레이어가 없거나, 번호가 겹치거나, 맵에 없는 스폰 번호면
+     */
+    public static GameWorld online(TileMap map, List<OnlineSeat> seats, ServerOutbox outbox) {
+        return new GameWorld(map, seats, outbox);
+    }
+
+    private GameWorld(TileMap map, List<OnlineSeat> seats, ServerOutbox outbox) {
+        List<Point> spawns = map.spawnPoints();
+        if (seats.stream().noneMatch(OnlineSeat::local)) {
+            throw new IllegalArgumentException("이 컴퓨터의 플레이어가 경기에 없습니다.");
+        }
+        this.map = map;
+        this.balloonField = new BalloonField(map);
+        this.itemDrops = new ItemDrops(RandomGenerator.getDefault());
+        this.boxPusher = new BoxPusher(map);
+        this.itemActions = new ItemActions(map, balloonField);
+        this.airDrop = new AirDrop(map, RandomGenerator.getDefault());
+        List<Player> players = new ArrayList<>();
+        List<Player> locals = new ArrayList<>();
+        for (OnlineSeat seat : seats) {
+            if (seat.spawn() < 1 || seat.spawn() > spawns.size()) {
+                throw new IllegalArgumentException("맵 %s에 %d번 스폰이 없습니다.".formatted(map.name(), seat.spawn()));
+            }
+            if (gears.containsKey(seat.playerId())) {
+                throw new IllegalArgumentException("플레이어 번호가 겹칩니다: " + seat.playerId());
+            }
+            Point spawn = spawns.get(seat.spawn() - 1);
+            Player player = new Player(seat.playerId(), seat.profile(), spawn.x, spawn.y);
+            players.add(player);
+            gears.put(player.id(), new PlayerGear());
+            if (seat.local()) {
+                locals.add(player);
+            }
+        }
+        this.localPlayers = List.copyOf(locals);
+        this.allPlayers = List.copyOf(players);
+        this.localPlayer = localPlayers.get(0);
+        this.occupancy = new CellOccupancy(balloonField, items, allPlayers, this::gear);
+        this.match = Match.judgedByServer(MatchMode.TEAM, allPlayers);
+        this.battleRules = new BattleRules(localPlayers, match, this::gear, balloonField::wetOwnersAt);
+        this.server = new ServerRules(this, outbox);
+        // 서버가 라운드를 열 때까지 검은 화면(Ready 앞)에 멈춰 둔다. 소리는 연출을 실제로 시작할 때 낸다
+        intro.begin();
     }
 
     /**
@@ -174,6 +234,10 @@ public final class GameWorld {
      * @param commands 플레이어 번호마다 이번 틱에 할 일. 없는 플레이어는 아무것도 하지 않는다 ({@link PlayerCommand#IDLE})
      */
     public void update(double dt, Map<Integer, PlayerCommand> commands) {
+        if (server != null) {
+            updateOnline(dt, commands);
+            return;
+        }
         elapsedSeconds += dt;
         StartIntro.Phase introPhase = advanceIntro(dt);
         if (introPhase != StartIntro.Phase.DONE) {
@@ -253,6 +317,61 @@ public final class GameWorld {
     }
 
     /**
+     * 온라인 경기의 한 틱. 이 컴퓨터의 플레이어를 움직이고, 다른 플레이어를 서버가 알려 준 자리로 따라가게 하고,
+     * 물풍선 키·아이템 칸은 서버에 보낸다. 물줄기가 사라지는 것처럼 보이기만 하는 일은 여기서 흘린다.
+     */
+    private void updateOnline(double dt, Map<Integer, PlayerCommand> commands) {
+        elapsedSeconds += dt;
+        boolean controls = server.advanceRound(dt);
+        Map<Integer, PlayerSnapshot> before = snapshots(localPlayers);
+        for (Player player : localPlayers) {
+            PlayerCommand command = controls ? commands.getOrDefault(player.id(), PlayerCommand.IDLE) : PlayerCommand.IDLE;
+            player.update(command.move(), dt, obstaclesFor(player));
+        }
+        server.moveRemotePlayers(dt);
+        balloonField.update(dt, allPlayers);
+        if (controls) {
+            for (Player player : localPlayers) {
+                if (commands.getOrDefault(player.id(), PlayerCommand.IDLE).placeBalloon()) {
+                    server.requestBalloon(player);
+                }
+            }
+            server.requestPickups();
+        }
+        List<Explosion> explosions = balloonField.takeNewExplosions();
+        if (explosions.size() == 1) {
+            sounds.add(GameSound.EXPLODE);
+        } else if (explosions.size() > 1) {
+            sounds.add(GameSound.EXPLODE_MULTI);
+        }
+        server.sendMoves(dt);
+        // 갇힘·탈락 소리는 서버가 알릴 때 낸다. 여기서는 덤불에 들어간 소리만 고른다
+        collectPlayerSounds(localPlayers, before);
+        chatLog.expire(elapsedSeconds);
+        speechBubbles.expire(elapsedSeconds);
+    }
+
+    /** 온라인 경기면 서버가 알린 일을 넣는 곳. 오프라인이면 비어 있다 */
+    public Optional<ServerRules> server() {
+        return Optional.ofNullable(server);
+    }
+
+    /** playerId번 플레이어. 이 경기에 없으면 null */
+    Player player(int playerId) {
+        for (Player player : allPlayers) {
+            if (player.id() == playerId) {
+                return player;
+            }
+        }
+        return null;
+    }
+
+    /** 소리를 담는다. 같은 소리는 화면이 꺼내 갈 때까지 한 번만 담긴다 */
+    void addSound(GameSound sound) {
+        sounds.add(sound);
+    }
+
+    /**
      * 경기 시작 연출("Ready... Start!")을 처음부터 시작한다. READY 소리를 내고, START!! 글자가 다 사라질 때까지
      * 아무도 조작할 수 없다. 화면에 띄우기 전에 한 번 부른다.
      */
@@ -281,7 +400,7 @@ public final class GameWorld {
      *
      * @return 이번 틱이 시작될 때의 단계. DONE이 아니면 이번 틱은 아직 연출이다
      */
-    private StartIntro.Phase advanceIntro(double dt) {
+    StartIntro.Phase advanceIntro(double dt) {
         StartIntro.Phase phase = intro.phase();
         intro.advance(dt);
         if (phase == StartIntro.Phase.READY && intro.phase() != StartIntro.Phase.READY) {
@@ -377,10 +496,14 @@ public final class GameWorld {
     }
 
     /**
-     * 내가 친 채팅을 올린다. 지금은 서버가 없어 바로 내 화면에 올린다. 서버가 붙으면 여기서 서버로 보내고,
+     * 내가 친 채팅을 올린다. 오프라인이면 바로 내 화면에 올린다. 온라인이면 서버로 보내고,
      * 서버가 돌려준 채팅(나와 다른 플레이어 모두)을 {@link #receiveChat}으로 올린다.
      */
     public void sendChat(String text) {
+        if (server != null) {
+            server.sendChat(localPlayer, text);
+            return;
+        }
         receiveChat(new ChatMessage(localPlayer.id(), localPlayer.profile().nickname(), text));
     }
 
@@ -459,9 +582,9 @@ public final class GameWorld {
         return localPlayers;
     }
 
-    /** 맵 위의 모든 플레이어. 지금은 이 컴퓨터의 플레이어뿐이다. */
+    /** 맵 위의 모든 플레이어. 오프라인이면 이 컴퓨터의 플레이어뿐이고, 온라인이면 다른 컴퓨터의 플레이어도 있다 */
     public List<Player> players() {
-        return localPlayers;
+        return allPlayers;
     }
 
     /** 게임을 시작한 뒤 흐른 시간(초). 경기가 끝나도 계속 흐른다. 경기의 남은 시간은 {@link Match#clock()}을 본다 */
