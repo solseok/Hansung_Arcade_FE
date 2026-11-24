@@ -25,12 +25,13 @@ import java.util.function.Consumer;
 
 /**
  * 온라인 경기와 서버를 잇는다. 인게임 푸시를 읽어 지금 띄운 경기({@link ServerRules})에 넣고,
- * 이 컴퓨터의 플레이어가 한 일(MOVE, BALLOON_PLACE, ITEM_PICKUP, CHAT)을 서버로 보낸다.
+ * 이 컴퓨터의 플레이어가 한 일(MOVE, BALLOON_PLACE, ITEM_PICKUP, ITEM_USE, CHAT)을 서버로 보낸다.
  * 나가기(GAME_EXIT)는 방 API({@link ServerLobbyService#exitGame})가 보낸다.
  *
  * <ul>
  *   <li>푸시: ROUND_BEGIN, PLAYER_MOVED, BALLOON_PLACED, BALLOON_EXPLODED, PLAYER_TRAPPED, PLAYER_RESCUED,
- *       PLAYER_POPPED, ITEM_TAKEN, ITEM_SCATTERED, PLAYER_LEFT, CHAT_MESSAGE, GAME_OVER. 게임 화면을 여는 GAME_STARTED는
+ *       PLAYER_POPPED, ITEM_TAKEN, ITEM_USED, ITEM_SCATTERED, AIRPLANE_APPEARED, ITEM_DROPPED, PLAYER_LEFT,
+ *       CHAT_MESSAGE, GAME_OVER. 게임 화면을 여는 GAME_STARTED는
  *       방 API({@link ServerLobbyService})가 받는다.</li>
  *   <li>받는 스레드에서 오므로 {@code ui}(EDT, 게임 루프와 같은 스레드)로 넘겨 넣는다.</li>
  *   <li>GAME_STARTED를 받은 뒤 게임 화면을 띄울 때까지(대기실이 어두워지는 동안) 온 푸시는 모아 두었다가 {@link #bind} 때
@@ -43,6 +44,7 @@ public final class ServerMatchLink implements ServerOutbox {
     public static final String MOVE = "MOVE";
     public static final String BALLOON_PLACE = "BALLOON_PLACE";
     public static final String ITEM_PICKUP = "ITEM_PICKUP";
+    public static final String ITEM_USE = "ITEM_USE";
     public static final String CHAT = "CHAT";
     public static final String ROUND_BEGIN = "ROUND_BEGIN";
     public static final String PLAYER_MOVED = "PLAYER_MOVED";
@@ -52,6 +54,9 @@ public final class ServerMatchLink implements ServerOutbox {
     public static final String PLAYER_RESCUED = "PLAYER_RESCUED";
     public static final String PLAYER_POPPED = "PLAYER_POPPED";
     public static final String ITEM_TAKEN = "ITEM_TAKEN";
+    public static final String ITEM_USED = "ITEM_USED";
+    public static final String AIRPLANE_APPEARED = "AIRPLANE_APPEARED";
+    public static final String ITEM_DROPPED = "ITEM_DROPPED";
     public static final String ITEM_SCATTERED = "ITEM_SCATTERED";
     public static final String PLAYER_LEFT = "PLAYER_LEFT";
     public static final String CHAT_MESSAGE = "CHAT_MESSAGE";
@@ -80,7 +85,19 @@ public final class ServerMatchLink implements ServerOutbox {
     private record PlayerPopped(long playerId, Long killerId, String reason) {
     }
 
-    private record ItemTaken(int itemId, long playerId, String item, Stats stats) {
+    /** @param heldCount 서버가 쓰는 아이템을 다루기 전에는 오지 않는다 (없으면 0) */
+    private record ItemTaken(int itemId, long playerId, String item, Stats stats, String heldItem, Integer heldCount) {
+    }
+
+    /** 값이 없는 필드는 오지 않는다 (null) */
+    private record ItemUsed(long playerId, String item, Long durationMs, Integer col, Integer row, String heldItem,
+                            Integer heldCount) {
+    }
+
+    private record AirplaneAppeared(int airplaneId, String heading) {
+    }
+
+    private record ItemDropped(int airplaneId, int itemId, int col, int row, String item, long fallMs) {
     }
 
     private record ItemScattered(long playerId, int col, int row, List<Drop> items) {
@@ -126,7 +143,13 @@ public final class ServerMatchLink implements ServerOutbox {
         onPush(PLAYER_TRAPPED, PlayerTrapped.class, (r, b) -> r.playerTrapped(b.playerId(), b.balloonId(), b.popMs()));
         onPush(PLAYER_RESCUED, PlayerRescued.class, (r, b) -> r.playerRescued(b.playerId(), b.rescuerId()));
         onPush(PLAYER_POPPED, PlayerPopped.class, (r, b) -> r.playerPopped(b.playerId(), b.killerId(), b.reason()));
-        onPush(ITEM_TAKEN, ItemTaken.class, (r, b) -> r.itemTaken(b.itemId(), b.playerId(), b.item(), b.stats()));
+        onPush(ITEM_TAKEN, ItemTaken.class, (r, b) -> r.itemTaken(b.itemId(), b.playerId(), b.item(), b.stats(),
+                b.heldItem(), count(b.heldCount())));
+        onPush(ITEM_USED, ItemUsed.class, (r, b) -> r.itemUsed(b.playerId(), b.item(), b.durationMs(), b.col(), b.row(),
+                b.heldItem(), count(b.heldCount())));
+        onPush(AIRPLANE_APPEARED, AirplaneAppeared.class, (r, b) -> r.airplaneAppeared(b.airplaneId(), b.heading()));
+        onPush(ITEM_DROPPED, ItemDropped.class,
+                (r, b) -> r.itemDropped(b.airplaneId(), b.itemId(), b.col(), b.row(), b.item(), b.fallMs()));
         onPush(ITEM_SCATTERED, ItemScattered.class,
                 (r, b) -> r.itemsScattered(b.playerId(), b.col(), b.row(), listOf(b.items())));
         client.onPush(PLAYER_LEFT, body -> ui.execute(() -> {
@@ -200,6 +223,10 @@ public final class ServerMatchLink implements ServerOutbox {
         }
     }
 
+    private static int count(Integer count) {
+        return count == null ? 0 : count;
+    }
+
     private static <T> List<T> listOf(List<T> list) {
         return list == null ? List.of() : list;
     }
@@ -251,6 +278,11 @@ public final class ServerMatchLink implements ServerOutbox {
     @Override
     public void pickUpItem(int playerId, int itemId) {
         client.send(ITEM_PICKUP, Map.of("playerId", playerId, "itemId", itemId));
+    }
+
+    @Override
+    public void useItem(int playerId, String item) {
+        client.send(ITEM_USE, Map.of("playerId", playerId, "item", item));
     }
 
     @Override

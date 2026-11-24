@@ -1,5 +1,7 @@
 package hansung.arcade.ingame;
 
+import hansung.arcade.ingame.airplane.FallingItem;
+import hansung.arcade.ingame.airplane.FlightPlan;
 import hansung.arcade.ingame.balloon.BalloonField;
 import hansung.arcade.ingame.balloon.BalloonField.ServerBurst;
 import hansung.arcade.ingame.balloon.WaterBalloon;
@@ -8,6 +10,7 @@ import hansung.arcade.ingame.entity.Direction;
 import hansung.arcade.ingame.entity.Player;
 import hansung.arcade.ingame.entity.PlayerState;
 import hansung.arcade.ingame.item.ItemType;
+import hansung.arcade.ingame.item.PlayerGear;
 import hansung.arcade.ingame.map.Tile;
 import hansung.arcade.ingame.map.TileMap;
 import hansung.arcade.ingame.match.MatchClock;
@@ -30,14 +33,18 @@ import java.util.Objects;
  *       바뀌었을 때만 MOVE로 보낸다. 다른 플레이어는 PLAYER_MOVED로 받은 자리로 따라간다 ({@link #CATCH_UP}배 빠르기).</li>
  *   <li>물풍선 키를 누르면 놓지 않고 BALLOON_PLACE만 보낸다. 서버가 받아들이면 BALLOON_PLACED가 와서 그때 놓는다.
  *       놓인 물풍선은 스스로 터지지 않고 BALLOON_EXPLODED가 오면 그 길이만큼 물줄기를 그리고, 블럭은 서버가 알려 준 모습으로 바꾼다.</li>
- *   <li>아이템이 있는 칸에 들어서면 ITEM_PICKUP을 한 번 보낸다. 먹는 것·능력치는 ITEM_TAKEN을 따른다.
+ *   <li>아이템이 있는 칸에 들어서면 ITEM_PICKUP을 한 번 보낸다. 먹는 것·능력치·손에 든 쓰는 아이템은 ITEM_TAKEN을 따른다.
  *       블럭에서 나온 아이템과 터진 사람이 흩뿌린 아이템도 서버가 알려 준 칸에 놓는다.</li>
+ *   <li>비행기는 AIRPLANE_APPEARED가 오면 띄우고(스스로 출현 시각을 세지 않는다), 아이템은 ITEM_DROPPED로 받은 것만
+ *       떨어뜨려 닿으면 놓는다. 떨어지는 사이 그 아이템이 물줄기에 사라지거나 누가 먹으면 놓지 않는다.</li>
+ *   <li>아이템 키를 누르면 손에 든 쓰는 아이템을 ITEM_USE로 보낸다. 바늘·보호막·스프링 신발의 효과와 남은 개수는
+ *       ITEM_USED를 따른다.</li>
  *   <li>갇힘·구출·탈락·나감은 PLAYER_TRAPPED, PLAYER_RESCUED, PLAYER_POPPED, PLAYER_LEFT를 따르고, 승패는 GAME_OVER로 정한다.</li>
  *   <li>화면을 연 뒤 ROUND_BEGIN이 올 때까지는 검은 화면에서 기다린다. ROUND_BEGIN의 카운트다운이 끝나는 순간에
  *       시작 연출("Ready... Start!")도 끝나도록 연출을 늦춰 시작하고, 그때부터 조작과 경기 시계가 움직인다.</li>
  * </ul>
  *
- * <p>서버가 아직 다루지 않는 것(밀거나 던지기, 액티브 아이템, 밀리는 상자, 비행기)은 온라인에서 하지 않는다.
+ * <p>서버가 아직 다루지 않는 것(물풍선 밀기·던지기, 밀리는 상자)은 온라인에서 하지 않는다.
  * 서버 메시지는 게임 루프와 같은 스레드(EDT)에서 넣는다.</p>
  */
 public final class ServerRules {
@@ -102,6 +109,8 @@ public final class ServerRules {
     /** 이 컴퓨터의 플레이어 번호 → 지금 선 칸, 그 칸에서 줍겠다고 보낸 아이템 */
     private final Map<Integer, Point> pickupCells = new HashMap<>();
     private final Map<Integer, Integer> pickupRequests = new HashMap<>();
+    /** 비행기에서 떨어지는 중인 아이템 (서버 itemId → 떨어지는 아이템). 닿으면 맵에 놓는다 */
+    private final Map<Integer, FallingItem> fallingItems = new HashMap<>();
     private double sinceMove;
     private boolean roundBegun;
     /** ROUND_BEGIN 뒤 경기가 시작될 때까지 남은 시간(초) */
@@ -112,6 +121,7 @@ public final class ServerRules {
     ServerRules(GameWorld world, ServerOutbox outbox) {
         this.world = Objects.requireNonNull(world);
         this.outbox = Objects.requireNonNull(outbox);
+        world.airDrop().followServer();
         for (Player player : world.players()) {
             if (!world.localPlayers().contains(player)) {
                 remotes.put(player.id(), new Remote(player.x(), player.y()));
@@ -157,6 +167,11 @@ public final class ServerRules {
             if (remote == null) {
                 continue;
             }
+            if (world.gear(player).isAirborne()) {
+                // 스프링 신발로 뛰는 동안은 점프가 자리를 옮긴다. 내려앉으면 다시 받은 자리를 따라간다
+                player.followServer(player.x(), player.y(), player.facing(), false, dt);
+                continue;
+            }
             double dx = remote.x - player.x();
             double dy = remote.y - player.y();
             double distance = Math.hypot(dx, dy);
@@ -182,7 +197,8 @@ public final class ServerRules {
         int row = player.row();
         TileMap map = world.map();
         BalloonField field = world.balloonField();
-        if (!isPlaying() || !player.canPlaceBalloon() || !map.isInside(col, row) || map.isSolid(col, row)
+        if (!isPlaying() || !player.canPlaceBalloon() || world.gear(player).isAirborne()
+                || !map.isInside(col, row) || map.isSolid(col, row)
                 || field.holds(col, row) || field.placedBy(player) >= player.balloons()) {
             return;
         }
@@ -201,7 +217,8 @@ public final class ServerRules {
                 pickupCells.put(player.id(), cell);
                 pickupRequests.remove(player.id());
             }
-            if (player.state() != PlayerState.NORMAL && player.state() != PlayerState.ESCAPING) {
+            if (player.state() != PlayerState.NORMAL && player.state() != PlayerState.ESCAPING
+                    || world.gear(player).isAirborne()) {
                 continue;
             }
             Integer itemId = itemAt(cell);
@@ -212,6 +229,21 @@ public final class ServerRules {
             outbox.pickUpItem(player.id(), itemId);
             pickupRequests.put(player.id(), itemId);
         }
+    }
+
+    /**
+     * player가 손에 든 쓰는 아이템을 써 달라고 서버에 보낸다. 쓸 수 있는지는 서버가 정한다 (못 쓰면 조용히 버린다).
+     * 스프링 신발은 서버가 마지막 MOVE의 칸·방향으로 뛰므로 지금 자리를 먼저 보낸다.
+     */
+    void requestItemUse(Player player) {
+        world.gear(player).activeItem().ifPresent(item -> {
+            // 공중에서는 어떤 아이템도 쓸 수 없고, 중간 자리를 MOVE로 보내면 안 된다
+            if (!isPlaying() || !player.isAlive() || world.gear(player).isAirborne()) {
+                return;
+            }
+            sendMove(player);
+            outbox.useItem(player.id(), item.id());
+        });
     }
 
     /** 경기 중이면 {@link #MOVE_INTERVAL_SECONDS}초마다, 지난번 보낸 뒤 바뀐 플레이어의 자리만 보낸다 */
@@ -226,15 +258,20 @@ public final class ServerRules {
         sinceMove = 0;
         for (Player player : world.localPlayers()) {
             Sent last = sent.get(player.id());
-            if (player.isAlive() && (last == null || !last.same(player))) {
+            // 뛰는 동안은 착지 칸을 이미 보냈다. 중간 자리를 보내면 서버가 공중 시간이 끝날 때 그 칸에서 가둘 수 있다
+            if (player.isAlive() && !world.gear(player).isAirborne() && (last == null || !last.same(player))) {
                 sendMove(player);
             }
         }
     }
 
     private void sendMove(Player player) {
-        outbox.move(player.id(), player.x(), player.y(), player.facing(), player.isMoving());
-        sent.put(player.id(), new Sent(player.x(), player.y(), player.facing(), player.isMoving()));
+        sendMoveAt(player, player.x(), player.y(), player.isMoving());
+    }
+
+    private void sendMoveAt(Player player, double x, double y, boolean moving) {
+        outbox.move(player.id(), x, y, player.facing(), moving);
+        sent.put(player.id(), new Sent(x, y, player.facing(), moving));
     }
 
     /** 1P가 친 채팅을 서버로 보낸다. 다듬고 나서 비어 있으면 보내지 않는다. 화면에는 서버가 돌려준 글로 뜬다 */
@@ -331,6 +368,8 @@ public final class ServerRules {
         Player player = world.player((int) playerId);
         if (player != null && player.isAlive()) {
             player.eliminate();
+            // 서버는 터진 사람의 손을 비우고 따로 알리지 않는다
+            world.gear(player).holdFromServer(null, 0);
             world.addSound(GameSound.DIE);
         }
         if (killerId != null && world.player(killerId.intValue()) != null) {
@@ -338,8 +377,13 @@ public final class ServerRules {
         }
     }
 
-    /** ITEM_TAKEN. 누군가 아이템을 먹었다. 능력치는 서버가 알려 준 값으로 맞춘다 */
-    public void itemTaken(int itemId, long playerId, String item, Stats stats) {
+    /**
+     * ITEM_TAKEN. 누군가 아이템을 먹었다. 능력치와 손에 든 쓰는 아이템은 서버가 알려 준 값으로 맞춘다.
+     *
+     * @param heldItem  먹은 뒤 손에 든 쓰는 아이템 id. 없으면 null
+     * @param heldCount 손에 든 개수. 없으면 0
+     */
+    public void itemTaken(int itemId, long playerId, String item, Stats stats, String heldItem, int heldCount) {
         removeItem(itemId);
         Player player = world.player((int) playerId);
         if (player == null) {
@@ -348,6 +392,7 @@ public final class ServerRules {
         if (stats != null) {
             player.syncStats(stats.balloons(), stats.waterRange(), stats.speedLevel());
         }
+        world.gear(player).holdFromServer(itemType(heldItem), heldCount);
         if (world.localPlayers().contains(player)) {
             world.addSound(GameSound.ITEM_EATEN);
         }
@@ -356,6 +401,83 @@ public final class ServerRules {
     /** ITEM_SCATTERED. 터진 사람이 먹었던 아이템이 맵 곳곳에 흩어졌다 */
     public void itemsScattered(long playerId, int col, int row, List<Drop> items) {
         placeItems(items);
+    }
+
+    /**
+     * ITEM_USED. 누군가 쓰는 아이템을 썼다. 효과를 보이고 손에 남은 아이템을 맞춘다.
+     * 바늘은 갇힌 물풍선을 깨고 빠져나오고, 보호막은 durationMs 동안 물줄기를 막는 모습을, 스프링 신발은 (col, row)로 뛴다.
+     */
+    public void itemUsed(long playerId, String item, Long durationMs, Integer col, Integer row, String heldItem,
+                         int heldCount) {
+        Player player = world.player((int) playerId);
+        ItemType used = itemType(item);
+        if (player == null || used == null) {
+            return;
+        }
+        PlayerGear gear = world.gear(player);
+        gear.holdFromServer(itemType(heldItem), heldCount);
+        switch (used) {
+            case NEEDLE -> player.escape();
+            case SHIELD -> {
+                gear.raiseShieldFromServer(durationMs == null ? PlayerGear.SHIELD_SECONDS : durationMs / 1000.0);
+                world.addSound(GameSound.SHIELD);
+            }
+            case SPRING_SHOE -> {
+                if (col != null && row != null) {
+                    gear.jumpFromServer(player, col, row);
+                    world.addSound(GameSound.SPRING);
+                    land(player, TileMap.centerX(col), TileMap.centerY(row));
+                }
+            }
+            default -> log.warn("쓰는 아이템이 아닌데 썼다고 왔습니다: {}", item);
+        }
+    }
+
+    /**
+     * 스프링 신발로 뛴 player가 (x, y)에 내려앉는다고 서버·화면 양쪽에 맞춘다. 이 컴퓨터의 플레이어면 착지 자리를 바로 MOVE로 보낸다.
+     * 서버는 공중 시간이 끝날 때 마지막 MOVE 칸에서 물줄기를 보므로, 뛰는 중간 자리가 남아 있으면 엉뚱한 칸에서 갇힐 수 있다.
+     * 다른 컴퓨터의 플레이어면 따라갈 자리를 착지 칸으로 둔다. 그래야 내려앉은 뒤 늦게 받은 중간 자리로 끌려가지 않는다.
+     */
+    private void land(Player player, double x, double y) {
+        Remote remote = remotes.get(player.id());
+        if (remote == null) {
+            sendMoveAt(player, x, y, false);
+            return;
+        }
+        remote.x = x;
+        remote.y = y;
+        remote.moving = false;
+    }
+
+    /** AIRPLANE_APPEARED. 비행기가 heading(RIGHT·LEFT) 쪽으로 맵 위를 가로지르기 시작했다. 떨어뜨릴 칸은 서버가 따로 알린다 */
+    public void airplaneAppeared(int airplaneId, String heading) {
+        Direction direction = direction(heading, null);
+        if (direction == null || !direction.isHorizontal()) {
+            log.warn("모르는 비행기 방향이라 띄우지 않습니다: {}", heading);
+            return;
+        }
+        world.airDrop().launch(new FlightPlan(direction, List.of()));
+        world.addSound(GameSound.AIRPLANE);
+    }
+
+    /**
+     * ITEM_DROPPED. 비행기가 (col, row) 칸에 아이템을 떨어뜨렸다. 떨어지는 모습을 보인 뒤 닿으면 놓는다.
+     * 서버는 이때부터 아이템이 있다고 보므로, 떨어지는 사이 removedItems·ITEM_TAKEN으로 없어지면 놓지 않는다.
+     *
+     * @param fallMs 쓰지 않는다. 떨어지는 높이가 서버와 같은 식이라 같은 때 닿는다
+     */
+    public void itemDropped(int airplaneId, int itemId, int col, int row, String item, long fallMs) {
+        ItemType type = itemType(item);
+        if (type == null) {
+            log.warn("모르는 아이템이라 떨어뜨리지 않습니다: {}", item);
+            return;
+        }
+        FallingItem falling = world.airDrop().dropFromServer(col, row, type, () -> {
+            fallingItems.remove(itemId);
+            placeItems(List.of(new Drop(itemId, col, row, item)));
+        });
+        fallingItems.put(itemId, falling);
+        world.addSound(GameSound.AIR_DROP);
     }
 
     /**
@@ -369,6 +491,7 @@ public final class ServerRules {
             Player player = world.player((int) id);
             if (player != null) {
                 player.leaveMatch();
+                world.gear(player).holdFromServer(null, 0);
                 mine |= world.localPlayers().contains(player);
             }
         }
@@ -405,6 +528,10 @@ public final class ServerRules {
     }
 
     private void removeItem(int itemId) {
+        FallingItem falling = fallingItems.remove(itemId);
+        if (falling != null) {
+            world.airDrop().cancel(falling);
+        }
         Point cell = itemCells.remove(itemId);
         if (cell != null) {
             world.items().remove(cell.x, cell.y);
@@ -418,6 +545,18 @@ public final class ServerRules {
             }
         }
         return null;
+    }
+
+    /** 아이템 id의 종류. 없거나 모르면 null */
+    private static ItemType itemType(String id) {
+        if (id == null) {
+            return null;
+        }
+        try {
+            return ItemType.fromId(id);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
     }
 
     private static Direction direction(String name, Direction fallback) {

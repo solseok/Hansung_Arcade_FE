@@ -324,20 +324,33 @@ public final class GameWorld {
         elapsedSeconds += dt;
         boolean controls = server.advanceRound(dt);
         Map<Integer, PlayerSnapshot> before = snapshots(localPlayers);
+        for (Player player : allPlayers) {
+            // 보호막 시간을 흘리고, 스프링 신발로 뛰는 중이면 점프가 자리를 옮긴다
+            if (gear(player).advance(dt, player)) {
+                balloonField.letLeave(player);
+            }
+        }
         for (Player player : localPlayers) {
             PlayerCommand command = controls ? commands.getOrDefault(player.id(), PlayerCommand.IDLE) : PlayerCommand.IDLE;
-            player.update(command.move(), dt, obstaclesFor(player));
+            // 점프해 공중에 있는 동안에는 걷지 않는다
+            player.update(gear(player).isAirborne() ? null : command.move(), dt, obstaclesFor(player));
         }
         server.moveRemotePlayers(dt);
         balloonField.update(dt, allPlayers);
         if (controls) {
             for (Player player : localPlayers) {
-                if (commands.getOrDefault(player.id(), PlayerCommand.IDLE).placeBalloon()) {
+                PlayerCommand command = commands.getOrDefault(player.id(), PlayerCommand.IDLE);
+                if (command.placeBalloon()) {
                     server.requestBalloon(player);
+                }
+                if (command.useItem()) {
+                    server.requestItemUse(player);
                 }
             }
             server.requestPickups();
         }
+        // 서버가 띄운 비행기를 날리고, 서버가 떨어뜨린 아이템을 내린다
+        airDrop.update(dt, dropZone);
         List<Explosion> explosions = balloonField.takeNewExplosions();
         if (explosions.size() == 1) {
             sounds.add(GameSound.EXPLODE);
