@@ -149,7 +149,7 @@ public final class MapLoader {
                                 .formatted(name, i + 1));
             }
         }
-        return new TileMap(name, themeOf(id), ground, blocks, spawns.stream().map(SpawnPoint::position).toList());
+        return new TileMap(id, name, themeOf(id), ground, blocks, spawns.stream().map(SpawnPoint::position).toList());
     }
 
     /** [floor]·[block] 층을 쓰는 맵은 두 층과 [spawn] 층이 모두 있어야 하고, 층 이름 없는 줄이 없어야 한다. */

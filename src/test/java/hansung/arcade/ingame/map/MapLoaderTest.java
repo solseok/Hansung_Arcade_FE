@@ -18,6 +18,7 @@ class MapLoaderTest {
     void 기본_맵을_리소스에서_읽는다() {
         TileMap map = MapLoader.loadResource("camp/camp08");
 
+        assertEquals("camp/camp08", map.id(), "이름 줄(name=)이 있어도 맵 id는 읽은 경로 그대로다");
         assertEquals("캠프 08", map.name());
         assertEquals("camp", map.theme());
         assertEquals(15, map.columns());
