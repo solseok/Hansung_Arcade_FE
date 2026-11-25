@@ -103,6 +103,51 @@ class OnlineSessionTest {
     }
 
     @Test
+    void 혼자_남으면_시작할_수_없다() {
+        server.respond(request -> FakeServer.ok(request, """
+                {"room":{"number":3,"title":"한 판","capacity":8,"mapId":"random","status":"WAITING"},"hostId":12,
+                 "players":[{"playerId":12,"nickname":"상상부기","slot":0,"character":"kkukku","team":"MINT","ready":false}]}"""
+                .replaceAll("\\n\\s*", "")));
+        session.enter(session.create("한 판", 8));
+
+        assertFalse(session.canStart());
+    }
+
+    @Test
+    void 방장이_빈_자리를_누르면_CHANGE_SLOT을_보내고_닫힌_자리는_ROOM_STATE대로_보인다() throws Exception {
+        enterAsHost(true);
+        server.next("ROOM_CREATE");
+        server.respond(request -> FakeServer.ok(request, "{}"));
+
+        assertTrue(session.toggleSlot(5));
+        var close = server.next("CHANGE_SLOT").path("body");
+        assertEquals(5, close.path("slot").asInt());
+        assertFalse(close.path("open").asBoolean());
+        assertFalse(session.isSlotClosed(5), "닫힌 자리는 서버가 알려 줄 때 바뀐다");
+
+        session.applyRoomState(hansung.arcade.outgame.lobby.RoomState.from(read(HOST_STATE.formatted(true)
+                .replace("\"status\":\"WAITING\"}", "\"status\":\"WAITING\",\"closedSlots\":[5]}"))));
+        assertTrue(session.isSlotClosed(5));
+        assertTrue(session.toggleSlot(5));
+        assertTrue(server.next("CHANGE_SLOT").path("body").path("open").asBoolean());
+
+        assertFalse(session.toggleSlot(4), "손님이 앉은 자리는 누르지 않는다");
+        assertFalse(session.toggleSlot(1), "2P가 앉은 자리도 그대로다");
+    }
+
+    @Test
+    void 손님은_자리를_눌러도_보내지_않는다() throws Exception {
+        server.respond(request -> FakeServer.ok(request, HOST_STATE.formatted(true).replace("\"hostId\":12",
+                "\"hostId\":20")));
+        session.enter(session.join(3));
+        server.next("ROOM_JOIN");
+
+        assertFalse(session.toggleSlot(5));
+        session.chat("확인");
+        assertEquals("CHAT", server.nextMessage().path("type").asText(), "CHANGE_SLOT은 나가지 않았다");
+    }
+
+    @Test
     void 고르기는_서버로_보내고_방장은_READY를_보내지_않는다() throws Exception {
         enterAsHost(true);
 

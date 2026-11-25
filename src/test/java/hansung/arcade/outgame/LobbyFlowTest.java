@@ -27,7 +27,8 @@ class LobbyFlowTest {
         MockLobbyService service = new MockLobbyService();
         OutgameSession session = new OutgameSession(service);
         assertFalse(session.canStart());
-        Room created = service.create("준비 검사", 8);
+        // 1P와 목업 참가자 한 명이 있는 방
+        Room created = service.create("준비 검사", 8, 2);
         // 서버에서 두 참가자 스냅샷을 받은 상황을 목업으로 재현한다.
         session.enter(new Room(created.number(), created.title(), 2, 8, created.map(), created.status()));
         session.setParticipantReady(2, false);
@@ -131,7 +132,8 @@ class LobbyFlowTest {
             assertThrows(IllegalStateException.class, session::start);
             assertThrows(IllegalStateException.class, () -> session.selectMap("camp/camp08"));
             session.leave();
-            Room room = service.create("8인 테스트", 8);
+            // 혼자서는 시작할 수 없으므로 목업 참가자 한 명과 함께 연다
+            Room room = service.create("8인 테스트", 8, 2);
             AtomicReference<JComponent> displayed = new AtomicReference<>();
             SceneManager scenes = new SceneManager(displayed::set);
             WaitingRoomPanel waiting = new WaitingRoomPanel(session, scenes);
@@ -157,7 +159,7 @@ class LobbyFlowTest {
             assertSame(waiting, displayed.get());
             assertTrue(service.isHost());
             assertEquals(room.number(), session.room().number());
-            assertEquals(1, service.rooms().stream().filter(item -> item.number() == room.number())
+            assertEquals(2, service.rooms().stream().filter(item -> item.number() == room.number())
                     .findFirst().orElseThrow().players());
         });
     }
