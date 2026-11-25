@@ -26,6 +26,18 @@ public interface ServerOutbox {
      */
     void pushBox(int playerId, int col, int row, Direction direction);
 
+    /**
+     * BALLOON_THROW. 장갑으로 (col, row)의 물풍선을 direction 쪽으로 던져 달라고 한다. 서버가 받아들이면 BALLOON_THROWN이 온다.
+     * 서버는 마지막 MOVE가 direction을 보고, (col, row)가 그 칸이거나 바로 앞 칸일 때만 던진다.
+     */
+    void throwBalloon(int playerId, int col, int row, Direction direction);
+
+    /**
+     * BALLOON_KICK. 신발·빨간 악마로 (col, row)의 물풍선을 direction 쪽으로 차 달라고 한다. 서버가 받아들이면 BALLOON_KICKED가 온다.
+     * 서버는 마지막 MOVE가 멈춘 채 direction을 보고 물풍선 바로 앞 칸에 있을 때만 찬다.
+     */
+    void kickBalloon(int playerId, int col, int row, Direction direction);
+
     /** CHAT. 서버가 방 전체에 CHAT_MESSAGE로 돌려준다 */
     void chat(int playerId, String text);
 }
