@@ -287,6 +287,40 @@ class ServerRulesTest {
     }
 
     @Test
+    void 서버가_구출을_알리면_구출_소리가_나고_닿아서_터뜨렸다고_알리면_터뜨리는_소리와_탈락_소리가_난다() {
+        play();
+        server.balloonPlaced(3, ME, 1, 2, 1, 2_000);
+        server.balloonExploded(List.of(new Blast(3, 1, 2, 1, 0, 0, 0)), List.of(), List.of(), List.of());
+        server.playerTrapped(OTHER, 3, 5_000);
+        world.takeSounds();
+
+        // 다른 컴퓨터의 플레이어 일이어도 갇힘·탈락처럼 모두 듣는다
+        server.playerRescued(OTHER, ME);
+        assertEquals(List.of(GameSound.RESCUE), world.takeSounds());
+        server.playerRescued(OTHER, ME);
+        assertEquals(List.of(), world.takeSounds(), "갇혀 있지 않으면 구출 소리를 다시 내지 않는다");
+
+        server.playerTrapped(OTHER, 3, 5_000);
+        world.takeSounds();
+        server.playerPopped(OTHER, (long) ME, "TOUCH");
+        assertEquals(List.of(GameSound.POP, GameSound.DIE), world.takeSounds());
+    }
+
+    @Test
+    void 서버가_시간이_다_돼_터졌다고_알리면_탈락_소리만_난다() {
+        play();
+        server.balloonPlaced(3, ME, 1, 2, 1, 2_000);
+        server.balloonExploded(List.of(new Blast(3, 1, 2, 1, 0, 0, 0)), List.of(), List.of(), List.of());
+        server.playerTrapped(OTHER, 3, 5_000);
+        world.takeSounds();
+
+        server.playerPopped(OTHER, null, "TIMEOUT");
+
+        assertFalse(other.isAlive());
+        assertEquals(List.of(GameSound.DIE), world.takeSounds());
+    }
+
+    @Test
     void 다른_플레이어는_받은_자리로_따라가고_멀리_떨어졌으면_바로_옮긴다() {
         play();
         double startX = other.x();

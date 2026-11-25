@@ -24,6 +24,22 @@ public enum GameSound {
     KICK("Cha_KickBomb"),
     /** 물줄기에 맞아 물풍선에 갇혔다 */
     TRAPPED("Cha_LockedIn"),
+    /**
+     * 같은 편이 닿아 갇힌 사람을 구했다 (온라인은 PLAYER_RESCUED). 바늘로 스스로 빠져나올 때는 나지 않는다.
+     *
+     * <p>resources/sounds에 구출 전용 소리가 없어서, 로그인에 성공할 때 내는 짧은(0.3초) 성공 소리를 쓴다.
+     * "해냈다"는 느낌이 살려 낸 순간과 맞고, 게임 화면에서는 다른 일에 쓰지 않아 헷갈리지 않는다.</p>
+     */
+    RESCUE("Bt_c_Success"),
+    /**
+     * 상대가 닿아 갇힌 사람을 터뜨렸다 (온라인은 PLAYER_POPPED reason TOUCH). 탈락이라 {@link #DIE}도 함께 난다.
+     * 갇힌 채 시간이 다 돼 탈락할 때는 {@link #DIE}만 난다.
+     *
+     * <p>resources/sounds에 물풍선을 터뜨리는 전용 소리가 없어서, 이름 그대로 톡 터지는 짧은(0.18초) Bt_c_Pop을 쓴다.
+     * 아웃게임 버튼을 누를 때도 나는 소리지만 게임 화면에는 그 버튼이 없다. 물풍선 폭발(Cha_BombExplode)은
+     * 길고 물풍선이 터질 때마다 나서, 닿아서 터뜨린 순간을 따로 알아듣기 어렵다.</p>
+     */
+    POP("Bt_c_Pop"),
     /** 탈락했다 */
     DIE("Cha_Die"),
     /** 부서진 블럭에서 아이템이 나왔다 */

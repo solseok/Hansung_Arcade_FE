@@ -9,6 +9,7 @@ import hansung.arcade.ingame.input.PlayerCommand;
 import hansung.arcade.ingame.item.ItemType;
 import hansung.arcade.ingame.item.ScriptedRandom;
 import hansung.arcade.ingame.map.MapLoader;
+import hansung.arcade.ingame.map.TileMap;
 import hansung.arcade.ingame.match.MatchMode;
 import org.junit.jupiter.api.Test;
 
@@ -111,6 +112,64 @@ class GameWorldSoundTest {
         List<GameSound> died = ticks(world, (int) Math.round(Player.TRAP_SECONDS / TICK) + 2, Map.of());
         assertFalse(me.isAlive());
         assertTrue(died.contains(GameSound.DIE), died.toString());
+        assertFalse(died.contains(GameSound.POP), "시간이 다 돼 탈락하면 탈락 소리만 난다");
+    }
+
+    /** 한 컴퓨터에서 여럿이 하는 경기. profiles 차례로 1, 2, 3번 스폰에 선다 */
+    private static GameWorld together(MatchMode mode, List<PlayerProfile> profiles, String... rows) {
+        return new GameWorld(MapLoader.parse("fixture/sound", List.of(rows)), profiles, mode, ScriptedRandom.noDrops());
+    }
+
+    /** toucher를 trapped 바로 오른쪽에 반 칸 안으로 붙여 세운다 */
+    private static void touch(Player toucher, Player trapped) {
+        toucher.placeAt(trapped.x() + TileMap.TILE_SIZE / 2.0 - 1, trapped.y());
+        assertTrue(toucher.touches(trapped));
+    }
+
+    @Test
+    void 갇힌_상대에게_닿아_터뜨리면_터뜨리는_소리와_탈락_소리가_난다() {
+        GameWorld world = together(MatchMode.SOLO, List.of(new PlayerProfile("부기", Mascot.SANGSANGBUGI),
+                new PlayerProfile("냥이", Mascot.KKOKKO)), "1...2");
+        Player trapped = world.localPlayers().get(0);
+        Player toucher = world.localPlayers().get(1);
+        trapped.trap(toucher.id());
+        touch(toucher, trapped);
+
+        List<GameSound> heard = ticks(world, 1, Map.of());
+
+        assertFalse(trapped.isAlive());
+        assertEquals(1, world.match().kills(toucher.id()));
+        assertEquals(List.of(GameSound.POP, GameSound.DIE), heard);
+    }
+
+    @Test
+    void 팀전에서_갇힌_팀원에게_닿아_구하면_구출_소리가_난다() {
+        GameWorld world = together(MatchMode.TEAM, List.of(new PlayerProfile("부기", Mascot.SANGSANGBUGI, 1),
+                new PlayerProfile("냥이", Mascot.KKOKKO, 1), new PlayerProfile("꾸꾸", Mascot.KKUKKU, 2)), "1...2...3");
+        Player trapped = world.localPlayers().get(0);
+        Player saver = world.localPlayers().get(1);
+        trapped.trap(trapped.id());
+        touch(saver, trapped);
+
+        List<GameSound> heard = ticks(world, 1, Map.of());
+
+        assertEquals(PlayerState.ESCAPING, trapped.state());
+        assertEquals(1, world.match().saves(saver.id()));
+        assertEquals(List.of(GameSound.RESCUE), heard);
+    }
+
+    @Test
+    void 바늘로_스스로_빠져나오면_구출_소리가_나지_않는다() {
+        GameWorld world = solo(ScriptedRandom.noDrops(), "1....");
+        Player me = world.localPlayer();
+        world.items().place(me.col(), me.row(), ItemType.NEEDLE);
+        assertEquals(List.of(GameSound.ITEM_EATEN), ticks(world, 1, Map.of()));
+        me.trap(me.id());
+
+        List<GameSound> heard = ticks(world, 1, Map.of(me.id(), ITEM));
+
+        assertEquals(PlayerState.ESCAPING, me.state());
+        assertFalse(heard.contains(GameSound.RESCUE), heard.toString());
     }
 
     @Test

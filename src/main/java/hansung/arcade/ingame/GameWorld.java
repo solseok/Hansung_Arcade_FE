@@ -68,7 +68,7 @@ import java.util.random.RandomGenerator;
  * 키를 눌러도 움직이거나 물풍선을 놓지 않는다. 경기 시계는 START!! 글자가 뜬 뒤부터 흐른다 ({@link StartIntro}).
  * 채팅은 그대로 올라가고 사라진다.</p>
  *
- * <p>한 틱에 일어난 일 가운데 소리를 낼 일(물풍선 놓기·터짐, 갇힘, 탈락, 아이템 나옴·먹음 등)은 {@link GameSound}로 모아 두고,
+ * <p>한 틱에 일어난 일 가운데 소리를 낼 일(물풍선 놓기·터짐, 갇힘, 닿아서 터뜨림·구함, 탈락, 아이템 나옴·먹음 등)은 {@link GameSound}로 모아 두고,
  * 화면이 {@link #takeSounds()}로 꺼내 소리를 낸다.</p>
  *
  * <p>경기({@link Match})가 끝나면 이동 입력과 물풍선 놓기는 더 받지 않고, 물줄기도 보이기만 할 뿐 아무도 가두지 않는다.
@@ -296,7 +296,12 @@ public final class GameWorld {
         items.removeWhere(balloonField::isWet);
         boxPusher.advance(dt);
         if (playing) {
-            battleRules.settle();
+            for (BattleRules.Touch touch : battleRules.settle()) {
+                sounds.add(switch (touch) {
+                    case POP -> GameSound.POP;
+                    case RESCUE -> GameSound.RESCUE;
+                });
+            }
             pickUpItems();
         }
         collectPlayerSounds(players, before);
