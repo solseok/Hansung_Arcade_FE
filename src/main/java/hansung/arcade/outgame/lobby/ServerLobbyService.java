@@ -322,8 +322,7 @@ public final class ServerLobbyService implements LobbyService {
     }
 
     /**
-     * 캐릭터를 고른다. 지금 서버는 playerId를 보지 않고 이 연결의 플레이어(1P·2P) 모두에 적용한다.
-     * 서버가 플레이어별 선택을 받게 되면 그대로 쓰이도록 고른 사람의 번호를 함께 보낸다.
+     * 캐릭터를 고른다. 서버는 playerId의 플레이어(1P·2P 가운데 하나)만 바꾼다.
      *
      * @param playerId  고른 사람 (2P면 2P 번호)
      * @param character 캐릭터 id 또는 {@value RoomState#RANDOM_CHARACTER}

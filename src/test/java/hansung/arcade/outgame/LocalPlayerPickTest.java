@@ -21,10 +21,11 @@ class LocalPlayerPickTest {
     }
 
     @Test
-    void 둘째_플레이어_2P는_1P와_다른_캐릭터와_팀으로_시작한다() {
+    void 둘째_플레이어_2P도_상상부기로_시작하고_팀만_1P와_다르다() {
         OutgameSession session = twoPlayers();
 
-        assertNotEquals(session.character(0), session.character(1));
+        assertEquals(Mascot.SANGSANGBUGI, session.character(0));
+        assertEquals(Mascot.SANGSANGBUGI, session.character(1));
         assertNotEquals(session.team(0), session.team(1));
         assertEquals(OutgameSession.DEFAULT_CHARACTER_2P, session.character(1));
         assertEquals(OutgameSession.DEFAULT_TEAM_2P, session.team(1));
