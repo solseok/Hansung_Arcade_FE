@@ -57,7 +57,7 @@ import java.util.List;
  * 설정이 없으면 기본 캐릭터({@link Mascot#DEFAULT})를 원래 색 그대로, 1팀, 개인전으로 시작한다.</p>
  *
  * <p>인게임을 바로 띄울 때 설정값 game.local-players=2 를 주면 한 키보드 2인 모드로 시작한다.
- * 2P는 player2.nickname, player2.character, player2.team, player2.color 로 정한다 (없으면 Player2, 한성냥이, 2팀, 원래 색).</p>
+ * 2P는 player2.nickname, player2.character, player2.team, player2.color 로 정한다 (없으면 Player2, 상상부기, 2팀, 원래 색).</p>
  *
  * <p>인게임을 바로 띄울 때 설정값 game.test-items=true 를 주면 1P 스폰 둘레에 아이템 11종을 한 개씩 깔아 두고 시작한다 ({@link TestItems}).</p>
  */
@@ -178,7 +178,7 @@ public final class StartScreenStep implements BootStep {
         int count = properties.getInt(LOCAL_PLAYERS, 1);
         return switch (count) {
             case 1 -> List.of(localProfile(properties));
-            case 2 -> List.of(localProfile(properties), profile(properties, "player2", "Player2", Mascot.HANSUNGNYANGI, 2));
+            case 2 -> List.of(localProfile(properties), profile(properties, "player2", "Player2", Mascot.DEFAULT, 2));
             default -> throw new IllegalStateException("설정값 %s=%d 는 쓸 수 없습니다. 1(혼자) 또는 2(한 키보드 2인)만 됩니다."
                     .formatted(LOCAL_PLAYERS, count));
         };

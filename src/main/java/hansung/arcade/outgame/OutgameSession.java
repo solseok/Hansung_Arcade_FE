@@ -54,8 +54,11 @@ public final class OutgameSession {
     private final Team[] teams = {Team.RED, DEFAULT_TEAM_2P};
     /** 1P·2P가 마지막으로 고른 캐릭터·팀 (이 컴퓨터에 기억) */
     private final LocalPicks picks;
-    /** 기억한 값으로 맞춰 달라고 이미 보낸 방 (온라인). 방 만들기와 대기실 화면이 같은 방으로 두 번 들어온다 */
-    private Room pickedRoom;
+    /**
+     * 기억한 값으로 맞춰 달라고 이미 보낸 방 번호 (온라인). 방 만들기와 대기실 화면이 같은 방으로 두 번 들어오므로 한 번만 보낸다.
+     * 방을 떠나면 비운다.
+     */
+    private Integer pickedRoom;
     private String mapId = GameMaps.DEFAULT_ID;
     private boolean ready;
     /** 목업 참가자(이 컴퓨터 밖의 사람)의 준비 상태. 서버가 붙으면 서버에서 받은 값으로 바꾼다 */
@@ -75,11 +78,7 @@ public final class OutgameSession {
         this.service = service;
         this.picks = Objects.requireNonNull(picks);
         for (int local = 0; local < MAX_LOCAL_PLAYERS; local++) {
-            String character = pickedCharacter(local);
-            randomCharacters[local] = RoomState.RANDOM_CHARACTER.equals(character);
-            if (!randomCharacters[local]) {
-                characters[local] = Mascot.fromId(character);
-            }
+            showCharacter(local, pickedCharacter(local));
             teams[local] = pickedTeam(local);
         }
         this.online = service instanceof ServerLobbyService server ? server : null;
@@ -140,6 +139,7 @@ public final class OutgameSession {
         playerIds = players.stream().map(LoginService.LoginPlayer::playerId).toList();
         room = null;
         roomState = null;
+        pickedRoom = null;
         service.signedIn(playerIds);
     }
 
@@ -256,11 +256,11 @@ public final class OutgameSession {
 
     /**
      * 방에 들어왔을 때 서버 자리의 캐릭터·팀이 이 컴퓨터에 기억한 값과 다르면 기억한 값으로 보이고, 그 플레이어 번호를 붙여
-     * 서버에 보낸다 (온라인). 같은 방(같은 Room 객체)으로 다시 들어오면 이미 보냈으므로 보이기만 한다.
+     * 서버에 보낸다 (온라인). 방을 떠나지 않고 같은 방으로 다시 들어오면 이미 보냈으므로 보이기만 한다.
      */
     private void usePicks() {
-        boolean send = room != pickedRoom;
-        pickedRoom = room;
+        boolean send = pickedRoom == null || pickedRoom != room.number();
+        pickedRoom = room.number();
         if (roomState == null) {
             return;
         }
@@ -271,10 +271,7 @@ public final class OutgameSession {
             }
             String character = pickedCharacter(local);
             if (!character.equals(seat.character())) {
-                randomCharacters[local] = RoomState.RANDOM_CHARACTER.equals(character);
-                if (!randomCharacters[local]) {
-                    characters[local] = Mascot.fromId(character);
-                }
+                showCharacter(local, character);
                 if (send) {
                     online.selectCharacter(playerIds.get(local), character);
                 }
@@ -286,6 +283,14 @@ public final class OutgameSession {
                     online.selectTeam(playerIds.get(local), team);
                 }
             }
+        }
+    }
+
+    /** local번째 플레이어의 캐릭터를 id(랜덤이면 random)로 보인다. 랜덤이면 마지막으로 고른 캐릭터는 그대로 둔다 */
+    private void showCharacter(int local, String id) {
+        randomCharacters[local] = RoomState.RANDOM_CHARACTER.equals(id);
+        if (!randomCharacters[local]) {
+            characters[local] = Mascot.fromId(id);
         }
     }
 
@@ -559,6 +564,7 @@ public final class OutgameSession {
         }
         roomState = null;
         room = null;
+        pickedRoom = null;
         participantReady.clear();
         ready = false;
     }
@@ -568,6 +574,7 @@ public final class OutgameSession {
         online().ifPresent(ServerLobbyService::exitGame);
         roomState = null;
         room = null;
+        pickedRoom = null;
         participantReady.clear();
         ready = false;
     }
@@ -583,6 +590,7 @@ public final class OutgameSession {
         } finally {
             roomState = null;
             room = null;
+            pickedRoom = null;
             participantReady.clear();
             ready = false;
         }

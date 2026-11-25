@@ -163,6 +163,29 @@ class OnlineSessionTest {
     }
 
     @Test
+    void 서버_값을_따라도_기억은_내가_고른_값이고_나갔다_다시_들어오면_다시_맞춘다() throws Exception {
+        enterAsHost(true);
+        server.next("ROOM_CREATE");
+        session.select(1, Mascot.SANGZZI);
+        server.next("SELECT_CHARACTER");
+
+        // 서버가 예전 값(kkukku)을 알려 와도 화면만 따르고 기억은 그대로다
+        session.applyRoomState(hansung.arcade.outgame.lobby.RoomState.from(read(HOST_STATE.formatted(true))));
+        assertEquals(Mascot.KKUKKU, session.character(1));
+        assertEquals(java.util.Optional.of("sangzzi"), picks.character(1));
+
+        session.leave();
+        session.enter(session.join(3));
+
+        server.next("ROOM_JOIN");
+        var character = server.nextMessage();
+        assertEquals("SELECT_CHARACTER", character.path("type").asText());
+        assertEquals(13, character.path("body").path("playerId").asLong());
+        assertEquals("sangzzi", character.path("body").path("character").asText());
+        assertEquals(Mascot.SANGZZI, session.character(1));
+    }
+
+    @Test
     void 기억한_랜덤도_방에_들어가면_맞춰_달라고_보낸다() throws Exception {
         picks.saveCharacter(0, "random");
 

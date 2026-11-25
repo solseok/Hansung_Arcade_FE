@@ -122,10 +122,10 @@ class StartScreenStepTest {
     }
 
     @Test
-    void 설정이_없으면_2P는_Player2와_한성냥이를_쓴다() {
+    void 설정이_없으면_2P는_Player2와_상상부기를_쓴다() {
         GameProperties properties = GameProperties.of(Map.of(), List.of("--game.local-players=2"));
 
-        assertEquals(new PlayerProfile("Player2", Mascot.HANSUNGNYANGI, 2), StartScreenStep.localProfiles(properties).get(1));
+        assertEquals(new PlayerProfile("Player2", Mascot.SANGSANGBUGI, 2), StartScreenStep.localProfiles(properties).get(1));
     }
 
     @Test
