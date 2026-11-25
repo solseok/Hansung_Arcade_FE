@@ -496,6 +496,7 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
         boolean meHost = session.isHost();
         // 서버에서 경기가 아직 끝나지 않았으면(게임 중) 고르기·준비·맵·자리를 막는다
         boolean waiting = room.status() == Room.Status.WAITING;
+        int mapLimit = GameMaps.byIdOrDefault(session.mapId()).maxPlayers();
         for (int i = 0; i < SLOTS; i++) {
             OutgameSession.SeatView seat = seats.get(i);
             if (seat != null) {
@@ -506,8 +507,8 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
             } else {
                 slots[i].display(session.isSlotClosed(i) ? SlotState.CLOSED : SlotState.EMPTY, "", null);
             }
-            // 방장은 빈 자리·닫힌 자리를 눌러 닫고 열 수 있다
-            slots[i].setCursor(Cursor.getPredefinedCursor(meHost && waiting && seat == null
+            // 방장은 빈 자리·닫힌 자리를 눌러 닫고 열 수 있다 (맵 최대 인원 밖 자리는 열 수 없다)
+            slots[i].setCursor(Cursor.getPredefinedCursor(meHost && waiting && seat == null && i < mapLimit
                     ? Cursor.HAND_CURSOR : Cursor.DEFAULT_CURSOR));
         }
 

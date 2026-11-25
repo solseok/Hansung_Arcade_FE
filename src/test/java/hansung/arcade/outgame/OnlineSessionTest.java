@@ -103,14 +103,21 @@ class OnlineSessionTest {
     }
 
     @Test
-    void 혼자_남으면_시작할_수_없다() {
-        server.respond(request -> FakeServer.ok(request, """
+    void 혼자면_서버가_거절한_문구로_시작에_실패한다() throws Exception {
+        server.respond(request -> "GAME_START".equals(request.path("type").asText())
+                ? FakeServer.fail(request, "NOT_ENOUGH_PLAYERS", "2명 이상 모여야 시작할 수 있습니다.")
+                : FakeServer.ok(request, """
                 {"room":{"number":3,"title":"한 판","capacity":8,"mapId":"random","status":"WAITING"},"hostId":12,
                  "players":[{"playerId":12,"nickname":"상상부기","slot":0,"character":"kkukku","team":"MINT","ready":false}]}"""
                 .replaceAll("\\n\\s*", "")));
         session.enter(session.create("한 판", 8));
-
         assertFalse(session.canStart());
+
+        IllegalStateException refused = org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,
+                session::start);
+
+        assertEquals("2명 이상 모여야 시작할 수 있습니다.", refused.getMessage());
+        server.next("GAME_START");
     }
 
     @Test

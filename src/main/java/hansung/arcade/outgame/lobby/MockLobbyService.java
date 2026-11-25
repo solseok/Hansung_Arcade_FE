@@ -130,6 +130,10 @@ public final class MockLobbyService implements LobbyService {
         if (old.players() > limit) {
             throw new IllegalStateException("이 맵은 " + limit + "명까지 입장할 수 있습니다.");
         }
+        // 맵 밖으로 열린 자리가 빠져 정원이 2명보다 적어지면 방장이 닫은 자리를 작은 번호부터 연다 (서버와 같다)
+        for (int slot = 0; openSlots(map) < 2 && slot < limit; slot++) {
+            closedByHost[slot] = false;
+        }
         Room updated = new Room(old.number(), old.title(), old.players(), openSlots(map), map, status);
         add(updated);
         return updated;

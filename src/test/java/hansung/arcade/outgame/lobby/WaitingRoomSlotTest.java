@@ -160,6 +160,8 @@ class WaitingRoomSlotTest {
         assertEquals(SlotState.CLOSED, slot(6).state());
         assertEquals("1/6", count());
         assertTrue(chatLog().contains("빌리지 10은(는) 최대 6명이라 이 자리는 열 수 없습니다."), chatLog());
+        assertEquals(Cursor.DEFAULT_CURSOR, slot(6).getCursor().getType(), "맵 밖 자리는 누를 수 없는 모양이다");
+        assertEquals(Cursor.HAND_CURSOR, slot(5).getCursor().getType());
     }
 
     @Test
@@ -177,6 +179,20 @@ class WaitingRoomSlotTest {
         assertEquals(SlotState.EMPTY, slot(6).state());
         assertEquals(SlotState.EMPTY, slot(7).state());
         assertEquals("1/7", count());
+    }
+
+    @Test
+    void 맵을_바꿔_열린_자리가_빠져도_정원은_2명_아래로_떨어지지_않는다() {
+        enterAsHost(2);
+        click(slot(7));
+        click(slot(1));
+        assertEquals("1/2", count());
+
+        SwingTree.named(waiting, "map-select", AbstractButton.class).doClick();
+
+        assertEquals("1/2", count());
+        assertEquals(SlotState.EMPTY, slot(1).state(), "방장이 닫은 가장 작은 빈자리를 연다");
+        assertEquals(SlotState.CLOSED, slot(7).state());
     }
 
     @Test
