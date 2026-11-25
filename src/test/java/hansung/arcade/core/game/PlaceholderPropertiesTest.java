@@ -106,14 +106,14 @@ class PlaceholderPropertiesTest {
     }
 
     @Test
-    void 기본_설정_파일의_서버_주소는_자리표시자다() throws IOException {
+    void 기본_설정_파일은_온라인이고_서버_주소는_이_컴퓨터를_기본값으로_둔_자리표시자다() throws IOException {
         var properties = new java.util.Properties();
         try (var in = GameProperties.class.getResourceAsStream("/application.properties")) {
             properties.load(new java.io.InputStreamReader(in, java.nio.charset.StandardCharsets.UTF_8));
         }
 
-        assertEquals("${SERVER_HOST}", properties.getProperty("network.host"));
-        assertEquals("${SERVER_PORT}", properties.getProperty("network.port"));
-        assertEquals("offline", properties.getProperty("network.mode"));
+        assertEquals("${SERVER_HOST:localhost}", properties.getProperty("network.host"));
+        assertEquals("${SERVER_PORT:9000}", properties.getProperty("network.port"));
+        assertEquals("online", properties.getProperty("network.mode"));
     }
 }
