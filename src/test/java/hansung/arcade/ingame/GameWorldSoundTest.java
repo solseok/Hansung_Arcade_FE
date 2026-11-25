@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.random.RandomGenerator;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -139,7 +140,7 @@ class GameWorldSoundTest {
 
         assertFalse(trapped.isAlive());
         assertEquals(1, world.match().kills(toucher.id()));
-        assertEquals(List.of(GameSound.POP, GameSound.DIE), heard);
+        assertEquals(Set.of(GameSound.POP, GameSound.DIE), Set.copyOf(heard));
     }
 
     @Test

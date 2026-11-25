@@ -52,7 +52,7 @@ public final class ItemDrops {
 
     /**
      * @param random 나오는지·무엇인지 정할 난수
-     * @param mapId  블럭을 부수는 맵의 id ({@link hansung.arcade.ingame.map.TileMap#id}). 캠프 08이 아니면 탱크가 나오지 않는다
+     * @param mapId  블럭을 부수는 맵의 id ({@link hansung.arcade.ingame.map.TileMap#id()}). 캠프 08이 아니면 탱크가 나오지 않는다
      */
     public ItemDrops(RandomGenerator random, String mapId) {
         this.random = Objects.requireNonNull(random);

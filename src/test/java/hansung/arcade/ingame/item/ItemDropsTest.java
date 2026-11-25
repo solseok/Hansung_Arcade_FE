@@ -94,6 +94,9 @@ class ItemDropsTest {
         assertEquals(Optional.of(ItemType.SPRING_SHOE), roll(CAMP, 0.0, 0.9999));
 
         assertEquals(Optional.of(ItemType.BUBBLE), roll(PATRIT, 0.0, 0.0));
+        // 합 97 표에서는 신발(72~78) 바로 뒤가 탱크 없이 바늘(78~85)이다
+        assertEquals(Optional.of(ItemType.SHOE), roll(PATRIT, 0.0, 77.999 / 97));
+        assertEquals(Optional.of(ItemType.NEEDLE), roll(PATRIT, 0.0, 78.001 / 97));
         assertEquals(Optional.of(ItemType.SPRING_SHOE), roll(PATRIT, 0.0, 0.9999));
     }
 

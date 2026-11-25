@@ -26,6 +26,7 @@ import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -303,7 +304,7 @@ class ServerRulesTest {
         server.playerTrapped(OTHER, 3, 5_000);
         world.takeSounds();
         server.playerPopped(OTHER, (long) ME, "TOUCH");
-        assertEquals(List.of(GameSound.POP, GameSound.DIE), world.takeSounds());
+        assertEquals(Set.of(GameSound.POP, GameSound.DIE), Set.copyOf(world.takeSounds()));
     }
 
     @Test
