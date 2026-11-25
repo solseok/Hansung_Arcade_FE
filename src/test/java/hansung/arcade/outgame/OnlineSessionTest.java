@@ -36,13 +36,19 @@ class OnlineSessionTest {
     private FakeServer server;
     private ServerClient client;
     private OutgameSession session;
+    /** 이 컴퓨터에 기억한 값. 기본은 HOST_STATE의 1P·2P 자리와 같게 두어 방에 들어가도 맞춰 달라고 보내지 않는다 */
+    private final LocalPicks picks = LocalPicks.inMemory();
 
     @BeforeEach
     void setUp() throws Exception {
         server = new FakeServer();
         client = new ServerClient(new NetworkSettings(NetworkMode.ONLINE, server.host(), server.port()),
                 (host, port) -> ServerConnection.open(host, port, new ServerConnection.Timing(3_000, 5_000, 5_000, 15_000)));
-        session = new OutgameSession(new ServerLobbyService(client, Runnable::run));
+        for (int local = 0; local < 2; local++) {
+            picks.saveCharacter(local, "kkukku");
+            picks.saveTeam(local, Team.MINT);
+        }
+        session = new OutgameSession(new ServerLobbyService(client, Runnable::run), picks);
         session.signedIn(List.of(new LoginService.LoginPlayer(12, "상상부기"), new LoginService.LoginPlayer(13, "꾸꾸")));
         client.connect().get(3, TimeUnit.SECONDS);
     }
@@ -125,10 +131,66 @@ class OnlineSessionTest {
         assertEquals(13, character.path("playerId").asLong());
         assertEquals("sangzzi", character.path("character").asText());
         assertEquals(13, server.next("SELECT_TEAM").path("body").path("playerId").asLong());
-        // 지금 서버는 연결 단위로 적용해 1P·2P가 같은 값으로 돌아온다. 세션은 서버가 돌려준 값을 따른다
+        // 서버가 다른 값을 돌려주면 세션은 서버 값을 따른다
         session.applyRoomState(hansung.arcade.outgame.lobby.RoomState.from(read(HOST_STATE.formatted(true))));
         assertEquals(Mascot.KKUKKU, session.character(1));
         assertEquals(Team.MINT, session.team(1));
+    }
+
+    @Test
+    void 방에_들어가면_기억한_값과_다른_자리만_playerId를_붙여_맞춰_달라고_보낸다() throws Exception {
+        picks.saveCharacter(1, "sangzzi");
+        picks.saveTeam(1, Team.YELLOW);
+
+        enterAsHost(true);
+
+        assertEquals("ROOM_CREATE", server.nextMessage().path("type").asText());
+        // 1P는 서버 자리(kkukku/MINT)와 같아 보내지 않는다
+        var character = server.nextMessage();
+        assertEquals("SELECT_CHARACTER", character.path("type").asText());
+        assertEquals(13, character.path("body").path("playerId").asLong());
+        assertEquals("sangzzi", character.path("body").path("character").asText());
+        var team = server.nextMessage();
+        assertEquals("SELECT_TEAM", team.path("type").asText());
+        assertEquals(13, team.path("body").path("playerId").asLong());
+        assertEquals("YELLOW", team.path("body").path("team").asText());
+        // 방 만들기에 이어 대기실 화면이 같은 방으로 또 들어와도 다시 보내지 않는다
+        session.chat("다음");
+        assertEquals("CHAT", server.nextMessage().path("type").asText());
+        assertEquals(Mascot.KKUKKU, session.character(0));
+        assertEquals(Mascot.SANGZZI, session.character(1));
+        assertEquals(Team.YELLOW, session.team(1));
+    }
+
+    @Test
+    void 기억한_랜덤도_방에_들어가면_맞춰_달라고_보낸다() throws Exception {
+        picks.saveCharacter(0, "random");
+
+        enterAsHost(true);
+
+        server.next("ROOM_CREATE");
+        var character = server.nextMessage();
+        assertEquals(12, character.path("body").path("playerId").asLong());
+        assertEquals("random", character.path("body").path("character").asText());
+        assertTrue(session.randomCharacter(0));
+    }
+
+    @Test
+    void 고른_적이_없으면_1P_2P_모두_상상부기이고_팀은_1P_빨강_2P_파랑으로_맞춘다() throws Exception {
+        session = new OutgameSession(new ServerLobbyService(client, Runnable::run));
+        session.signedIn(List.of(new LoginService.LoginPlayer(12, "상상부기"), new LoginService.LoginPlayer(13, "꾸꾸")));
+
+        enterAsHost(true);
+
+        server.next("ROOM_CREATE");
+        List<String> sent = new java.util.ArrayList<>();
+        for (int i = 0; i < 4; i++) {
+            var message = server.nextMessage();
+            var body = message.path("body");
+            sent.add(body.path("playerId").asLong() + ":" + body.path(
+                    message.path("type").asText().equals("SELECT_CHARACTER") ? "character" : "team").asText());
+        }
+        assertEquals(List.of("12:sangsangbugi", "12:RED", "13:sangsangbugi", "13:BLUE"), sent);
     }
 
     @Test

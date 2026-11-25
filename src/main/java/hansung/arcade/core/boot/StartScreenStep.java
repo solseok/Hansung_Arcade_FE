@@ -23,6 +23,7 @@ import hansung.arcade.ingame.render.ItemSprites;
 import hansung.arcade.ingame.render.Tileset;
 import hansung.arcade.outgame.GamePreviewScene;
 import hansung.arcade.network.ServerClient;
+import hansung.arcade.outgame.LocalPicks;
 import hansung.arcade.outgame.LoginPanel;
 import hansung.arcade.outgame.LoginService;
 import hansung.arcade.outgame.OfflineLoginService;
@@ -94,7 +95,8 @@ public final class StartScreenStep implements BootStep {
                         ? new MockLobbyService()
                         : new ServerLobbyService(server, SwingUtilities::invokeLater);
                 SceneManager scenes = new SceneManager(window::show);
-                OutgameSession session = new OutgameSession(service);
+                // 1P·2P가 고른 캐릭터·팀은 이 컴퓨터에 기억해 다음에 켜도 이어 쓴다
+                OutgameSession session = new OutgameSession(service, LocalPicks.file(LocalPicks.defaultFile()));
                 LoginService login = server == null ? new OfflineLoginService() : new ServerLoginService(server);
                 scenes.register("login", new LoginPanel(session, scenes, login));
                 if (server != null) {
