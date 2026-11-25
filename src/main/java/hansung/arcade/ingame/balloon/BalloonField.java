@@ -177,15 +177,15 @@ public final class BalloonField {
 
     /**
      * 서버가 찼다고 알린 물풍선을 (col, row) 칸 가운데에서 direction 쪽으로 미끄러뜨리기 시작한다 (온라인 BALLOON_KICKED).
-     * 이 컴퓨터가 보던 칸이 달랐으면 그 칸으로 옮긴 뒤 미끄러뜨린다.
+     * 이 컴퓨터가 보던 칸이 달랐거나 아직 날고 있는 것으로 보이던 물풍선이면(서버는 내려앉은 뒤에야 찬다) 그 칸에 세운 뒤 미끄러뜨린다.
      *
      * @param players 맵 위의 모든 플레이어. 옮긴 칸에 몸이 걸친 사람은 그 칸을 벗어날 때까지 지나갈 수 있다
      */
     public void kickFromServer(WaterBalloon balloon, int col, int row, Direction direction, List<Player> players) {
-        if (!balloons.contains(balloon) || balloon.isFlying()) {
+        if (!balloons.contains(balloon)) {
             return;
         }
-        if (balloon.col() != col || balloon.row() != row) {
+        if (balloon.isFlying() || balloon.col() != col || balloon.row() != row) {
             balloon.settleAt(col, row);
             admitOverlapping(balloon, players);
         }
@@ -194,15 +194,15 @@ public final class BalloonField {
 
     /**
      * 서버가 미끄러지던 물풍선이 (col, row)에 멈췄다고 알렸다 (온라인 BALLOON_STOPPED). 그 칸 가운데에 세운다.
-     * 이 컴퓨터에서 아직 미끄러지는 중이거나 다른 칸에 멈췄어도 서버가 알린 칸을 따른다.
+     * 이 컴퓨터에서 아직 미끄러지거나 날고 있거나 다른 칸에 멈췄어도 서버가 알린 칸을 따른다.
      *
      * @param players 맵 위의 모든 플레이어. 세운 칸에 몸이 걸친 사람은 그 칸을 벗어날 때까지 지나갈 수 있다
      */
     public void stopFromServer(WaterBalloon balloon, int col, int row, List<Player> players) {
-        if (!balloons.contains(balloon) || balloon.isFlying()) {
+        if (!balloons.contains(balloon)) {
             return;
         }
-        boolean moved = balloon.col() != col || balloon.row() != row;
+        boolean moved = balloon.isFlying() || balloon.col() != col || balloon.row() != row;
         balloon.settleAt(col, row);
         if (moved) {
             admitOverlapping(balloon, players);

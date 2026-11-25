@@ -462,6 +462,35 @@ class BalloonFieldMoveTest {
     }
 
     @Test
+    void 이_컴퓨터에서_아직_날고_있는_물풍선을_서버가_찼으면_비행을_끝내고_알린_칸에서_미끄러진다() {
+        BalloonField field = new BalloonField(MapLoader.parse("fixture/throw", List.of("1.........")));
+        WaterBalloon balloon = serverBalloonAt(field, 1);
+        field.throwFromServer(balloon, Direction.RIGHT, 7, 0, 0.36);
+
+        field.kickFromServer(balloon, 7, 0, Direction.LEFT, List.of());
+
+        assertFalse(balloon.isFlying());
+        assertTrue(balloon.isSliding());
+        assertEquals(TileMap.centerX(7), balloon.x(), 1e-9);
+        assertEquals(0, balloon.height(), 1e-9);
+    }
+
+    @Test
+    void 이_컴퓨터에서_아직_날고_있는_물풍선이_멈췄다고_오면_비행을_끝내고_알린_칸에_선다() {
+        BalloonField field = new BalloonField(MapLoader.parse("fixture/throw", List.of("1.........")));
+        WaterBalloon balloon = serverBalloonAt(field, 1);
+        field.throwFromServer(balloon, Direction.RIGHT, 7, 0, 0.36);
+        Player standing = playerAt(2, 5, 0);
+
+        field.stopFromServer(balloon, 5, 0, List.of(standing));
+
+        assertTrue(balloon.isResting());
+        assertEquals(5, balloon.col());
+        assertEquals(TileMap.centerX(5), balloon.x(), 1e-9);
+        assertFalse(field.blocks(standing, 5, 0), "세운 칸에 서 있던 사람은 그 칸을 벗어날 때까지 지나갈 수 있다");
+    }
+
+    @Test
     void 미끄러지는_물풍선은_앞이_비어_있어도_찰_수_없다() {
         BalloonField field = new BalloonField(MapLoader.parse("fixture/slide", List.of("1.........")));
         WaterBalloon balloon = serverBalloonAt(field, 3);

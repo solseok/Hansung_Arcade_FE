@@ -183,9 +183,10 @@ public final class WaterBalloon {
         slideOffset = 0;
     }
 
-    /** (col, row) 칸 가운데에 바로 세운다. 미끄러지던 것은 멈춘다. 서버가 알린 칸으로 맞출 때 쓴다 */
+    /** (col, row) 칸 가운데에 바로 세운다. 미끄러지거나 날던 것은 멈춘다. 서버가 알린 칸으로 맞출 때 쓴다 */
     void settleAt(int col, int row) {
         stopSliding();
+        flight = null;
         this.col = col;
         this.row = row;
     }
