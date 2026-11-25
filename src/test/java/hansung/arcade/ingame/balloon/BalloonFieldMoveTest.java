@@ -383,4 +383,92 @@ class BalloonFieldMoveTest {
         assertEquals(2, pushed.col());
         assertEquals(TileMap.centerX(2), pushed.x(), 1e-9);
     }
+
+    // ---------------------------------------------------------------- 온라인: 서버가 놓은 물풍선
+
+    /** row 0의 col칸에 서버가 놓은 물풍선 (스스로 터지지 않는다) */
+    private static WaterBalloon serverBalloonAt(BalloonField field, int col) {
+        return field.placeFromServer(9, col, 0, 1, List.of());
+    }
+
+    @Test
+    void 서버_물풍선은_가시_난_면_앞에_멈춰도_스스로_터지지_않고_서버를_기다린다() {
+        BalloonField field = new BalloonField(MapLoader.parse("fixture/thorn", List.of("1....<")));
+        WaterBalloon balloon = serverBalloonAt(field, 1);
+
+        field.kickFromServer(balloon, 1, 0, Direction.RIGHT, List.of());
+        ticks(field, List.of(), 30);
+
+        assertTrue(balloon.isResting());
+        assertEquals(4, balloon.col());
+        assertTrue(field.explosions().isEmpty());
+    }
+
+    @Test
+    void 서버_물풍선은_다른_물풍선이_있는_칸에_멈춰도_스스로_터지지_않는다() {
+        BalloonField field = new BalloonField(MapLoader.parse("fixture/slide", List.of("1....B")));
+        WaterBalloon kicked = serverBalloonAt(field, 1);
+        serverBalloonAt(field, 3);
+
+        field.kickFromServer(kicked, 1, 0, Direction.RIGHT, List.of());
+        ticks(field, List.of(), 9);
+        serverBalloonAt(field, 4);
+        ticks(field, List.of(), 5);
+
+        assertEquals(3, field.balloons().size());
+        assertTrue(kicked.isResting());
+        assertEquals(3, kicked.col());
+        assertTrue(field.explosions().isEmpty());
+    }
+
+    @Test
+    void 서버_물풍선은_내려앉을_칸이_막혀도_더_날지_않고_그_칸에서_서버를_기다린다() {
+        BalloonField field = new BalloonField(MapLoader.parse("fixture/throw", List.of("1.........")));
+        WaterBalloon thrown = serverBalloonAt(field, 1);
+        field.throwFromServer(thrown, Direction.RIGHT, 7, 0, 0.36);
+        serverBalloonAt(field, 7);
+
+        ticks(field, List.of(), 30);
+
+        assertTrue(thrown.isResting());
+        assertEquals(7, thrown.col());
+        assertTrue(field.explosions().isEmpty());
+    }
+
+    @Test
+    void 던질_수_있는지는_가만히_놓였고_내려앉을_곳이_제자리가_아닌지로_본다() {
+        BalloonField field = new BalloonField(MapLoader.parse("fixture/throw", List.of("1.........")));
+        WaterBalloon balloon = serverBalloonAt(field, 1);
+
+        assertTrue(field.canThrow(balloon, Direction.RIGHT));
+        assertTrue(field.canThrow(balloon, Direction.LEFT), "맵 끝에서 거꾸로 돌아와 0열에 내려앉는다");
+        assertFalse(field.canThrow(balloon, Direction.UP), "한 줄짜리 맵이라 내려앉을 곳이 없다");
+        field.kickFromServer(balloon, 1, 0, Direction.RIGHT, List.of());
+        assertFalse(field.canThrow(balloon, Direction.RIGHT), "미끄러지는 중");
+    }
+
+    @Test
+    void 찰_수_있는지는_미끄러질_칸이_있거나_가시_난_면을_보는지로_본다() {
+        BalloonField field = new BalloonField(MapLoader.parse("fixture/thorn", List.of("1.<.>.")));
+        WaterBalloon nearThorn = serverBalloonAt(field, 1);
+        WaterBalloon nearBack = serverBalloonAt(field, 3);
+
+        assertTrue(field.canKick(nearThorn, Direction.RIGHT), "가시 난 면이라 그 자리에서 터진다");
+        assertTrue(field.canKick(nearThorn, Direction.LEFT));
+        assertFalse(field.canKick(nearBack, Direction.RIGHT), "가시가 없는 면 바로 앞");
+        assertFalse(field.canKick(nearBack, Direction.UP));
+        field.throwFromServer(nearThorn, Direction.LEFT, 0, 0, 0.2);
+        assertFalse(field.canKick(nearThorn, Direction.LEFT), "나는 중");
+    }
+
+    @Test
+    void 미끄러지는_물풍선은_앞이_비어_있어도_찰_수_없다() {
+        BalloonField field = new BalloonField(MapLoader.parse("fixture/slide", List.of("1.........")));
+        WaterBalloon balloon = serverBalloonAt(field, 3);
+        assertTrue(field.canKick(balloon, Direction.RIGHT));
+
+        field.kickFromServer(balloon, 3, 0, Direction.RIGHT, List.of());
+
+        assertFalse(field.canKick(balloon, Direction.RIGHT));
+    }
 }
