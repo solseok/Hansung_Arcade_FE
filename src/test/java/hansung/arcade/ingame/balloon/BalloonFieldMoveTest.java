@@ -43,8 +43,8 @@ class BalloonFieldMoveTest {
 
         assertTrue(field.push(balloon, Direction.RIGHT));
         assertTrue(balloon.isSliding());
-        // 초당 10칸이라 네 칸은 0.4초
-        ticks(field, List.of(), 30);
+        // 초당 5칸이라 네 칸은 0.8초
+        ticks(field, List.of(), 50);
 
         assertTrue(balloon.isResting());
         assertEquals(5, balloon.col());
@@ -71,7 +71,7 @@ class BalloonFieldMoveTest {
         Player standing = playerAt(3, 8, 0);
 
         field.push(pushed, Direction.RIGHT);
-        ticks(field, List.of(standing), 60);
+        ticks(field, List.of(standing), 90);
 
         assertEquals(8, pushed.col());
         assertTrue(pushed.isResting());
@@ -109,7 +109,7 @@ class BalloonFieldMoveTest {
         WaterBalloon balloon = placeAt(field, 1, 1);
 
         field.push(balloon, Direction.RIGHT);
-        ticks(field, List.of(), 30);
+        ticks(field, List.of(), 40);
 
         assertTrue(field.balloons().isEmpty());
         Explosion explosion = field.explosions().get(0);
@@ -122,7 +122,7 @@ class BalloonFieldMoveTest {
         WaterBalloon balloon = placeAt(field, 1, 1);
 
         field.push(balloon, Direction.RIGHT);
-        ticks(field, List.of(), 30);
+        ticks(field, List.of(), 40);
 
         assertEquals(4, balloon.col());
         assertTrue(field.explosions().isEmpty());
@@ -143,11 +143,11 @@ class BalloonFieldMoveTest {
     void 미끄러지는_동안에도_터질_시간은_그대로_흘러_지금_칸에서_터진다() {
         BalloonField field = new BalloonField(MapLoader.parse("fixture/slide", List.of("1..............")));
         WaterBalloon balloon = placeAt(field, 1, 1);
-        ticks(field, List.of(), 108);
+        ticks(field, List.of(), 96);
 
         field.push(balloon, Direction.RIGHT);
-        // 남은 0.2초 동안 두 칸쯤 미끄러지다 터진다
-        ticks(field, List.of(), 12);
+        // 남은 0.4초 동안 두 칸쯤 미끄러지다 터진다
+        ticks(field, List.of(), 24);
 
         assertTrue(field.balloons().isEmpty());
         assertEquals(3, field.explosions().get(0).col());
@@ -156,15 +156,15 @@ class BalloonFieldMoveTest {
     @Test
     void 미끄러지다_물줄기가_남은_칸에_들어가면_터진다() {
         BalloonField field = new BalloonField(MapLoader.parse("fixture/slide", List.of("1.........")));
-        WaterBalloon pushed = placeAt(field, 1, 1);
+        WaterBalloon pushed = placeAt(field, 1, 3);
         placeAt(field, 2, 6);
         ticks(field, List.of(), 60);
         // 6열 물풍선이 먼저 터져 5열까지 물줄기가 남은 채로 민다
         field.detonate(6, 0);
 
         field.push(pushed, Direction.RIGHT);
-        // 5열에 들어서기까지 3.5칸 = 0.35초. 물줄기는 0.45초 남는다
-        ticks(field, List.of(), 25);
+        // 5열에 들어서기까지 1.5칸 = 0.3초. 물줄기는 0.45초 남는다
+        ticks(field, List.of(), 21);
 
         assertTrue(field.balloons().isEmpty());
         assertEquals(5, field.explosions().get(1).col());
@@ -176,7 +176,7 @@ class BalloonFieldMoveTest {
         WaterBalloon pushed = placeAt(field, 1, 1);
 
         field.push(pushed, Direction.RIGHT);
-        ticks(field, List.of(), 30);
+        ticks(field, List.of(), 40);
 
         assertTrue(field.balloons().isEmpty());
         assertEquals(4, field.explosions().get(0).col());
@@ -337,11 +337,11 @@ class BalloonFieldMoveTest {
         WaterBalloon pushed = placeAt(field, 1, 1);
         ticks(field, List.of(), 60);
         placeAt(field, 2, 2);
-        ticks(field, List.of(), 54);
+        ticks(field, List.of(), 48);
 
-        // 남은 0.1초 동안 한 칸 미끄러져 2열 물풍선 위에서 터진다
+        // 남은 0.2초 동안 한 칸 미끄러져 2열 물풍선 위에서 터진다
         field.push(pushed, Direction.RIGHT);
-        ticks(field, List.of(), 6);
+        ticks(field, List.of(), 12);
 
         assertTrue(field.balloons().isEmpty());
         assertEquals(2, field.explosions().size());
@@ -355,10 +355,10 @@ class BalloonFieldMoveTest {
 
         field.push(pushed, Direction.RIGHT);
         // 3열에 막 들어섰을 때 4열에 서 있던 사람이 물풍선을 놓는다. 멈출 곳이 3열밖에 없다
-        ticks(field, List.of(), 9);
+        ticks(field, List.of(), 18);
         assertEquals(3, pushed.col());
         placeAt(field, 3, 4);
-        ticks(field, List.of(), 5);
+        ticks(field, List.of(), 10);
 
         assertTrue(field.balloons().isEmpty());
         assertTrue(field.explosions().stream().anyMatch(explosion -> explosion.col() == 3));
@@ -372,12 +372,12 @@ class BalloonFieldMoveTest {
 
         field.push(pushed, Direction.RIGHT);
         // 2열 가운데를 막 지났다. 다음에 들어갈 3열은 물풍선이 곧 차지할 칸이다
-        ticks(field, List.of(), 7);
+        ticks(field, List.of(), 14);
         assertEquals(2, pushed.col());
         assertTrue(field.holds(3, 0));
         // 그래도 상자가 들어왔다면(게임에서는 막는다) 물풍선은 상자를 지나가지 않는다
         map.moveBlock(3, 1, 3, 0);
-        ticks(field, List.of(), 20);
+        ticks(field, List.of(), 40);
 
         assertTrue(pushed.isResting());
         assertEquals(2, pushed.col());
@@ -397,7 +397,7 @@ class BalloonFieldMoveTest {
         WaterBalloon balloon = serverBalloonAt(field, 1);
 
         field.kickFromServer(balloon, 1, 0, Direction.RIGHT, List.of());
-        ticks(field, List.of(), 30);
+        ticks(field, List.of(), 40);
 
         assertTrue(balloon.isResting());
         assertEquals(4, balloon.col());
@@ -411,9 +411,9 @@ class BalloonFieldMoveTest {
         serverBalloonAt(field, 3);
 
         field.kickFromServer(kicked, 1, 0, Direction.RIGHT, List.of());
-        ticks(field, List.of(), 9);
+        ticks(field, List.of(), 18);
         serverBalloonAt(field, 4);
-        ticks(field, List.of(), 5);
+        ticks(field, List.of(), 10);
 
         assertEquals(3, field.balloons().size());
         assertTrue(kicked.isResting());

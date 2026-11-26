@@ -50,8 +50,8 @@ import java.util.Set;
  */
 public final class BalloonField {
 
-    /** 밀린 물풍선이 미끄러지는 빠르기 (초당 칸) */
-    public static final double SLIDE_TILES_PER_SECOND = 10;
+    /** 밀린 물풍선이 미끄러지는 빠르기 (초당 칸). 서버 Match.BALLOON_SLIDE_MS_PER_TILE(한 칸 0.2초)과 같아야 한다 */
+    public static final double SLIDE_TILES_PER_SECOND = 5;
     /** 던진 물풍선이 내려앉는 거리. 원래 칸을 0번째로 세어 이만큼째 칸이다 */
     public static final int THROW_DISTANCE = 6;
     /** 던진 물풍선이 한 칸을 나는 시간(초) */
