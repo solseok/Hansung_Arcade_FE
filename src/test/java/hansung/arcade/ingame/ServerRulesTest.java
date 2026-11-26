@@ -4,6 +4,7 @@ import hansung.arcade.ingame.ServerRules.Blast;
 import hansung.arcade.ingame.ServerRules.Drop;
 import hansung.arcade.ingame.ServerRules.Stats;
 import hansung.arcade.ingame.ServerRules.TileChange;
+import hansung.arcade.ingame.airplane.Flight;
 import hansung.arcade.ingame.balloon.Explosion;
 import hansung.arcade.ingame.balloon.WaterBalloon;
 import hansung.arcade.ingame.balloon.WaterCell;
@@ -376,27 +377,45 @@ class ServerRulesTest {
         ticks(62 * 60);
         assertEquals(0, world.airDrop().launches(), "온라인은 1:59가 돼도 스스로 띄우지 않는다");
 
-        server.airplaneAppeared(1, "RIGHT");
+        server.airplaneAppeared(1, "RIGHT", 2);
         assertEquals(1, world.airDrop().flights().size());
-        assertEquals(Direction.RIGHT, world.airDrop().flights().getFirst().heading());
+        Flight flight = world.airDrop().flights().getFirst();
+        assertEquals(Direction.RIGHT, flight.heading());
+        assertEquals(2, flight.row(), "서버가 알린 줄을 따라 난다");
+        assertEquals(80, flight.y(), "2번 줄의 위쪽 끝");
         assertTrue(world.takeSounds().contains(GameSound.AIRPLANE));
 
-        server.itemDropped(1, 9, 2, 2, "bubble", 200);
+        server.itemDropped(1, 9, 2, 2, "bubble", 129);
         assertEquals(1, world.airDrop().fallingItems().size());
         assertTrue(world.items().at(2, 2).isEmpty(), "떨어지는 동안은 아직 칸에 없다");
         assertTrue(world.takeSounds().contains(GameSound.AIR_DROP));
 
-        ticks(60);
+        // fallMs 129ms: 7틱(0.117초)에는 아직 떨어지는 중이고 8틱(0.133초)에 닿는다
+        ticks(7);
+        assertEquals(1, world.airDrop().fallingItems().size());
+        ticks(1);
         assertTrue(world.airDrop().fallingItems().isEmpty());
         assertEquals(ItemType.BUBBLE, world.items().at(2, 2).orElseThrow().type());
         assertEquals(0, world.airDrop().launches() - 1, "떨어뜨린 아이템 때문에 비행기를 더 띄우지 않는다");
     }
 
     @Test
+    void 맵에_없는_줄이나_모르는_방향의_비행기는_띄우지_않는다() {
+        play();
+
+        server.airplaneAppeared(1, "RIGHT", 3);
+        server.airplaneAppeared(2, "LEFT", -1);
+        server.airplaneAppeared(3, "UP", 1);
+
+        assertEquals(0, world.airDrop().launches());
+        assertFalse(world.takeSounds().contains(GameSound.AIRPLANE));
+    }
+
+    @Test
     void 떨어지는_사이_물줄기에_사라지거나_누가_먹은_아이템은_놓지_않는다() {
         play();
-        server.itemDropped(1, 9, 2, 2, "bubble", 200);
-        server.itemDropped(1, 10, 0, 2, "shoe", 200);
+        server.itemDropped(1, 9, 2, 2, "bubble", 129);
+        server.itemDropped(1, 10, 0, 2, "shoe", 129);
 
         server.balloonExploded(List.of(), List.of(), List.of(), List.of(9));
         server.itemTaken(10, OTHER, "shoe", new Stats(2, 1, 4), null, 0);
@@ -409,7 +428,7 @@ class ServerRulesTest {
     @Test
     void 내_발밑에_떨어진_아이템은_닿은_뒤에_줍겠다고_보낸다() {
         play();
-        server.itemDropped(1, 11, me.col(), me.row(), "fluid", 200);
+        server.itemDropped(1, 11, me.col(), me.row(), "fluid", 129);
 
         ticks(3);
         assertEquals(0, outbox.count("ITEM_PICKUP"), "떨어지는 동안은 보내지 않는다");
@@ -953,9 +972,9 @@ class ServerRulesTest {
         void 비행기_아이템이_떨어지는_중인_칸으로는_밀어_달라고_하지_않는다() {
             start();
             run(reachTicks + pushTicks - 3, Direction.RIGHT);
-            // 맨 윗줄은 0.1초 만에 닿으므로 밀 때가 되기 직전에 떨어뜨린다
-            boxServer.airplaneAppeared(1, "LEFT");
-            boxServer.itemDropped(1, 7, 2, 0, "bubble", 100);
+            // 비행기 아이템은 0.129초 만에 닿으므로 밀 때가 되기 직전에 떨어뜨린다
+            boxServer.airplaneAppeared(1, "LEFT", 0);
+            boxServer.itemDropped(1, 7, 2, 0, "bubble", 129);
 
             run(3, Direction.RIGHT);
 

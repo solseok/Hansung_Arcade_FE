@@ -113,16 +113,29 @@ class ServerMatchLinkTest {
     }
 
     @Test
+    void row를_보내지_않는_옛_서버의_비행기는_맨_윗줄로_띄운다() throws Exception {
+        bind();
+        server.push("{\"type\":\"ROUND_BEGIN\",\"body\":{\"countdownMs\":0,\"timeLimitMs\":180000}}");
+        until(() -> world.server().orElseThrow().isPlaying());
+
+        server.push("{\"type\":\"AIRPLANE_APPEARED\",\"body\":{\"airplaneId\":1,\"heading\":\"RIGHT\"}}");
+        until(() -> world.airDrop().flights().size() == 1);
+
+        assertEquals(0, world.airDrop().flights().getFirst().row());
+    }
+
+    @Test
     void 비행기와_쓰는_아이템_푸시를_경기에_넣는다() throws Exception {
         bind();
         server.push("{\"type\":\"ROUND_BEGIN\",\"body\":{\"countdownMs\":0,\"timeLimitMs\":180000}}");
         until(() -> world.server().orElseThrow().isPlaying());
 
-        server.push("{\"type\":\"AIRPLANE_APPEARED\",\"body\":{\"airplaneId\":1,\"heading\":\"LEFT\"}}");
+        server.push("{\"type\":\"AIRPLANE_APPEARED\",\"body\":{\"airplaneId\":1,\"heading\":\"LEFT\",\"row\":2}}");
         server.push("{\"type\":\"ITEM_DROPPED\",\"body\":{\"airplaneId\":1,\"itemId\":4,\"col\":0,\"row\":2,"
-                + "\"item\":\"shoe\",\"fallMs\":381}}");
+                + "\"item\":\"shoe\",\"fallMs\":129}}");
         until(() -> world.airDrop().fallingItems().size() == 1);
         assertEquals(1, world.airDrop().flights().size());
+        assertEquals(2, world.airDrop().flights().getFirst().row(), "AIRPLANE_APPEARED의 row를 따라 난다");
 
         server.push("{\"type\":\"ITEM_TAKEN\",\"body\":{\"itemId\":9,\"playerId\":12,\"item\":\"shield\","
                 + "\"stats\":{\"balloons\":1,\"waterRange\":1,\"speedLevel\":5},\"heldItem\":\"shield\",\"heldCount\":2}}");
