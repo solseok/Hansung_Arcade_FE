@@ -2,6 +2,7 @@ package hansung.arcade.outgame;
 
 import hansung.arcade.outgame.lobby.LobbyService;
 import hansung.arcade.outgame.lobby.MockLobbyService;
+import hansung.arcade.outgame.lobby.SampleRooms;
 import hansung.arcade.outgame.lobby.Room;
 import org.junit.jupiter.api.Test;
 
@@ -26,7 +27,7 @@ class MapCapacityTest {
 
     @Test
     void 목업_방_목록의_빌리지_방은_6명까지다() {
-        List<Room> village = new MockLobbyService().rooms().stream()
+        List<Room> village = new MockLobbyService(SampleRooms.rooms()).rooms().stream()
                 .filter(room -> room.map().equals("빌리지 10")).toList();
 
         assertFalse(village.isEmpty());
@@ -37,7 +38,7 @@ class MapCapacityTest {
 
     @Test
     void 빌리지로_바꾸면_정원이_6명으로_줄고_다른_맵으로_바꾸면_돌아온다() {
-        MockLobbyService service = new MockLobbyService();
+        MockLobbyService service = new MockLobbyService(SampleRooms.rooms());
         OutgameSession session = new OutgameSession(service);
         session.login("부기");
         Room room = session.create("정원 확인", 8);
@@ -108,7 +109,7 @@ class MapCapacityTest {
     void 모르는_맵_이름은_기본_맵으로_넘기지_않고_거절한다() {
         assertThrows(IllegalArgumentException.class, () -> GameMaps.byName("없는 맵"));
 
-        MockLobbyService service = new MockLobbyService();
+        MockLobbyService service = new MockLobbyService(SampleRooms.rooms());
         service.create("맵 이름 검사", 8, 1);
         assertThrows(IllegalArgumentException.class, () -> service.updateRoom("없는 맵", Room.Status.WAITING));
     }

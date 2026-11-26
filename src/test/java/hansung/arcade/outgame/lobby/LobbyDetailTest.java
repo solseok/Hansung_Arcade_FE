@@ -310,7 +310,7 @@ class LobbyDetailTest {
 
     /** 목업 서비스를 감싸 방 목록을 비우거나 바로시작을 실패시킬 수 있는 서비스 */
     private static final class StubService implements LobbyService {
-        private final MockLobbyService delegate = new MockLobbyService();
+        private final MockLobbyService delegate = new MockLobbyService(SampleRooms.rooms());
         boolean empty;
         RuntimeException quickJoinError;
 

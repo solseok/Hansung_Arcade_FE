@@ -3,6 +3,7 @@ package hansung.arcade.outgame;
 import hansung.arcade.core.game.SceneManager;
 import hansung.arcade.core.ui.RunOnEdt;
 import hansung.arcade.outgame.lobby.MockLobbyService;
+import hansung.arcade.outgame.lobby.SampleRooms;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -85,7 +86,7 @@ class NicknameRuleTest {
 
     @Test
     void 세션_로그인도_같은_규칙을_쓴다() {
-        OutgameSession session = new OutgameSession(new MockLobbyService());
+        OutgameSession session = new OutgameSession(new MockLobbyService(SampleRooms.rooms()));
 
         assertThrows(IllegalArgumentException.class, () -> session.login("가"));
         assertThrows(IllegalArgumentException.class, () -> session.login("ㅁㄴㅇㄹ"));
@@ -101,7 +102,7 @@ class NicknameRuleTest {
         AtomicReference<JComponent> displayed = new AtomicReference<>();
         SceneManager scenes = new SceneManager(displayed::set);
         scenes.register("lobby", JLabel::new);
-        LoginPanel login = new LoginPanel(new OutgameSession(new MockLobbyService()), scenes);
+        LoginPanel login = new LoginPanel(new OutgameSession(new MockLobbyService(SampleRooms.rooms())), scenes);
 
         SwingTree.named(login, "nickname-1", JTextField.class).setText("ㅁㄴㅇㄹ");
         SwingTree.button(login, "시작하기").doClick();
@@ -118,7 +119,7 @@ class NicknameRuleTest {
 
     @Test
     void 규칙_안내_문구는_화면에_두지_않는다() {
-        LoginPanel login = new LoginPanel(new OutgameSession(new MockLobbyService()), new SceneManager(c -> { }));
+        LoginPanel login = new LoginPanel(new OutgameSession(new MockLobbyService(SampleRooms.rooms())), new SceneManager(c -> { }));
 
         assertTrue(SwingTree.texts(login).stream().noneMatch(text -> text.contains("2~8자") || text.contains("영문, 숫자")),
                 SwingTree.texts(login).toString());

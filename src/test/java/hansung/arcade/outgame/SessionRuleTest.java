@@ -2,6 +2,7 @@ package hansung.arcade.outgame;
 
 import hansung.arcade.ingame.entity.Mascot;
 import hansung.arcade.outgame.lobby.MockLobbyService;
+import hansung.arcade.outgame.lobby.SampleRooms;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashSet;
@@ -21,7 +22,7 @@ class SessionRuleTest {
 
     @Test
     void 캐릭터_팀_랜덤을_바꾸면_준비가_풀린다() {
-        OutgameSession session = new OutgameSession(new MockLobbyService());
+        OutgameSession session = new OutgameSession(new MockLobbyService(SampleRooms.rooms()));
         session.login("부기");
         session.join(2);
 
@@ -40,7 +41,7 @@ class SessionRuleTest {
 
     @Test
     void 맵을_바꿔도_방장이_정한_정원을_넘지_않는다() {
-        OutgameSession session = new OutgameSession(new MockLobbyService());
+        OutgameSession session = new OutgameSession(new MockLobbyService(SampleRooms.rooms()));
         session.login("부기");
         session.create("4인 방", 4);
 
@@ -52,7 +53,7 @@ class SessionRuleTest {
 
     @Test
     void 랜덤_맵과_랜덤_캐릭터는_시작할_때마다_무작위로_정한다() {
-        OutgameSession session = new OutgameSession(new MockLobbyService());
+        OutgameSession session = new OutgameSession(new MockLobbyService(SampleRooms.rooms()));
         // 혼자서는 시작할 수 없으므로 한 컴퓨터 2인으로 연다
         session.login("부기", "꾸꾸");
         session.create("랜덤 방", 8);
@@ -77,7 +78,7 @@ class SessionRuleTest {
 
     @Test
     void 둘이_랜덤_캐릭터를_고르면_각자_따로_뽑는다() {
-        OutgameSession session = new OutgameSession(new MockLobbyService());
+        OutgameSession session = new OutgameSession(new MockLobbyService(SampleRooms.rooms()));
         session.login("부기", "꾸꾸");
         session.create("둘이서", 8);
         session.selectRandomCharacter(0);

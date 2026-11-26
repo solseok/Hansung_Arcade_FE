@@ -147,22 +147,23 @@ PowerShell에서는 앞에 `.\`를 붙입니다. 예: `.\gradlew build`
 기본 실행은 로그인입니다. 배경은 800x600 그림(`resources/etc/hsu_arcade.png`)을 창 전체에 깔고, 아래 가운데 입력 영역 양옆의
 1P·2P를 고르고 1P면 닉네임 1개·2P면 2개를 입력합니다(2P면 입력 영역이 넓어집니다). [시작하기]·[종   료]는 입력 영역 바로 아래에 있습니다.
 닉네임은 2~8자이고 ㅁㄴㅇㄹ처럼 완성되지 않은 한글이나 숫자로만 된 닉네임은 받지 않습니다(규칙 안내 문구는 두지 않고 어긋날 때만 이유를 보여 줍니다). 닉네임 칸은 가장 넓은 8자가 꽉 차는 폭입니다. 서버 주소·포트는 입력하지 않고
-`application.properties`의 `network.host=${SERVER_HOST}`·`network.port=${SERVER_PORT}` 자리표시자를 `.env`로 채웁니다(아래 서버 접속).
+`application.properties`의 `network.host=${SERVER_HOST:localhost}`·`network.port=${SERVER_PORT:9000}` 자리표시자를 `.env`로 채웁니다(아래 서버 접속).
 `--app.start-screen=lobby`로 로비에 바로 들어갈 수 있습니다.
 
 ### 서버 접속 (온라인 로그인)
 
-`.env.example`을 프로젝트 폴더에 `.env`로 복사해 `SERVER_HOST`·`SERVER_PORT`를 채운 뒤 온라인 모드로 실행합니다.
+기본 실행은 온라인 모드입니다. `.env.example`을 프로젝트 폴더에 `.env`로 복사해 `SERVER_HOST`·`SERVER_PORT`를 채운 뒤 실행합니다.
 `.env`는 커밋하지 않습니다. 같은 이름의 환경 변수가 있으면 그 값이, 실행 인자 `--network.host=...`가 있으면 그 값이 앞섭니다.
+`.env`도 환경 변수도 없으면 이 컴퓨터에 띄운 서버(`localhost:9000`)에 접속합니다.
 
 ```bash
-./gradlew run --args="--network.mode=online"
+./gradlew run
 ```
 
 [시작하기]를 누르면 그때 서버에 접속해(TCP, 한 줄 JSON) HELLO를 확인하고 LOGIN을 보냅니다. 기다리는 동안 입력이 막히고,
 서버가 거절하면(닉네임 중복 등) 서버 문구를 오류 줄에 보여 줍니다. 로그인한 뒤에는 5초마다 PING을 보내고, 게임을 끝내면 BYE를 보냅니다.
 연결이 끊기면 로그인 화면으로 돌아가 이유를 보여 줍니다.
-기본값 `network.mode=offline`은 `.env` 없이 지금처럼 서버 없이 실행합니다.
+서버 없이 이 컴퓨터에서만 하려면 `./gradlew run --args="--network.mode=offline"`로 실행합니다. 오프라인 로비에는 이 컴퓨터에서 만든 방만 있습니다.
 
 온라인이면 로비·대기실·경기 모두 서버를 따릅니다(`ServerLobbyService`, `ServerMatchLink`). 서버는 Hansung_Arcade_BE `develop`
 (방 API #8, 인게임 경기 #4, 아이템 획득·흩뿌리기 #10이 합쳐진 버전)이어야 합니다.
@@ -208,7 +209,7 @@ PowerShell에서는 앞에 `.\`를 붙입니다. 예: `.\gradlew build`
 둘 다 없으면 기본 고정폭), 버튼·상태처럼 바뀌지 않는 문구는 굵은 산세리프에 테두리·그러데이션을 입혀 씁니다.
 사용자가 알려 준 색과 참고 화면 PNG는 맥 스크린샷(Display P3) 값이라 `OutgamePalette.p3`로 sRGB로 바꿔 넣습니다.
 
-오프라인(`network.mode=offline`)에서는 다른 참가자가 준비된 목업입니다. 참가자의 준비는 로컬 상태만 바꾸며 서버로 전달하지 않습니다.
+오프라인(`network.mode=offline`)에서는 이 컴퓨터의 플레이어(1P·2P)만 방에 있고, 준비는 로컬 상태만 바꿉니다.
 게임 시작은 선택한 맵·캐릭터로 이 컴퓨터의 플레이어만 넣은 인게임을 실행합니다.
 오프라인 인게임 아래의 ‘목업 경기 끝내기’는 마지막 플레이어가 죽은 상황을 흉내 냅니다. 1.5초 뒤 맵 프레임 아래에서
 `| NAME | KILL | SAVE |` 결과 모달(8명이 들어가는 고정 크기, 이 컴퓨터의 플레이어 줄은 노란 글자)이 올라오고,

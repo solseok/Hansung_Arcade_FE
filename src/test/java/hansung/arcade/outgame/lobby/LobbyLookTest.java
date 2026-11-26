@@ -44,7 +44,7 @@ class LobbyLookTest {
 
     @BeforeEach
     void setUp() {
-        OutgameSession session = new OutgameSession(new MockLobbyService());
+        OutgameSession session = new OutgameSession(new MockLobbyService(SampleRooms.rooms()));
         session.login("부기");
         SceneManager scenes = new SceneManager(screen -> { });
         lobby = new LobbyPanel(session, scenes);
