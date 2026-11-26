@@ -122,9 +122,9 @@ class StartIntroTest {
     }
 
     @Test
-    void 크아_영상에서_잰_시간을_따른다() {
-        // 검은 화면 0.5초, START!! 1.5초(밝아짐 0.5초 포함, 0.75초 뒤부터 0.75초 동안 흩어짐)
-        assertEquals(0.5, StartIntro.READY_SECONDS, 1e-9);
+    void Ready와_Start_소리가_1초_간격이고_START_글자는_크아_영상에서_잰_시간을_따른다() {
+        // 검은 화면 1초(Ready 소리가 끝나고 잠깐 쉰 뒤 Start), START!! 1.5초(밝아짐 0.5초 포함, 0.75초 뒤부터 0.75초 동안 흩어짐)
+        assertEquals(1.0, StartIntro.READY_SECONDS, 1e-9);
         assertEquals(1.5, StartIntro.START_SECONDS, 1e-9);
         assertTrue(StartIntro.FADE_IN_SECONDS <= StartIntro.START_HOLD_SECONDS, "다 밝아진 뒤에 흩어진다");
     }
