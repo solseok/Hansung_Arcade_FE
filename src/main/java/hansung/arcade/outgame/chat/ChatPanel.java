@@ -20,10 +20,16 @@ import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 
 /**
  * 대기실 채팅: 위에 "전체 채팅" 탭, 가운데 로그, 아래 입력 줄(입력 칸 + 전송).
  * 일반 메시지는 흰 글자, 시스템 안내는 노란 글자다. 사용자가 쓰는 채팅 글자는 굴림체로 매끈하게 그린다.
+ *
+ * <p>글자 커서와 키보드 포커스는 입력 칸만 갖는다. 로그는 포커스를 받지 않아 눌러도 캐럿·선택이 생기지 않고,
+ * 로그를 누르면 입력 칸으로 포커스를 넘긴다 (JDK는 편집할 수 없는 글 칸도 포커스를 받으면 캐럿을 보인다).
+ * 전송 버튼도 포커스를 받지 않아, 눌러 보낸 뒤에도 입력 칸에서 이어 칠 수 있다.</p>
  */
 public final class ChatPanel extends JPanel {
     /** 탭 높이, 입력 줄 높이 */
@@ -55,6 +61,13 @@ public final class ChatPanel extends JPanel {
         messages.setBackground(OutgamePalette.CHAT_BACKGROUND);
         messages.setFont(OutgameFonts.gulimChe(12));
         messages.setBorder(BorderFactory.createEmptyBorder(4, 8, 4, 8));
+        messages.setFocusable(false);
+        messages.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mousePressed(MouseEvent event) {
+                focusInput();
+            }
+        });
         scroll.setBorder(BorderFactory.createEmptyBorder());
         scroll.getViewport().setBackground(OutgamePalette.CHAT_BACKGROUND);
         add(scroll);
@@ -67,6 +80,7 @@ public final class ChatPanel extends JPanel {
         input.setToolTipText("메시지를 입력하고 Enter를 누르세요");
         input.addActionListener(event -> send());
         send.addActionListener(event -> send());
+        send.setFocusable(false);
         add(input);
         add(send);
     }
@@ -92,6 +106,11 @@ public final class ChatPanel extends JPanel {
         } finally {
             g.dispose();
         }
+    }
+
+    /** 입력 칸에 키보드 포커스를 준다. 대기실에 들어오면 바로 칠 수 있게 부른다 */
+    public void focusInput() {
+        input.requestFocusInWindow();
     }
 
     private void send() {
