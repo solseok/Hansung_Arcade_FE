@@ -10,6 +10,7 @@ import java.util.Optional;
 import java.util.SplittableRandom;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ItemDropsTest {
@@ -27,11 +28,19 @@ class ItemDropsTest {
     }
 
     @Test
-    void 그림이_있는_아이템_11종이_모두_블럭에서_나온다() {
-        assertEquals(EnumSet.allOf(ItemType.class), ItemDrops.WEIGHTS.keySet());
-        assertEquals(100, ItemDrops.WEIGHTS.values().stream().mapToInt(Integer::intValue).sum());
-        for (ItemType item : ItemType.values()) {
+    void 블럭에서는_탱크를_뺀_10종이_합_97의_비율로_나온다() {
+        assertEquals(EnumSet.complementOf(EnumSet.of(ItemType.TANK)), ItemDrops.WEIGHTS.keySet());
+        assertEquals(97, ItemDrops.WEIGHTS.values().stream().mapToInt(Integer::intValue).sum());
+        for (ItemType item : ItemDrops.WEIGHTS.keySet()) {
             assertEquals(Optional.of(item), roll(0.0, ScriptedRandom.pickFor(item)), item.id());
+        }
+    }
+
+    @Test
+    void 어떤_난수로도_블럭에서_탱크가_무작위로_나오지_않는다() {
+        for (int i = 0; i < 10_000; i++) {
+            double pick = i / 10_000.0;
+            assertNotEquals(Optional.of(ItemType.TANK), roll(0.0, pick), "난수 " + pick);
         }
     }
 
@@ -42,7 +51,7 @@ class ItemDropsTest {
         assertEquals(22, weights.get(ItemType.FLUID));
         assertEquals(16, weights.get(ItemType.ROLLER_SHOE));
         assertEquals(60, weights.get(ItemType.BUBBLE) + weights.get(ItemType.FLUID) + weights.get(ItemType.ROLLER_SHOE));
-        for (ItemType rare : List.of(ItemType.ULTRA, ItemType.RED_DEVIL, ItemType.TANK)) {
+        for (ItemType rare : List.of(ItemType.ULTRA, ItemType.RED_DEVIL)) {
             assertTrue(weights.get(rare) < weights.get(ItemType.NEEDLE), rare.id());
         }
     }
@@ -50,8 +59,11 @@ class ItemDropsTest {
     @Test
     void 난수_구간의_양_끝도_빠짐없이_한_아이템이다() {
         assertEquals(Optional.of(ItemType.BUBBLE), roll(0.0, 0.0));
-        assertEquals(Optional.of(ItemType.BUBBLE), roll(0.0, 0.2199));
-        assertEquals(Optional.of(ItemType.FLUID), roll(0.0, 0.22));
+        assertEquals(Optional.of(ItemType.BUBBLE), roll(0.0, 21.999 / 97));
+        assertEquals(Optional.of(ItemType.FLUID), roll(0.0, 22.001 / 97));
+        // 신발(72~78) 바로 뒤가 탱크 없이 바늘(78~85)이다
+        assertEquals(Optional.of(ItemType.SHOE), roll(0.0, 77.999 / 97));
+        assertEquals(Optional.of(ItemType.NEEDLE), roll(0.0, 78.001 / 97));
         assertEquals(Optional.of(ItemType.SPRING_SHOE), roll(0.0, 0.9999));
     }
 
@@ -70,9 +82,9 @@ class ItemDropsTest {
         }
 
         assertEquals(0.33, dropped / (double) rolls, 0.005);
-        for (ItemType item : ItemType.values()) {
-            assertEquals(ItemDrops.WEIGHTS.get(item) / 100.0, counts.get(item) / (double) dropped, 0.006, item.id());
+        for (ItemType item : ItemDrops.WEIGHTS.keySet()) {
+            assertEquals(ItemDrops.WEIGHTS.get(item) / 97.0, counts.get(item) / (double) dropped, 0.006, item.id());
         }
-        assertEquals(ItemType.values().length, counts.size());
+        assertEquals(ItemDrops.WEIGHTS.keySet(), counts.keySet());
     }
 }

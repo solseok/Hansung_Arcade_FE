@@ -59,6 +59,8 @@ public final class ServerRules {
     static final double SNAP_DISTANCE = TileMap.TILE_SIZE * 2.0;
     /** 다른 플레이어를 따라가는 빠르기. 그 플레이어가 걷는 빠르기의 이만큼 배라 늦게 받은 만큼 따라잡는다 */
     static final double CATCH_UP = 1.5;
+    /** PLAYER_POPPED의 reason: 상대가 닿아 터뜨렸다. 나머지는 TIMEOUT(갇힌 채 시간이 다 됨)이다 */
+    static final String POPPED_BY_TOUCH = "TOUCH";
     private static final double EPSILON = 1e-6;
     private static final Logger log = LoggerFactory.getLogger(ServerRules.class);
 
@@ -369,18 +371,21 @@ public final class ServerRules {
         }
     }
 
-    /** PLAYER_RESCUED. 같은 편이 닿아 구했다 */
+    /** PLAYER_RESCUED. 같은 편이 닿아 구했다. 갇혀 있던 사람이 풀리면 구출 소리를 낸다 */
     public void playerRescued(long playerId, long rescuerId) {
         Player player = world.player((int) playerId);
-        if (player != null) {
-            player.escape();
+        if (player != null && player.escape()) {
+            world.addSound(GameSound.RESCUE);
         }
         if (world.player((int) rescuerId) != null) {
             world.match().recordSave((int) rescuerId);
         }
     }
 
-    /** PLAYER_POPPED. 상대가 닿았거나(TOUCH) 시간이 다 돼(TIMEOUT) 터졌다. killerId는 TIMEOUT이면 null */
+    /**
+     * PLAYER_POPPED. 상대가 닿았거나(TOUCH) 시간이 다 돼(TIMEOUT) 터졌다. killerId는 TIMEOUT이면 null.
+     * 탈락 소리를 내고, 상대가 닿아 터뜨렸으면 터뜨리는 소리도 낸다.
+     */
     public void playerPopped(long playerId, Long killerId, String reason) {
         Player player = world.player((int) playerId);
         if (player != null && player.isAlive()) {
@@ -388,6 +393,9 @@ public final class ServerRules {
             // 서버는 터진 사람의 손을 비우고 따로 알리지 않는다
             world.gear(player).holdFromServer(null, 0);
             world.addSound(GameSound.DIE);
+            if (POPPED_BY_TOUCH.equals(reason)) {
+                world.addSound(GameSound.POP);
+            }
         }
         if (killerId != null && world.player(killerId.intValue()) != null) {
             world.match().recordKill(killerId.intValue());

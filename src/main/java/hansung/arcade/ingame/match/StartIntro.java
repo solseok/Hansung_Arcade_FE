@@ -1,11 +1,13 @@
 package hansung.arcade.ingame.match;
 
 /**
- * 경기 시작 연출 "Ready... Start!". Swing에 의존하지 않는다. 크레이지아케이드 플레이 영상(두 판의 시작을 0.05~0.1초 간격으로 본 것)에서
- * 잰 흐름을 따른다.
+ * 경기 시작 연출 "Ready... Start!". Swing에 의존하지 않는다. 화면 흐름(검은 화면 → START!! 글자와 함께 밝아짐 → 글자가 흩어짐)은
+ * 크레이지아케이드 플레이 영상(두 판의 시작을 0.05~0.1초 간격으로 본 것)에서 잰 것을 따르고, 검은 화면의 길이는 소리에 맞춘다.
  *
  * <ol>
- *   <li>READY({@link #READY_SECONDS}초): 화면이 완전히 검다. Ready 소리가 난다. 글자는 없다.</li>
+ *   <li>READY({@link #READY_SECONDS}초): 화면이 완전히 검다. Ready 소리가 난다. 글자는 없다.
+ *       Ready 소리(Ntc_GameReady, 게임이 풀어 쓰는 PCM으로 0.73초, 들리는 부분은 0.05~0.68초)가 다 끝나고
+ *       잠깐(약 0.3초) 쉰 뒤에 Start 소리가 나도록, Ready와 Start가 1초 간격으로 울리게 했다.</li>
  *   <li>START({@link #START_SECONDS}초): START!! 글자가 뜬 채로 {@link #FADE_IN_SECONDS}초 동안 검은 화면에서 맵이 밝아지고,
  *       처음부터 {@link #START_HOLD_SECONDS}초가 지나면 남은 시간 동안 왼쪽 글자부터 한 자씩 위로 튀어 올라 사라진다.
  *       Start 소리가 나고, 이 단계부터 경기 시계가 흐른다.</li>
@@ -18,8 +20,11 @@ package hansung.arcade.ingame.match;
  */
 public final class StartIntro {
 
-    /** 화면이 완전히 검은 시간(초). Ready 소리가 이 동안 난다 */
-    public static final double READY_SECONDS = 0.5;
+    /**
+     * 화면이 완전히 검은 시간(초). Ready 소리가 이 동안 나고, 다 끝난 뒤 잠깐 쉬었다가 START!! 글자와 Start 소리가 나온다.
+     * 0.5초였을 때는 Start 소리가 Ready 소리 끝 0.2초쯤과 겹쳐 쉼 없이 이어져 들렸다
+     */
+    public static final double READY_SECONDS = 1.0;
     /** START!! 글자가 뜬 뒤 검은 화면에서 맵이 다 밝아지는 데 걸리는 시간(초) */
     public static final double FADE_IN_SECONDS = 0.5;
     /** START!! 글자가 뜬 뒤 흩어지기 시작할 때까지(초). 밝아지는 시간을 포함한다 */

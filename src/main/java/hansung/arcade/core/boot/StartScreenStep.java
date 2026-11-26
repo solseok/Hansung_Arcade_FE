@@ -31,6 +31,7 @@ import hansung.arcade.outgame.OutgameSession;
 import hansung.arcade.outgame.ServerLoginService;
 import hansung.arcade.outgame.ServerMatchLink;
 import hansung.arcade.outgame.audio.Sound;
+import hansung.arcade.outgame.audio.SoundSettings;
 import hansung.arcade.outgame.lobby.LobbyPanel;
 import hansung.arcade.outgame.lobby.LobbyService;
 import hansung.arcade.outgame.lobby.MockLobbyService;
@@ -78,6 +79,8 @@ public final class StartScreenStep implements BootStep {
 
     @Override
     public void run(GameContext context) {
+        // 이 컴퓨터에 저장해 둔 전체 음량을 첫 곡보다 먼저 적용한다. 로비 메뉴에서 바꾸면 여기에 다시 적는다
+        Sound.useSettings(SoundSettings.file(SoundSettings.defaultFile()));
         GameWindow window = context.get(GameWindow.class);
         TileMap map = context.get(TileMap.class);
         Tileset tileset = context.get(Tileset.class);
