@@ -238,6 +238,24 @@ class ServerRulesTest {
     }
 
     @Test
+    void 내구도_상자가_다_부서지며_서버가_고정_드롭으로_탱크를_알리면_그_칸에_탱크를_놓는다() {
+        // 클라이언트 비율표에는 탱크가 없다. 탱크는 서버가 맵의 고정 드롭으로 알려 줄 때만 놓인다
+        play();
+        assertEquals(Tile.HARD_BLOCK_3, map.tileAt(4, 0));
+
+        server.balloonExploded(List.of(), List.of(new TileChange(4, 0, "b")), List.of(), List.of());
+        server.balloonExploded(List.of(), List.of(new TileChange(4, 0, "a")), List.of(), List.of());
+        assertTrue(world.items().at(4, 0).isEmpty(), "다 부서지기 전에는 아무것도 나오지 않는다");
+
+        world.takeSounds();
+        server.balloonExploded(List.of(), List.of(new TileChange(4, 0, ".")), List.of(new Drop(9, 4, 0, "tank")), List.of());
+
+        assertEquals(Tile.FLOOR, map.tileAt(4, 0));
+        assertEquals(ItemType.TANK, world.items().at(4, 0).orElseThrow().type());
+        assertTrue(world.takeSounds().contains(GameSound.ITEM_POP));
+    }
+
+    @Test
     void 아이템_칸에_들어서면_한_번만_줍겠다고_보내고_먹는_것은_서버를_따른다() {
         play();
         server.itemsScattered(OTHER, 1, 1, List.of(new Drop(7, me.col(), me.row(), "fluid")));

@@ -15,7 +15,6 @@ public final class TileMap {
 
     public static final int TILE_SIZE = 40;
 
-    private final String id;
     private final String name;
     private final String theme;
     /** 바닥 층. 칸마다 바닥 타일({@link Tile#isGround()})이 하나씩 있고 바뀌지 않는다 */
@@ -25,12 +24,10 @@ public final class TileMap {
     private final List<Point> spawnPoints;
 
     /**
-     * @param id     맵 id (resources/maps 아래 경로, 예: camp/camp08)
      * @param ground 바닥 층. 모든 칸이 바닥 타일이다
      * @param blocks 블럭 층. 바닥과 같은 크기이고, 빈 칸은 null, 나머지는 바닥이 아닌 타일이다
      */
-    TileMap(String id, String name, String theme, Tile[][] ground, Tile[][] blocks, List<Point> spawnPoints) {
-        this.id = id;
+    TileMap(String name, String theme, Tile[][] ground, Tile[][] blocks, List<Point> spawnPoints) {
         this.name = name;
         this.theme = theme;
         this.ground = new Tile[ground.length][];
@@ -53,12 +50,6 @@ public final class TileMap {
         this.spawnPoints = List.copyOf(spawnPoints);
     }
 
-    /** 맵 id. resources/maps 아래 경로다 (예: camp/camp08). 블럭에서 나오는 아이템처럼 맵마다 다른 규칙을 고를 때 쓴다 */
-    public String id() {
-        return id;
-    }
-
-    /** 화면에 쓰는 이름. 맵 파일에 name= 줄이 없으면 맵 id다 */
     public String name() {
         return name;
     }

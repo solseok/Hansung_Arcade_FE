@@ -8,7 +8,6 @@ import hansung.arcade.ingame.entity.PlayerProfile;
 import hansung.arcade.ingame.entity.PlayerState;
 import hansung.arcade.ingame.input.PlayerCommand;
 import hansung.arcade.ingame.item.FieldItems.FieldItem;
-import hansung.arcade.ingame.item.ItemDrops;
 import hansung.arcade.ingame.item.ItemType;
 import hansung.arcade.ingame.item.ScriptedRandom;
 import hansung.arcade.ingame.map.MapLoader;
@@ -142,24 +141,6 @@ class GameWorldBlockTest {
         ticks(world, WATER_TICKS + 1);
         assertTrue(world.balloonField().explosions().isEmpty());
         assertEquals(Optional.of(new FieldItem(0, 0, ItemType.FLUID)), world.items().at(0, 0));
-    }
-
-    @Test
-    void 탱크는_캠프_08의_블럭에서만_나온다() {
-        // 두 경기 모두 캠프 08에서 탱크를 고르는 난수를 쓴다. 다른 맵은 탱크를 뺀 비율(합 97)로 골라 같은 난수가 신발이 된다.
-        // 실제 맵 파일처럼 화면 이름(name=)을 두어, 이름이 아니라 맵 id로 가리는지 본다
-        GameWorld camp = new GameWorld(MapLoader.parse("camp/camp08", List.of("name=캠프 08", "B1.")),
-                List.of(new PlayerProfile("부기", Mascot.SANGSANGBUGI)), MatchMode.SOLO,
-                ScriptedRandom.alwaysDrops(ItemType.TANK, ItemDrops.TANK_MAP_ID));
-        GameWorld patrit = new GameWorld(MapLoader.parse("patrit/patrit14", List.of("name=패트릿 14", "B1.")),
-                List.of(new PlayerProfile("부기", Mascot.SANGSANGBUGI)), MatchMode.SOLO,
-                ScriptedRandom.alwaysDrops(ItemType.TANK, ItemDrops.TANK_MAP_ID));
-
-        placeAndExplode(camp);
-        placeAndExplode(patrit);
-
-        assertEquals(Optional.of(new FieldItem(0, 0, ItemType.TANK)), camp.items().at(0, 0));
-        assertEquals(Optional.of(new FieldItem(0, 0, ItemType.SHOE)), patrit.items().at(0, 0));
     }
 
     @Test

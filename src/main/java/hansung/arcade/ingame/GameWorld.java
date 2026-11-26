@@ -55,7 +55,7 @@ import java.util.random.RandomGenerator;
  *   <li>물풍선 키를 막 누른 플레이어가 선 칸에 물풍선을 놓는다. 장갑이 있으면 선 칸이나 앞 칸의 물풍선을 던진다.
  *       아이템 키를 막 누른 플레이어는 아이템 칸의 액티브 아이템을 쓴다 ({@link ItemActions}).</li>
  *   <li>이번 틱에 터진 물줄기가 막혀 멈춘 블럭을 맞힌다. 한 틱에 여럿이 같은 블럭을 맞혀도 한 번만 맞는다.
- *       다 부서진 블럭 자리에는 {@link ItemDrops} 확률로 아이템이 나온다. 탱크는 캠프 08에서만 나온다.</li>
+ *       다 부서진 블럭 자리에는 {@link ItemDrops} 확률로 아이템이 나온다. 탱크는 무작위로 나오지 않는다.</li>
  *   <li>물줄기가 덮은 칸의 아이템은 사라진다. 블럭 자리는 물줄기가 들어가지 않은 칸이라 방금 나온 아이템은 남는다.</li>
  *   <li>물줄기 싸움을 가린다 ({@link BattleRules}). 물줄기가 덮은 칸에 선 플레이어를 가두고, 갇힌 사람에게 닿은 플레이어가
  *       같은 편이면 구하고(save) 상대면 터뜨리며(kill, 탈락), 갇힌 채 5초가 지난 사람을 탈락시킨다.</li>
@@ -158,7 +158,7 @@ public final class GameWorld {
         }
         this.map = map;
         this.balloonField = new BalloonField(map);
-        this.itemDrops = new ItemDrops(random, map.id());
+        this.itemDrops = new ItemDrops(random);
         this.boxPusher = new BoxPusher(map);
         this.itemActions = new ItemActions(map, balloonField);
         this.airDrop = new AirDrop(map, random);
@@ -197,7 +197,7 @@ public final class GameWorld {
         }
         this.map = map;
         this.balloonField = new BalloonField(map);
-        this.itemDrops = new ItemDrops(RandomGenerator.getDefault(), map.id());
+        this.itemDrops = new ItemDrops(RandomGenerator.getDefault());
         this.boxPusher = new BoxPusher(map);
         this.itemActions = new ItemActions(map, balloonField);
         this.airDrop = new AirDrop(map, RandomGenerator.getDefault());

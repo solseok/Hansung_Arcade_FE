@@ -1,6 +1,5 @@
 package hansung.arcade.ingame.item;
 
-import java.util.Map;
 import java.util.random.RandomGenerator;
 
 /**
@@ -31,34 +30,22 @@ public final class ScriptedRandom implements RandomGenerator {
         return of(NO_DROP);
     }
 
-    /**
-     * 캠프 08이 아닌 맵(테스트 맵 fixture/...)에서 블럭이 부서질 때마다 item이 나온다.
-     * 탱크는 그런 맵에서 나오지 않으므로 {@link #alwaysDrops(ItemType, String)}에 캠프 08을 넣는다
-     */
+    /** 블럭이 부서질 때마다 item이 나온다. "무엇인지" 난수는 {@link ItemDrops#WEIGHTS}에서 item 구간의 가운데 값이다 */
     public static ScriptedRandom alwaysDrops(ItemType item) {
-        return of(DROPS, pickFor(item, ItemDrops.WEIGHTS_WITHOUT_TANK));
+        return of(DROPS, pickFor(item));
     }
 
-    /** mapId 맵에서 블럭이 부서질 때마다 item이 나온다 */
-    public static ScriptedRandom alwaysDrops(ItemType item, String mapId) {
-        return of(DROPS, pickFor(item, mapId));
-    }
-
-    /** mapId 맵에서 {@link ItemDrops}가 item을 고르는 "무엇인지" 난수 [0, 1): 그 맵 비율({@link ItemDrops#weightsFor})에서 item 구간의 가운데 값 */
-    public static double pickFor(ItemType item, String mapId) {
-        return pickFor(item, ItemDrops.weightsFor(mapId));
-    }
-
-    private static double pickFor(ItemType item, Map<ItemType, Integer> weights) {
-        int total = weights.values().stream().mapToInt(Integer::intValue).sum();
+    /** {@link ItemDrops}가 item을 고르는 "무엇인지" 난수 [0, 1): 비율의 합(97)으로 나눈 item 구간의 가운데 값 */
+    public static double pickFor(ItemType item) {
+        int total = ItemDrops.WEIGHTS.values().stream().mapToInt(Integer::intValue).sum();
         int bound = 0;
-        for (var entry : weights.entrySet()) {
+        for (var entry : ItemDrops.WEIGHTS.entrySet()) {
             if (entry.getKey() == item) {
                 return (bound + entry.getValue() / 2.0) / total;
             }
             bound += entry.getValue();
         }
-        throw new IllegalArgumentException("이 맵의 블럭에서 나오지 않는 아이템입니다: " + item);
+        throw new IllegalArgumentException("블럭에서 무작위로 나오지 않는 아이템입니다: " + item);
     }
 
     @Override
