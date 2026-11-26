@@ -38,9 +38,12 @@ class VolumeTest {
     private volatile boolean capturing = true;
 
     @BeforeEach
-    void 앞_테스트의_소리를_비운다() throws Exception {
+    void 앞_테스트의_소리를_비우고_기본값으로() throws Exception {
         Sound.awaitEffects();
         Sound.stopAll();
+        Sound.setMuted(false);
+        Sound.setVolume(Sound.MAX_VOLUME);
+        Sound.useSettings(SoundSettings.inMemory());
         Sound.useBgmDevices(() -> new CapturingDevice(this));
     }
 
@@ -59,14 +62,8 @@ class VolumeTest {
     }
 
     @Test
-    void 처음_음량은_100퍼센트다() {
-        Sound.useSettings(SoundSettings.inMemory());
-        assertEquals(Sound.MAX_VOLUME, Sound.volume());
-        assertEquals(1.0, Sound.gain());
-    }
-
-    @Test
     void 음량은_제곱한_배율로_곱해_반이면_4분의_1이다() {
+        assertEquals(1.0, Sound.gain());
         assertEquals(1.0, Volume.gain(100));
         assertEquals(0.25, Volume.gain(50), 1e-9);
         assertEquals(0.0, Volume.gain(0));
@@ -249,7 +246,7 @@ class VolumeTest {
     }
 
     private static short sample(byte[] pcm, int i) {
-        return (short) ((pcm[i] & 0xFF) | (pcm[i + 1] << 8));
+        return Volume.read(pcm, i);
     }
 
     private static int peak(byte[] pcm) {
@@ -274,9 +271,7 @@ class VolumeTest {
         byte[] expected(double gain) {
             byte[] bytes = new byte[samples.length * 2];
             for (int i = 0; i < samples.length; i++) {
-                short scaled = Volume.apply(samples[i], gain);
-                bytes[i * 2] = (byte) scaled;
-                bytes[i * 2 + 1] = (byte) (scaled >> 8);
+                Volume.write(bytes, i * 2, Volume.apply(samples[i], gain));
             }
             return bytes;
         }

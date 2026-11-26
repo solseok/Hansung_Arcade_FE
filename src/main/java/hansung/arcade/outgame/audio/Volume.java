@@ -33,11 +33,19 @@ final class Volume {
         }
         byte[] out = new byte[pcm.length];
         for (int i = 0; i + 1 < pcm.length; i += 2) {
-            short sample = (short) ((pcm[i] & 0xFF) | (pcm[i + 1] << 8));
-            short scaled = apply(sample, gain);
-            out[i] = (byte) scaled;
-            out[i + 1] = (byte) (scaled >> 8);
+            write(out, i, apply(read(pcm, i), gain));
         }
         return out;
+    }
+
+    /** 리틀 엔디언 PCM의 i번째 바이트부터 16비트 소리 한 개 */
+    static short read(byte[] pcm, int i) {
+        return (short) ((pcm[i] & 0xFF) | (pcm[i + 1] << 8));
+    }
+
+    /** 16비트 소리 한 개를 리틀 엔디언으로 pcm의 i번째 바이트부터 적는다 */
+    static void write(byte[] pcm, int i, short sample) {
+        pcm[i] = (byte) sample;
+        pcm[i + 1] = (byte) (sample >> 8);
     }
 }

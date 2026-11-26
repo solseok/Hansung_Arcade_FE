@@ -6,6 +6,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.io.Reader;
 import java.io.Writer;
+import java.nio.charset.CharacterCodingException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
@@ -19,7 +20,8 @@ import java.util.Properties;
  * 파일은 사용자 홈의 ~/.hansung-arcade 폴더에 둔다 ({@link #defaultFile}).
  *
  * <p>파일을 읽거나 쓰지 못해도 게임은 그대로 한다. 읽지 못하면 비어 있는 것으로 보고, 쓰지 못하면 이번 실행 동안만 기억한다.
- * 같은 컴퓨터에 게임 창을 여럿 띄워도 서로 적은 값을 지우지 않도록, 적을 때마다 파일을 다시 읽어 바뀐 값만 고쳐 쓴다.</p>
+ * 같은 컴퓨터에 게임 창을 여럿 띄워도 서로 적은 값을 지우지 않도록, 적을 때마다 파일을 다시 읽어 바뀐 값만 고쳐 쓴다.
+ * 이때 파일이 있는데 읽지 못하면(잠깐 잠겼거나 권한이 없을 때) 다른 값을 지우지 않게 쓰지 않고 이번 실행 동안만 기억한다.</p>
  */
 public final class LocalProperties {
     private static final Logger log = LoggerFactory.getLogger(LocalProperties.class);
@@ -76,8 +78,8 @@ public final class LocalProperties {
         try {
             Path dir = file.toAbsolutePath().getParent();
             Files.createDirectories(dir);
-            // 다른 창이 적은 값을 지우지 않게 파일을 다시 읽어 이 값만 바꾼다
-            Properties merged = read(file, subject);
+            // 다른 창이 적은 값을 지우지 않게 파일을 다시 읽어 이 값만 바꾼다 (읽지 못하면 IOException으로 쓰지 않는다)
+            Properties merged = load(file);
             merged.setProperty(key, value);
             temp = Files.createTempFile(dir, file.getFileName().toString(), ".tmp");
             try (Writer out = Files.newBufferedWriter(temp, StandardCharsets.UTF_8)) {
@@ -101,14 +103,28 @@ public final class LocalProperties {
 
     /** 파일을 읽는다. 없거나 읽지 못하면 비어 있다 */
     private static Properties read(Path file, String subject) {
+        try {
+            return load(file);
+        } catch (IOException e) {
+            log.warn("{}: 파일을 읽지 못해 적어 둔 값이 없는 것으로 봅니다: {}", subject, file, e);
+            return new Properties();
+        }
+    }
+
+    /**
+     * 파일을 읽는다. 없거나 내용이 깨졌으면(잘못된 \\u 등) 비어 있다.
+     *
+     * @throws IOException 파일이 있는데 읽지 못하면
+     */
+    private static Properties load(Path file) throws IOException {
         Properties properties = new Properties();
         if (!Files.exists(file)) {
             return properties;
         }
         try (Reader in = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
             properties.load(in);
-        } catch (IOException | IllegalArgumentException e) {
-            log.warn("{}: 파일을 읽지 못해 적어 둔 값이 없는 것으로 봅니다: {}", subject, file, e);
+        } catch (IllegalArgumentException | CharacterCodingException e) {
+            log.warn("파일 내용이 깨져 적어 둔 값이 없는 것으로 봅니다: {}", file, e);
             properties.clear();
         }
         return properties;
