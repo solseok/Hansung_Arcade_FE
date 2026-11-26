@@ -12,6 +12,7 @@ import hansung.arcade.outgame.ui.OutgameFonts;
 import hansung.arcade.outgame.ui.OutgamePalette;
 import hansung.arcade.outgame.ui.RoundPanel;
 import hansung.arcade.outgame.ui.TextLabel;
+import hansung.arcade.outgame.ui.VolumeControl;
 import javax.swing.JButton;
 import javax.swing.JCheckBoxMenuItem;
 import javax.swing.JComponent;
@@ -117,6 +118,8 @@ public final class LobbyPanel extends JPanel implements Scene {
         JCheckBoxMenuItem mute = new JCheckBoxMenuItem("음소거", Sound.isMuted());
         mute.addActionListener(event -> Sound.setMuted(mute.isSelected()));
         popup.add(mute);
+        // 전체 음량: 슬라이더를 움직이면 지금 나오는 BGM과 이후 효과음에 바로 적용하고, 손을 떼면 이 컴퓨터에 저장한다
+        popup.add(new VolumeControl());
         menu.addActionListener(event -> popup.show(menu, 0, -popup.getPreferredSize().height));
         JButton exit = new GlossButton("나가기", GlossButton.BLUE);
         exit.addActionListener(event -> {

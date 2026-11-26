@@ -4,6 +4,7 @@ import javazoom.jl.decoder.Bitstream;
 import javazoom.jl.decoder.Decoder;
 import javazoom.jl.decoder.Header;
 import javazoom.jl.decoder.SampleBuffer;
+import javazoom.jl.player.AudioDevice;
 import javazoom.jl.player.Player;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,6 +26,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Supplier;
 
 /**
  * 소리. 곡은 resources/sounds/{이름}.mp3 이다.
@@ -35,6 +37,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * 여러 소리가 겹쳐 나게 한다. 물풍선이 터지는 중에 아이템을 먹어도 앞 소리가 끊기지 않는다.
  * 한꺼번에 {@value #MAX_EFFECTS}개보다 많이 울리고 있으면 새 소리는 내지 않는다.
  * Clip을 여는 일은 EDT를 막지 않도록 효과음 전용 데몬 스레드에서 한다.</p>
+ *
+ * <p>전체 음량({@link #setVolume}, 0~{@value #MAX_VOLUME}%)은 BGM과 효과음에 모두 곱한다. BGM은 MP3 프레임마다 음량을
+ * 새로 읽어 틀고 있는 곡에도 적용하고({@link VolumeAudioDevice}, 장치 버퍼만큼 약 0.5초 뒤에 들린다), 효과음은 낼 때의 음량으로 낸다.
+ * 음소거와는 따로라서 음소거를 풀면 정해 둔 음량으로 난다. 정한 음량은 이 컴퓨터에 저장해 다음에 켜도 쓴다({@link SoundSettings}).</p>
  */
 public final class Sound {
     private static final Logger LOG = LoggerFactory.getLogger(Sound.class);
@@ -42,6 +48,8 @@ public final class Sound {
     public static final String CLICK = "Bt_c_Pop";
     /** 한꺼번에 울릴 수 있는 효과음 수 */
     static final int MAX_EFFECTS = 16;
+    /** 전체 음량의 최댓값(%). 저장한 음량이 없으면 이 값으로 시작한다 */
+    public static final int MAX_VOLUME = 100;
 
     private static final Track BGM = new Track();
     private static final ExecutorService EFFECTS = Executors.newSingleThreadExecutor(task -> {
@@ -58,6 +66,12 @@ public final class Sound {
     /** 앱이 쓰는 기본 Clip */
     static final ClipSource SYSTEM_CLIPS = AudioSystem::getClip;
     private static volatile ClipSource clips = SYSTEM_CLIPS;
+    /** BGM을 틀 소리 장치를 만드는 곳. 테스트는 장치 대신 쓰인 소리를 받아 보는 것으로 바꿔 끼운다 */
+    private static volatile Supplier<AudioDevice> bgmDevices = VolumeAudioDevice::new;
+    /** 전체 음량(%). BGM은 프레임마다, 효과음은 낼 때마다 읽는다 */
+    private static volatile int volume = MAX_VOLUME;
+    /** 전체 음량을 저장할 곳. {@link #useSettings} 전에는 이번 실행 동안만 기억한다 */
+    private static volatile SoundSettings settings = SoundSettings.inMemory();
     private static boolean muted;
     private static String bgm;
 
@@ -139,6 +153,53 @@ public final class Sound {
         }
     }
 
+    /** 이 컴퓨터에 저장해 둔 전체 음량을 읽어 적용하고, 이후 {@link #saveVolume}이 여기에 적게 한다. 첫 곡을 틀기 전에 부른다 */
+    public static void useSettings(SoundSettings saved) {
+        settings = saved;
+        saved.volume().ifPresent(percent -> {
+            setVolume(percent);
+            LOG.info("저장해 둔 전체 음량 {}%로 소리를 냅니다.", percent);
+        });
+    }
+
+    /** 전체 음량(0~{@value #MAX_VOLUME}%) */
+    public static int volume() {
+        return volume;
+    }
+
+    /**
+     * 전체 음량을 바꾼다. 틀고 있는 BGM은 다음 프레임부터(장치 버퍼에 채워 둔 약 0.5초 뒤에 들린다),
+     * 효과음은 다음에 내는 소리부터 이 음량으로 난다.
+     * 음소거와는 따로라서 음소거 중에 바꾸면 음소거를 풀 때 이 음량으로 난다. 0%도 음소거로 치지 않는다.
+     * 파일에는 {@link #saveVolume}이 적는다 (슬라이더를 움직이는 동안 파일을 거듭 쓰지 않게).
+     *
+     * @throws IllegalArgumentException 0~100이 아니면
+     */
+    public static void setVolume(int percent) {
+        volume = requireVolume(percent);
+    }
+
+    /** 지금 전체 음량을 이 컴퓨터에 저장한다 ({@link #useSettings}로 정한 곳) */
+    public static void saveVolume() {
+        settings.saveVolume(volume);
+    }
+
+    /** 소리에 곱할 진폭 배율 (0~1, {@link Volume#gain}) */
+    static double gain() {
+        return Volume.gain(volume);
+    }
+
+    static boolean validVolume(int percent) {
+        return percent >= 0 && percent <= MAX_VOLUME;
+    }
+
+    static int requireVolume(int percent) {
+        if (!validVolume(percent)) {
+            throw new IllegalArgumentException("전체 음량은 0~" + MAX_VOLUME + "%입니다: " + percent);
+        }
+        return percent;
+    }
+
     public static synchronized void stopAll() {
         BGM.stop();
         stopEffects();
@@ -162,13 +223,15 @@ public final class Sound {
             return;
         }
         Optional<Pcm> pcm = pcm(key);
-        if (pcm.isEmpty() || PLAYING.size() >= MAX_EFFECTS) {
+        // 음량이 0%면 들리지 않으니 Clip을 열지 않는다
+        double gain = gain();
+        if (pcm.isEmpty() || gain <= 0 || PLAYING.size() >= MAX_EFFECTS) {
             return;
         }
         Clip clip = null;
         try {
             clip = clips.open();
-            start(clip, pcm.get());
+            start(clip, pcm.get(), gain);
         } catch (Exception | LinkageError exception) {
             if (clip != null) {
                 PLAYING.remove(clip);
@@ -180,8 +243,10 @@ public final class Sound {
         }
     }
 
-    private static void start(Clip clip, Pcm pcm) throws LineUnavailableException {
-        clip.open(pcm.format(), pcm.data(), 0, pcm.data().length);
+    /** 전체 음량 배율 gain을 곱한 소리로 Clip을 열어 튼다 */
+    private static void start(Clip clip, Pcm pcm, double gain) throws LineUnavailableException {
+        byte[] data = Volume.apply(pcm.data(), gain);
+        clip.open(pcm.format(), data, 0, data.length);
         AtomicBoolean finished = new AtomicBoolean();
         clip.addLineListener(event -> {
             if (event.getType() == LineEvent.Type.STOP && finished.compareAndSet(false, true)) {
@@ -219,6 +284,11 @@ public final class Sound {
 
     static void useClips(ClipSource source) {
         clips = source;
+    }
+
+    /** BGM을 틀 소리 장치. 곡을 (다시) 틀 때마다 새로 만든다 */
+    static void useBgmDevices(Supplier<AudioDevice> devices) {
+        bgmDevices = devices;
     }
 
     private static Optional<Pcm> pcm(String key) {
@@ -304,7 +374,7 @@ public final class Sound {
                         if (generation != token) {
                             return;
                         }
-                        next = new Player(new BufferedInputStream(raw));
+                        next = new Player(new BufferedInputStream(raw), bgmDevices.get());
                         player = next;
                     }
                     try {
