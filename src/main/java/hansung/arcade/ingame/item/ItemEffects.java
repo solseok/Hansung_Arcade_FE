@@ -22,7 +22,8 @@ public final class ItemEffects {
             case ROLLER_SHOE -> player.addSpeedLevel(1);
             case ULTRA -> maxOutWaterRange(player);
             case RED_DEVIL -> {
-                maxOutWaterRange(player);
+                // 붉은 악마: 이동속도를 캐릭터 최댓값까지 한 번에 올리고 물풍선을 밀 수 있게 한다 (속도 최대 + 신발)
+                maxOutSpeed(player);
                 gear.allowPushing();
             }
             case SHOE -> gear.allowPushing();
@@ -30,6 +31,11 @@ public final class ItemEffects {
             case TANK -> gear.boardTank();
             case NEEDLE, SHIELD, SPRING_SHOE -> gear.equip(item);
         }
+    }
+
+    /** 이동속도를 캐릭터의 최댓값까지 한 번에 올린다 */
+    private static void maxOutSpeed(Player player) {
+        player.addSpeedLevel(player.profile().mascot().speed().max());
     }
 
     /** 물줄기 길이를 캐릭터의 최댓값까지 한 번에 올린다 */
