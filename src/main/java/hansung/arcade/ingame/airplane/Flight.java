@@ -9,9 +9,10 @@ import java.util.List;
 /**
  * 맵 위를 가로지르는 비행기 하나. Swing에 의존하지 않는다.
  *
- * <p>위치 {@link #x()}는 비행기가 아이템을 떨어뜨리는 자리(날개 밑 배 가운데)의 맵 x 좌표(px)이고, 높이는 늘 {@link #CRUISE_Y}다.
- * 맵 한쪽 바깥 {@link #OFFSTAGE}px에서 들어와 {@link #SPEED}로 반대쪽 바깥 {@link #OFFSTAGE}px까지 날아가면 사라진다.
- * 떨어뜨리는 자리가 계획한 칸의 열 가운데를 지나는 순간 그 칸을 떨어뜨릴 차례가 된다.</p>
+ * <p>위치 ({@link #x()}, {@link #y()})는 비행기가 아이템을 떨어뜨리는 자리(날개 밑 배 가운데)의 맵 좌표(px)다.
+ * 비행기는 계획한 줄({@link FlightPlan#row()})을 따라 가로질러서, 높이는 그 줄의 위쪽 끝(칸 가운데보다 {@link #DROP_HEIGHT}px 위)으로
+ * 날아가는 동안 바뀌지 않는다. 맵 한쪽 바깥 {@link #OFFSTAGE}px에서 들어와 {@link #SPEED}로 반대쪽 바깥 {@link #OFFSTAGE}px까지
+ * 날아가면 사라진다. 떨어뜨리는 자리가 계획한 칸의 열 가운데를 지나는 순간 그 칸을 떨어뜨릴 차례가 된다.</p>
  */
 public final class Flight {
 
@@ -23,10 +24,10 @@ public final class Flight {
      */
     public static final int OFFSTAGE = 80;
     /**
-     * 떨어뜨리는 자리의 높이(맵 y, px). 비행기는 맵 맨 위를 가로질러서, 어느 줄을 고르든 아이템이 비행기 배에서 아래로 떨어진다.
-     * 그림은 이 자리가 위쪽 끝에서 44px 아래라서 맵 맨 위에 2px 띄워 놓인다.
+     * 떨어뜨리는 자리(비행기 배)가 지나가는 줄의 칸 가운데보다 이만큼 위를 난다(px). 줄의 위쪽 끝이다.
+     * 아이템은 여기서 그 줄의 칸까지 떨어진다 ({@link FallingItem}). 서버 {@code AirDrop.DROP_HEIGHT}와 같다.
      */
-    public static final int CRUISE_Y = 46;
+    public static final int DROP_HEIGHT = TileMap.TILE_SIZE / 2;
 
     private final FlightPlan plan;
     private final double endX;
@@ -35,8 +36,11 @@ public final class Flight {
     private double x;
     private double age;
 
-    /** @param map 가로지를 맵 */
+    /** @param map 가로지를 맵. plan의 줄이 이 맵에 있어야 한다 */
     Flight(FlightPlan plan, TileMap map) {
+        if (plan.row() >= map.rows()) {
+            throw new IllegalArgumentException("맵에 없는 줄입니다: %d (줄 %d개)".formatted(plan.row(), map.rows()));
+        }
         this.plan = plan;
         boolean eastward = plan.heading() == Direction.RIGHT;
         this.x = eastward ? -OFFSTAGE : map.pixelWidth() + OFFSTAGE;
@@ -73,6 +77,16 @@ public final class Flight {
     /** 떨어뜨리는 자리의 맵 x 좌표(px) */
     public double x() {
         return x;
+    }
+
+    /** 떨어뜨리는 자리의 맵 y 좌표(px). 지나가는 줄의 위쪽 끝(줄 × 40)이다 */
+    public double y() {
+        return TileMap.centerY(plan.row()) - DROP_HEIGHT;
+    }
+
+    /** 지나가는 줄. 이 비행기는 이 줄에만 떨어뜨린다 */
+    public int row() {
+        return plan.row();
     }
 
     /** 나는 방향. {@link Direction#RIGHT} 또는 {@link Direction#LEFT} */

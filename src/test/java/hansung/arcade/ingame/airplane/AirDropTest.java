@@ -38,7 +38,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * 비행기의 출현 시각, 떨어뜨릴 칸 고르기, 떨어뜨릴지 판단, 떨어진 아이템 놓기.
+ * 비행기의 출현 시각, 지나갈 줄과 떨어뜨릴 칸 고르기, 떨어뜨릴지 판단, 떨어진 아이템 놓기.
  *
  * <p>게임 상태 없이, 비행기가 보는 창구({@link DropZone})를 경기·물풍선·바닥 아이템·플레이어로 직접 만들어 넘긴다.
  * 맵은 15 x 13칸이고 1P는 (0, 12), 2P는 (14, 12)에서 시작한다.</p>
@@ -130,8 +130,9 @@ class AirDropTest {
         }
     }
 
+    /** 왼쪽에서 오른쪽으로 drops의 줄(모두 같은 줄)을 지나는 계획 */
     private static FlightPlan eastward(Drop... drops) {
-        return new FlightPlan(Direction.RIGHT, List.of(drops));
+        return new FlightPlan(Direction.RIGHT, drops[0].row(), List.of(drops));
     }
 
     @Test
@@ -194,9 +195,10 @@ class AirDropTest {
     void 비행기는_맵_바깥에서_들어와_반대쪽_바깥까지_날면_사라진다() {
         Field field = new Field(map(), 1);
         AirDrop airDrop = new AirDrop(field.map, ScriptedRandom.of(0.5));
-        airDrop.launch(new FlightPlan(Direction.LEFT, List.of()));
+        airDrop.launch(new FlightPlan(Direction.LEFT, 6, List.of()));
         Flight flight = airDrop.flights().get(0);
         assertEquals(field.map.pixelWidth() + Flight.OFFSTAGE, flight.x());
+        assertEquals(240, flight.y(), "6번 줄의 위쪽 끝");
 
         run(field, airDrop, 1);
         assertEquals(field.map.pixelWidth() + Flight.OFFSTAGE - Flight.SPEED * TICK, flight.x(), 1e-9);
@@ -207,7 +209,31 @@ class AirDropTest {
         run(field, airDrop, 1);
         assertTrue(flight.isGone());
         assertEquals(-Flight.OFFSTAGE, flight.x());
+        assertEquals(240, flight.y(), "날아가는 동안 높이는 그대로다");
         assertTrue(airDrop.flights().isEmpty());
+    }
+
+    @Test
+    void 비행기는_지나가는_줄의_위쪽_끝을_난다() {
+        Field field = new Field(map(), 1);
+        AirDrop airDrop = new AirDrop(field.map, ScriptedRandom.of(0.5));
+        airDrop.launch(new FlightPlan(Direction.RIGHT, 0, List.of()));
+        airDrop.launch(new FlightPlan(Direction.LEFT, 9, List.of()));
+        airDrop.launch(new FlightPlan(Direction.RIGHT, 12, List.of()));
+
+        // 떨어뜨리는 자리는 줄 × 40, 칸 가운데보다 20px 위
+        assertEquals(List.of(0.0, 360.0, 480.0), airDrop.flights().stream().map(Flight::y).toList());
+        assertEquals(List.of(0, 9, 12), airDrop.flights().stream().map(Flight::row).toList());
+        assertEquals(TileMap.centerY(9) - Flight.DROP_HEIGHT, airDrop.flights().get(1).y());
+    }
+
+    @Test
+    void 맵에_없는_줄로는_띄우지_않는다() {
+        AirDrop airDrop = new AirDrop(map(), ScriptedRandom.of(0.5));
+
+        assertThrows(IllegalArgumentException.class, () -> airDrop.launch(new FlightPlan(Direction.RIGHT, 13, List.of())));
+        assertTrue(airDrop.flights().isEmpty());
+        assertEquals(0, airDrop.launches());
     }
 
     @Test
@@ -228,8 +254,8 @@ class AirDropTest {
     void 오른쪽에서_올_때는_오른쪽_칸부터_떨어뜨린다() {
         Field field = new Field(map(), 1);
         AirDrop airDrop = new AirDrop(field.map, ScriptedRandom.of(0.5));
-        airDrop.launch(new FlightPlan(Direction.LEFT,
-                List.of(new Drop(2, 3, ItemType.BUBBLE), new Drop(11, 8, ItemType.FLUID))));
+        airDrop.launch(new FlightPlan(Direction.LEFT, 8,
+                List.of(new Drop(2, 8, ItemType.BUBBLE), new Drop(11, 8, ItemType.FLUID))));
 
         flyUntilJustBefore(field, airDrop, 11);
         run(field, airDrop, 1);
@@ -239,7 +265,7 @@ class AirDropTest {
         flyUntilJustBefore(field, airDrop, 2);
         assertTrue(airDrop.fallingItems().isEmpty(), "물약 병은 이미 칸에 닿았다");
         run(field, airDrop, 1);
-        assertEquals(List.of(new Drop(2, 3, ItemType.BUBBLE)),
+        assertEquals(List.of(new Drop(2, 8, ItemType.BUBBLE)),
                 airDrop.fallingItems().stream().map(FallingItem::drop).toList());
     }
 
@@ -250,7 +276,7 @@ class AirDropTest {
         assertEquals(0, airDrop.launches());
         assertEquals(0, airDrop.releases());
 
-        airDrop.launch(eastward(new Drop(3, 5, ItemType.SHOE), new Drop(9, 6, ItemType.BUBBLE)));
+        airDrop.launch(eastward(new Drop(3, 5, ItemType.SHOE), new Drop(9, 5, ItemType.BUBBLE)));
         while (!airDrop.flights().isEmpty() || !airDrop.fallingItems().isEmpty()) {
             run(field, airDrop, 1);
         }
@@ -269,35 +295,60 @@ class AirDropTest {
         run(field, airDrop, 1);
 
         FallingItem item = airDrop.fallingItems().get(0);
-        // 맨 아랫줄 가운데(520 - 20)까지 비행기 높이 46에서 떨어진다
-        assertEquals(500 - Flight.CRUISE_Y, item.startHeight());
+        // 맨 아랫줄이어도 비행기가 그 줄 위쪽 끝(480)을 지나므로 칸 가운데(500)까지 20px만 떨어진다.
+        // 떨어뜨린 틱에 이미 1/60초만큼 내려왔다
+        assertEquals(20 - FallingItem.GRAVITY * TICK * TICK / 2, item.height(), 1e-9);
+        int ticks = 1;
         while (!item.hasLanded()) {
             assertEquals(Optional.empty(), field.items.at(7, 12));
             run(field, airDrop, 1);
+            ticks++;
         }
+        assertEquals(8, ticks, "떨어뜨린 틱부터 8틱(0.133초)째에 닿는다");
 
         assertEquals(Optional.of(ItemType.FLUID), field.items.at(7, 12).map(i -> i.type()));
         assertTrue(airDrop.fallingItems().isEmpty());
     }
 
     @Test
-    void 맨_아랫줄까지_떨어지는_데_0_6초쯤_걸린다() {
-        FallingItem item = new FallingItem(new Drop(0, 12, ItemType.BUBBLE), 500 - Flight.CRUISE_Y);
-        int ticks = 0;
-        while (!item.hasLanded()) {
-            item.advance(TICK);
-            ticks++;
+    void 어느_줄이든_20px을_떨어져_0_129초_뒤에_닿는다() {
+        // 서버가 ITEM_DROPPED에 실어 보내는 fallMs와 같다
+        assertEquals(129, Math.round(FallingItem.FALL_SECONDS * 1000));
+        for (int row : List.of(0, 6, 12)) {
+            Field field = new Field(map(), 1);
+            AirDrop airDrop = new AirDrop(field.map, ScriptedRandom.of(0.5));
+            airDrop.launch(eastward(new Drop(7, row, ItemType.BUBBLE)));
+            flyUntilJustBefore(field, airDrop, 7);
+            run(field, airDrop, 1);
+            FallingItem item = airDrop.fallingItems().get(0);
+            // 떨어뜨린 틱에 이미 1/60초만큼 내려왔다
+            assertEquals(20 - FallingItem.GRAVITY * TICK * TICK / 2, item.height(), 1e-9, "줄 " + row);
+
+            int ticks = 1;
+            while (!item.hasLanded()) {
+                run(field, airDrop, 1);
+                ticks++;
+            }
+            // 7틱(0.117초)에는 16.3px만 떨어졌고 8틱(0.133초)에 닿는다
+            assertEquals(8, ticks, "줄 " + row);
+            assertEquals(List.of(new Drop(7, row, ItemType.BUBBLE)), field.placed());
         }
-        // 루트(2 x 454 / 2400) = 0.615초
-        assertEquals(37, ticks);
     }
 
     @Test
-    void 비행기_배보다_위인_칸도_조금은_떨어진다() {
-        FallingItem item = new FallingItem(new Drop(0, 0, ItemType.BUBBLE), 20 - Flight.CRUISE_Y);
+    void 서버가_떨어뜨린_아이템도_같은_높이에서_떨어져_같은_때_닿는다() {
+        Field field = new Field(map(), 1);
+        AirDrop airDrop = new AirDrop(field.map, ScriptedRandom.of(0.5));
+        airDrop.followServer();
+        List<Drop> landed = new ArrayList<>();
+        FallingItem item = airDrop.dropFromServer(4, 11, ItemType.SHOE, () -> landed.add(new Drop(4, 11, ItemType.SHOE)));
 
-        assertEquals(FallingItem.MIN_HEIGHT, item.startHeight());
-        assertFalse(item.hasLanded());
+        assertEquals(FallingItem.START_HEIGHT, item.height());
+        run(field, airDrop, 7);
+        assertTrue(landed.isEmpty());
+        run(field, airDrop, 1);
+        assertEquals(List.of(new Drop(4, 11, ItemType.SHOE)), landed);
+        assertTrue(airDrop.fallingItems().isEmpty());
     }
 
     @Test
@@ -428,51 +479,102 @@ class AirDropTest {
     }
 
     @Test
-    void 나올_때마다_난수로_서로_다른_두_칸과_떨어뜨릴_아이템을_고른다() {
+    void 나올_때마다_난수로_줄을_먼저_고르고_그_줄에서_서로_다른_두_열과_아이템을_고른다() {
         TileMap map = map();
-        // 칸 0번(0, 0), 아이템 0번(물풍선), 남은 칸 중 0번 → 이미 고른 0번을 건너뛰어 (1, 0), 아이템 2번(물약 병)
-        FlightPlan first = new AirDrop(map, ScriptedRandom.of(0.0, 0.0, 0.0, 0.99)).plan();
-        assertEquals(List.of(new Drop(0, 0, ItemType.BUBBLE), new Drop(1, 0, ItemType.FLUID)), first.drops());
+        // 줄 · 열 · 아이템 · 열 · 아이템 차례. 13줄의 12번, 15열의 0번, 아이템 0번(물풍선),
+        // 남은 14열의 7번 → 이미 고른 0번을 건너뛰어 8번, 아이템 1번(신발)
+        FlightPlan first = new AirDrop(map, ScriptedRandom.of(0.9999, 0.0, 0.0, 0.5, 0.5)).plan();
+        assertEquals(12, first.row());
+        assertEquals(List.of(new Drop(0, 12, ItemType.BUBBLE), new Drop(8, 12, ItemType.SHOE)), first.drops());
 
-        // 같은 난수가 나와도 두 번째는 다른 칸이다: 195칸의 97번 (7, 6), 194칸의 97번 → 98번 (8, 6)
+        // 처음 난수는 줄에만 쓴다: 13줄의 3번, 15열의 3번, 물약 병, 남은 14열의 13번 → 14번, 물풍선
+        FlightPlan second = new AirDrop(map, ScriptedRandom.of(0.27, 0.2, 0.9, 0.99, 0.0)).plan();
+        assertEquals(3, second.row());
+        assertEquals(List.of(new Drop(3, 3, ItemType.FLUID), new Drop(14, 3, ItemType.BUBBLE)), second.drops());
+
+        // 같은 난수가 나와도 두 번째는 다른 열이다: 13줄의 6번, 15열의 7번, 14열의 7번 → 8번
         FlightPlan same = new AirDrop(map, ScriptedRandom.of(0.5)).plan();
         assertEquals(List.of(new Drop(7, 6, ItemType.SHOE), new Drop(8, 6, ItemType.SHOE)), same.drops());
 
-        // 가장 큰 난수로는 마지막 칸들을 고른다
-        FlightPlan last = new AirDrop(map, ScriptedRandom.of(0.9999)).plan();
-        assertEquals(List.of(new Drop(14, 12, ItemType.FLUID), new Drop(13, 12, ItemType.FLUID)), last.drops());
+        // 가장 작은·큰 난수로는 맨 윗줄 첫 열들·맨 아랫줄 마지막 열들을 고른다
+        assertEquals(List.of(new Drop(0, 0, ItemType.BUBBLE), new Drop(1, 0, ItemType.BUBBLE)),
+                new AirDrop(map, ScriptedRandom.of(0.0)).plan().drops());
+        assertEquals(List.of(new Drop(14, 12, ItemType.FLUID), new Drop(13, 12, ItemType.FLUID)),
+                new AirDrop(map, ScriptedRandom.of(0.9999)).plan().drops());
     }
 
     @Test
-    void 많이_고르면_모든_칸과_세_가지_아이템이_고르게_나온다() {
+    void 많이_고르면_모든_줄과_칸과_세_가지_아이템이_고르게_나오고_두_칸은_늘_지나가는_줄에_있다() {
         TileMap map = map();
         AirDrop airDrop = new AirDrop(map, new SplittableRandom(20261115));
+        int plans = 5000;
+        int[] perRow = new int[ROWS];
         Set<List<Integer>> cells = new HashSet<>();
         Set<ItemType> items = EnumSet.noneOf(ItemType.class);
-        for (int i = 0; i < 5000; i++) {
-            List<Drop> drops = airDrop.plan().drops();
+        for (int i = 0; i < plans; i++) {
+            FlightPlan plan = airDrop.plan();
+            List<Drop> drops = plan.drops();
             assertEquals(2, drops.size());
-            assertNotEquals(List.of(drops.get(0).col(), drops.get(0).row()), List.of(drops.get(1).col(), drops.get(1).row()));
+            assertNotEquals(drops.get(0).col(), drops.get(1).col());
+            perRow[plan.row()]++;
             for (Drop drop : drops) {
+                assertEquals(plan.row(), drop.row(), "비행기가 지나가는 줄에만 떨어뜨린다");
                 assertTrue(map.isInside(drop.col(), drop.row()));
                 cells.add(List.of(drop.col(), drop.row()));
                 items.add(drop.item());
             }
         }
 
+        // 줄마다 평균 5000 / 13 = 385번쯤
+        for (int row = 0; row < ROWS; row++) {
+            assertTrue(perRow[row] > 300 && perRow[row] < 470, "줄 %d: %d번".formatted(row, perRow[row]));
+        }
         assertEquals(COLUMNS * ROWS, cells.size());
         assertEquals(EnumSet.of(ItemType.BUBBLE, ItemType.SHOE, ItemType.FLUID), items);
     }
 
     @Test
-    void 계획은_가로_방향_서로_다른_칸_두_개까지만_받는다() {
+    void 혼자_도는_경기의_비행기는_고른_줄을_따라_날며_그_줄에만_떨어뜨린다() {
+        Field field = new Field(map(), 1);
+        // 3번 줄, (3, 3) 물풍선, (14, 3) 신발
+        AirDrop airDrop = new AirDrop(field.map, ScriptedRandom.of(0.27, 0.2, 0.0, 0.99, 0.5));
+        while (airDrop.flights().isEmpty()) {
+            run(field, airDrop, 1);
+        }
+        Flight flight = airDrop.flights().get(0);
+        assertEquals(119, field.match.clock().remainingSeconds());
+        assertEquals(3, flight.row());
+        assertEquals(120, flight.y());
+
+        List<Drop> released = new ArrayList<>();
+        while (!airDrop.flights().isEmpty() || !airDrop.fallingItems().isEmpty()) {
+            run(field, airDrop, 1);
+            assertEquals(120, flight.y(), "날아가는 동안 줄을 바꾸지 않는다");
+            for (FallingItem item : airDrop.fallingItems()) {
+                if (!released.contains(item.drop())) {
+                    released.add(item.drop());
+                }
+            }
+        }
+
+        assertEquals(List.of(new Drop(3, 3, ItemType.BUBBLE), new Drop(14, 3, ItemType.SHOE)), released);
+        assertEquals(released, field.placed());
+    }
+
+    @Test
+    void 계획은_가로_방향으로_지나가는_줄의_서로_다른_칸_두_개까지만_받는다() {
         Drop a = new Drop(1, 1, ItemType.BUBBLE);
         Drop b = new Drop(2, 1, ItemType.SHOE);
+        assertEquals(List.of(a, b), new FlightPlan(Direction.RIGHT, 1, List.of(a, b)).drops());
 
-        assertThrows(IllegalArgumentException.class, () -> new FlightPlan(Direction.UP, List.of(a)));
+        assertThrows(IllegalArgumentException.class, () -> new FlightPlan(Direction.UP, 1, List.of(a)));
         assertThrows(IllegalArgumentException.class,
-                () -> new FlightPlan(Direction.RIGHT, List.of(a, b, new Drop(3, 1, ItemType.FLUID))));
+                () -> new FlightPlan(Direction.RIGHT, 1, List.of(a, b, new Drop(3, 1, ItemType.FLUID))));
         assertThrows(IllegalArgumentException.class,
-                () -> new FlightPlan(Direction.RIGHT, List.of(a, new Drop(1, 1, ItemType.SHOE))));
+                () -> new FlightPlan(Direction.RIGHT, 1, List.of(a, new Drop(1, 1, ItemType.SHOE))));
+        assertThrows(IllegalArgumentException.class,
+                () -> new FlightPlan(Direction.RIGHT, 1, List.of(a, new Drop(5, 2, ItemType.SHOE))), "다른 줄의 칸");
+        assertThrows(IllegalArgumentException.class, () -> new FlightPlan(Direction.RIGHT, 2, List.of(a)), "다른 줄의 칸");
+        assertThrows(IllegalArgumentException.class, () -> new FlightPlan(Direction.LEFT, -1, List.of()));
     }
 }

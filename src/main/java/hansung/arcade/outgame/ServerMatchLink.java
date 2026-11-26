@@ -96,7 +96,8 @@ public final class ServerMatchLink implements ServerOutbox {
                             Integer heldCount) {
     }
 
-    private record AirplaneAppeared(int airplaneId, String heading) {
+    /** @param row 지나가는 줄. 보내지 않는 옛 서버에서는 0 (기본 ObjectMapper는 없는 int 필드를 0으로 채운다) */
+    private record AirplaneAppeared(int airplaneId, String heading, int row) {
     }
 
     private record ItemDropped(int airplaneId, int itemId, int col, int row, String item, long fallMs) {
@@ -152,7 +153,7 @@ public final class ServerMatchLink implements ServerOutbox {
                 b.heldItem(), count(b.heldCount())));
         onPush(ITEM_USED, ItemUsed.class, (r, b) -> r.itemUsed(b.playerId(), b.item(), b.durationMs(), b.col(), b.row(),
                 b.heldItem(), count(b.heldCount())));
-        onPush(AIRPLANE_APPEARED, AirplaneAppeared.class, (r, b) -> r.airplaneAppeared(b.airplaneId(), b.heading()));
+        onPush(AIRPLANE_APPEARED, AirplaneAppeared.class, (r, b) -> r.airplaneAppeared(b.airplaneId(), b.heading(), b.row()));
         onPush(ITEM_DROPPED, ItemDropped.class,
                 (r, b) -> r.itemDropped(b.airplaneId(), b.itemId(), b.col(), b.row(), b.item(), b.fallMs()));
         onPush(ITEM_SCATTERED, ItemScattered.class,

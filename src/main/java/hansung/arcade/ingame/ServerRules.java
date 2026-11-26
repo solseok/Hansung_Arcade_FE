@@ -37,8 +37,8 @@ import java.util.Objects;
  *       놓인 물풍선은 스스로 터지지 않고 BALLOON_EXPLODED가 오면 그 길이만큼 물줄기를 그리고, 블럭은 서버가 알려 준 모습으로 바꾼다.</li>
  *   <li>아이템이 있는 칸에 들어서면 ITEM_PICKUP을 한 번 보낸다. 먹는 것·능력치·손에 든 쓰는 아이템은 ITEM_TAKEN을 따른다.
  *       블럭에서 나온 아이템과 터진 사람이 흩뿌린 아이템도 서버가 알려 준 칸에 놓는다.</li>
- *   <li>비행기는 AIRPLANE_APPEARED가 오면 띄우고(스스로 출현 시각을 세지 않는다), 아이템은 ITEM_DROPPED로 받은 것만
- *       떨어뜨려 닿으면 놓는다. 떨어지는 사이 그 아이템이 물줄기에 사라지거나 누가 먹으면 놓지 않는다.</li>
+ *   <li>비행기는 AIRPLANE_APPEARED가 오면 알려 준 줄(row)을 따라 띄우고(스스로 출현 시각을 세지 않는다),
+ *       아이템은 ITEM_DROPPED로 받은 것만 떨어뜨려 닿으면 놓는다. 떨어지는 사이 그 아이템이 물줄기에 사라지거나 누가 먹으면 놓지 않는다.</li>
  *   <li>아이템 키를 누르면 손에 든 쓰는 아이템을 ITEM_USE로 보낸다. 바늘·보호막·스프링 신발의 효과와 남은 개수는
  *       ITEM_USED를 따른다.</li>
  *   <li>상자에 막힌 채 {@link BoxPusher#PUSH_SECONDS}초를 밀면 상자를 옮기지 않고 멈춘 자리(MOVE)와 BOX_PUSH를 보낸다.
@@ -477,14 +477,22 @@ public final class ServerRules {
         }
     }
 
-    /** AIRPLANE_APPEARED. 비행기가 heading(RIGHT·LEFT) 쪽으로 맵 위를 가로지르기 시작했다. 떨어뜨릴 칸은 서버가 따로 알린다 */
-    public void airplaneAppeared(int airplaneId, String heading) {
+    /**
+     * AIRPLANE_APPEARED. 비행기가 heading(RIGHT·LEFT) 쪽으로 맵의 row 줄을 따라 가로지르기 시작했다. 그 줄의 위쪽 끝 높이로 그린다.
+     * 떨어뜨릴 칸(모두 그 줄)은 서버가 ITEM_DROPPED로 따로 알린다. row를 보내지 않는 옛 서버에서는 0으로 읽혀
+     * 비행기만 맨 윗줄로 띄운다.
+     */
+    public void airplaneAppeared(int airplaneId, String heading, int row) {
         Direction direction = direction(heading, null);
         if (direction == null || !direction.isHorizontal()) {
             log.warn("모르는 비행기 방향이라 띄우지 않습니다: {}", heading);
             return;
         }
-        world.airDrop().launch(new FlightPlan(direction, List.of()));
+        if (row < 0 || row >= world.map().rows()) {
+            log.warn("맵에 없는 줄이라 비행기를 띄우지 않습니다: {}", row);
+            return;
+        }
+        world.airDrop().launch(new FlightPlan(direction, row, List.of()));
         world.addSound(GameSound.AIRPLANE);
     }
 
@@ -492,7 +500,8 @@ public final class ServerRules {
      * ITEM_DROPPED. 비행기가 (col, row) 칸에 아이템을 떨어뜨렸다. 떨어지는 모습을 보인 뒤 닿으면 놓는다.
      * 서버는 이때부터 아이템이 있다고 보므로, 떨어지는 사이 removedItems·ITEM_TAKEN으로 없어지면 놓지 않는다.
      *
-     * @param fallMs 쓰지 않는다. 떨어지는 높이가 서버와 같은 식이라 같은 때 닿는다
+     * @param fallMs 쓰지 않는다. 서버는 늘 129ms(비행기 배에서 칸까지 20px)를 보내고,
+     *               {@link FallingItem}도 같은 높이·가속도로 떨어져 같은 때 닿는다
      */
     public void itemDropped(int airplaneId, int itemId, int col, int row, String item, long fallMs) {
         ItemType type = itemType(item);
