@@ -25,7 +25,7 @@ import static hansung.arcade.outgame.ui.WaitingRoomLayout.SLOT_WIDTH;
 /**
  * 대기실 자리 하나 (95x137): 그림 칸 95 + 닉네임 줄 20 + 상태 줄 17.
  * 그림 칸에는 팀 색으로 고정색을 다시 칠한 캐릭터(1배)를 그리고, 상태 줄에는 방장·준비(불 켜짐·꺼짐)를 보여 준다.
- * 빈자리는 그림 칸만 어둡게, 정원 밖 닫힌 자리는 X를 그린다.
+ * 빈자리는 그림 칸만 어둡게, 닫힌 자리(방장이 닫았거나 맵 최대 인원 밖)는 X를 그린다.
  */
 public final class PlayerSlot extends JComponent {
 

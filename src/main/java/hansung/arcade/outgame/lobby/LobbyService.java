@@ -1,6 +1,7 @@
 package hansung.arcade.outgame.lobby;
 
 import java.util.List;
+import java.util.stream.IntStream;
 
 /**
  * 방 목록과 입장·퇴장·방 설정 바꾸기. seats는 이 컴퓨터에서 함께 들어가는 사람 수(1P면 1, 2P면 2)다.
@@ -52,6 +53,29 @@ public interface LobbyService {
      * @throws IllegalArgumentException 모르는 맵 이름이면
      */
     Room updateRoom(String map, Room.Status status);
+
+    /**
+     * 들어가 있는 방의 닫힌 자리 번호 (작은 순서). 방장이 닫은 자리와 맵 최대 인원 밖 자리를 모두 넣는다.
+     * 기본은 정원 이상인 자리다 (자리를 하나씩 열고 닫지 못하는 서비스).
+     *
+     * @param room 지금 방
+     */
+    default List<Integer> closedSlots(Room room) {
+        return IntStream.range(Math.max(0, room.capacity()), RoomState.SLOTS).boxed().toList();
+    }
+
+    /**
+     * 방장이 빈 자리를 열거나 닫는다. 닫으면 정원이 하나 줄고 열면 하나 는다. 이미 그 상태면 아무것도 바꾸지 않는다.
+     *
+     * @param slot 0~7
+     * @param open 열면 true, 닫으면 false
+     * @return 바뀐 방 (온라인은 ROOM_STATE가 오기 전 모습)
+     * @throws IllegalStateException 방장이 아니거나, 사람이 있는 자리를 닫거나, 정원이 2명보다 줄거나,
+     *                               맵 최대 인원 밖 자리를 열려 하면. 메시지를 그대로 보여 줄 수 있다
+     */
+    default Room setSlotOpen(int slot, boolean open) {
+        throw new IllegalStateException("자리를 열고 닫을 수 없는 방입니다.");
+    }
 
     void leave();
 }
