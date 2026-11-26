@@ -4,6 +4,7 @@ import hansung.arcade.core.game.SceneManager;
 import hansung.arcade.core.ui.RunOnEdt;
 import hansung.arcade.outgame.lobby.LobbyPanel;
 import hansung.arcade.outgame.lobby.MockLobbyService;
+import hansung.arcade.outgame.lobby.SampleRooms;
 import hansung.arcade.outgame.lobby.WaitingRoomPanel;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -29,7 +30,7 @@ class ButtonLookTest {
 
     @Test
     void 로그인_로비_대기실의_버튼은_기본_테두리와_바탕을_그리지_않는다() {
-        OutgameSession session = new OutgameSession(new MockLobbyService());
+        OutgameSession session = new OutgameSession(new MockLobbyService(SampleRooms.rooms()));
         SceneManager scenes = new SceneManager(screen -> { });
         LoginPanel login = new LoginPanel(session, scenes);
         session.login("부기");

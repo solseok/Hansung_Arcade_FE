@@ -43,7 +43,7 @@ class WaitingRoomSlotTest {
 
     @BeforeEach
     void setUp() {
-        service = new MockLobbyService();
+        service = new MockLobbyService(SampleRooms.rooms());
         session = new OutgameSession(service);
         session.login("부기");
         scenes = new SceneManager(screen -> { });

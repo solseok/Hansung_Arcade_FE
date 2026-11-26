@@ -44,6 +44,9 @@ class GamePropertiesTest {
 
         // 시작 맵은 자주 바뀌므로 값 대신 "테마/맵" 형식만 확인한다
         assertTrue(properties.get("game.start-map").matches("[a-z]+/[a-z0-9]+"), properties.get("game.start-map"));
-        assertEquals("offline", properties.get("network.mode"));
+        assertEquals("online", properties.get("network.mode"));
+        // .env·환경 변수가 없으면 이 컴퓨터에 띄운 서버로 간다
+        assertEquals("localhost", properties.get("network.host"));
+        assertEquals(9000, properties.getInt("network.port"));
     }
 }

@@ -3,6 +3,7 @@ package hansung.arcade.outgame;
 import hansung.arcade.core.game.SceneManager;
 import hansung.arcade.network.ServerException;
 import hansung.arcade.outgame.lobby.MockLobbyService;
+import hansung.arcade.outgame.lobby.SampleRooms;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -50,7 +51,7 @@ class LoginServerFlowTest {
     @BeforeEach
     void setUp() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
-            session = new OutgameSession(new MockLobbyService());
+            session = new OutgameSession(new MockLobbyService(SampleRooms.rooms()));
             SceneManager scenes = new SceneManager(displayed::set);
             scenes.register("lobby", () -> lobbyView);
             login = new LoginPanel(session, scenes, service);

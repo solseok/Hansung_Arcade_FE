@@ -30,7 +30,7 @@ class WaitingRoomTwoPlayerTest {
     private WaitingRoomPanel waiting;
 
     private void enter(String... nicknames) {
-        session = new OutgameSession(new MockLobbyService());
+        session = new OutgameSession(new MockLobbyService(SampleRooms.rooms()));
         session.login(nicknames);
         SceneManager scenes = new SceneManager(screen -> { });
         waiting = new WaitingRoomPanel(session, scenes, (parent, current) -> Optional.empty());

@@ -4,6 +4,7 @@ import hansung.arcade.core.game.SceneManager;
 import hansung.arcade.core.ui.RunOnEdt;
 import hansung.arcade.outgame.lobby.LobbyPanel;
 import hansung.arcade.outgame.lobby.MockLobbyService;
+import hansung.arcade.outgame.lobby.SampleRooms;
 import hansung.arcade.outgame.lobby.WaitingRoomPanel;
 import hansung.arcade.outgame.ui.OutgameFonts;
 import org.junit.jupiter.api.Test;
@@ -47,7 +48,7 @@ class FontRoleTest {
 
     @Test
     void 로그인_화면() {
-        OutgameSession session = new OutgameSession(new MockLobbyService());
+        OutgameSession session = new OutgameSession(new MockLobbyService(SampleRooms.rooms()));
         LoginPanel login = new LoginPanel(session, new SceneManager(screen -> { }));
 
         assertRoles(login);
@@ -55,7 +56,7 @@ class FontRoleTest {
 
     @Test
     void 로비() {
-        OutgameSession session = new OutgameSession(new MockLobbyService());
+        OutgameSession session = new OutgameSession(new MockLobbyService(SampleRooms.rooms()));
         session.login("부기");
         SceneManager scenes = new SceneManager(screen -> { });
         LobbyPanel lobby = new LobbyPanel(session, scenes);
@@ -68,7 +69,7 @@ class FontRoleTest {
 
     @Test
     void 대기실() {
-        OutgameSession session = new OutgameSession(new MockLobbyService());
+        OutgameSession session = new OutgameSession(new MockLobbyService(SampleRooms.rooms()));
         session.login("부기");
         SceneManager scenes = new SceneManager(screen -> { });
         WaitingRoomPanel waiting = new WaitingRoomPanel(session, scenes);
@@ -80,7 +81,7 @@ class FontRoleTest {
 
     @Test
     void 바꿀_수_있는_문구는_도트가_아니라_매끈하게_그린다() {
-        OutgameSession session = new OutgameSession(new MockLobbyService());
+        OutgameSession session = new OutgameSession(new MockLobbyService(SampleRooms.rooms()));
         session.login("부기");
         SceneManager scenes = new SceneManager(screen -> { });
         LobbyPanel lobby = new LobbyPanel(session, scenes);

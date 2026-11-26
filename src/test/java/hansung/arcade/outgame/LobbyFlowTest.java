@@ -3,6 +3,7 @@ package hansung.arcade.outgame;
 import hansung.arcade.core.game.SceneManager;
 import hansung.arcade.outgame.lobby.LobbyPanel;
 import hansung.arcade.outgame.lobby.MockLobbyService;
+import hansung.arcade.outgame.lobby.SampleRooms;
 import hansung.arcade.outgame.lobby.Room;
 import hansung.arcade.outgame.lobby.WaitingRoomPanel;
 import org.junit.jupiter.api.Test;
@@ -24,7 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class LobbyFlowTest {
     @Test
     void 준비검사와_맵_게임상태_복귀동기화() {
-        MockLobbyService service = new MockLobbyService();
+        MockLobbyService service = new MockLobbyService(SampleRooms.rooms());
         OutgameSession session = new OutgameSession(service);
         assertFalse(session.canStart());
         // 1P와 목업 참가자 한 명이 있는 방
@@ -53,7 +54,7 @@ class LobbyFlowTest {
 
     @Test
     void 입장제한과_중복요청_퇴장시_인원복구() {
-        MockLobbyService service = new MockLobbyService();
+        MockLobbyService service = new MockLobbyService(SampleRooms.rooms());
         assertThrows(IllegalStateException.class, () -> service.join(4));
         assertThrows(IllegalStateException.class, () -> service.join(3));
         assertThrows(IllegalStateException.class, () -> service.join(999));
@@ -71,7 +72,7 @@ class LobbyFlowTest {
     @Test
     void 통합목록_페이지_채팅_입장_퇴장_재입장() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
-            MockLobbyService service = new MockLobbyService();
+            MockLobbyService service = new MockLobbyService(SampleRooms.rooms());
             OutgameSession session = new OutgameSession(service);
             session.login("부기");
             AtomicReference<JComponent> displayed = new AtomicReference<>();
@@ -124,7 +125,7 @@ class LobbyFlowTest {
     @Test
     void 로그인검사와_방장시작_결과복귀시_방유지() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
-            MockLobbyService service = new MockLobbyService();
+            MockLobbyService service = new MockLobbyService(SampleRooms.rooms());
             OutgameSession session = new OutgameSession(service);
             assertThrows(IllegalArgumentException.class, () -> session.login(" "));
             session.login("전솔");

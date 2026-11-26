@@ -46,14 +46,14 @@ class RoomOrderTest {
 
     @Test
     void 로비에_대기중_게임중_탭이_없다() {
-        LobbyPanel lobby = lobby(new MockLobbyService());
+        LobbyPanel lobby = lobby(new MockLobbyService(SampleRooms.rooms()));
 
         assertTrue(SwingTree.all(lobby, JTabbedPane.class).isEmpty());
     }
 
     @Test
     void 쪽을_넘겨_봐도_대기_방이_모두_게임_중인_방보다_앞에_있다() {
-        MockLobbyService service = new MockLobbyService();
+        MockLobbyService service = new MockLobbyService(SampleRooms.rooms());
         LobbyPanel lobby = lobby(service);
 
         List<Room> shown = new ArrayList<>();

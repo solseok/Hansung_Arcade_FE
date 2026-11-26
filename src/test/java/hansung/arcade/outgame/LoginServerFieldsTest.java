@@ -5,6 +5,7 @@ import hansung.arcade.core.game.GameProperties;
 import hansung.arcade.core.game.SceneManager;
 import hansung.arcade.core.ui.RunOnEdt;
 import hansung.arcade.outgame.lobby.MockLobbyService;
+import hansung.arcade.outgame.lobby.SampleRooms;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
@@ -29,7 +30,7 @@ class LoginServerFieldsTest {
 
     @Test
     void 로그인_화면에_서버주소와_포트_입력이_없다() {
-        LoginPanel login = new LoginPanel(new OutgameSession(new MockLobbyService()), new SceneManager(screen -> { }));
+        LoginPanel login = new LoginPanel(new OutgameSession(new MockLobbyService(SampleRooms.rooms())), new SceneManager(screen -> { }));
 
         List<String> texts = SwingTree.texts(login);
         assertTrue(texts.stream().noneMatch(text -> text.contains("서버") || text.contains("포트")), texts.toString());
@@ -47,7 +48,7 @@ class LoginServerFieldsTest {
         assertFalse(methods.contains("host"), "OutgameSession.host()가 남아 있습니다.");
         assertFalse(methods.contains("port"), "OutgameSession.port()가 남아 있습니다.");
 
-        OutgameSession session = new OutgameSession(new MockLobbyService());
+        OutgameSession session = new OutgameSession(new MockLobbyService(SampleRooms.rooms()));
         session.login("부기");
         assertEquals(List.of("부기"), session.nicknames());
         assertEquals("부기", session.nickname());
