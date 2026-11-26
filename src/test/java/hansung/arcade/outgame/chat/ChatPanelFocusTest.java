@@ -116,7 +116,8 @@ class ChatPanelFocusTest {
                 window.setVisible(true);
                 window.toFront();
                 OutgameSession user = new OutgameSession(new MockLobbyService());
-                user.login("부기");
+                // 혼자서는 시작할 수 없으므로 1P·2P 둘로 들어간다
+                user.login("부기", "꾸꾸");
                 // GameWindow처럼 화면을 갈아 끼우고 화면 자체에 포커스를 달라고 한다
                 SceneManager manager = new SceneManager(screen -> {
                     window.setContentPane(screen);
@@ -136,7 +137,7 @@ class ChatPanelFocusTest {
             waitUntil(() -> frame.get().isFocused());
             assumeTrue(frame.get().isFocused(), "창이 포커스를 받지 못해 확인하지 않습니다.");
 
-            // 혼자 만든 방이라 방장이고 바로 시작할 수 있다
+            // 1P·2P 둘이 만든 방이라 방장이고 바로 시작할 수 있다
             SwingUtilities.invokeAndWait(() -> scenes.get().show("waiting", session.get().create("방", 2)));
             JTextField input = find(waiting.get(), JTextField.class);
             waitUntil(() -> focusOwner() == input);

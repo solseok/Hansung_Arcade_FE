@@ -240,7 +240,9 @@ class WaitingRoomPanelTest {
     /** 16. ?는 랜덤 캐릭터 선택이다. 고르면 ?가 골라진 채로 남고, 실제 캐릭터는 게임을 시작할 때 정한다 */
     @Test
     void 물음표는_랜덤_캐릭터_선택이다() {
-        enterAsHost(8);
+        // 혼자서는 시작할 수 없으므로 목업 참가자 한 명과 함께 연다
+        scenes.show("waiting", service.create("8인 테스트", 8, 2));
+        layout();
         JToggleButton random = SwingTree.named(waiting, "character-random", JToggleButton.class);
 
         random.doClick();
@@ -383,6 +385,7 @@ class WaitingRoomPanelTest {
 
     @Test
     void 랜덤_맵은_보라_액자_안에_물음표_카드로_보여_주고_시작할_때_맵을_정한다() {
+        session.login("부기", "꾸꾸");
         enterAsHost(8);
         pick.set(GameMaps.RANDOM_ID);
 

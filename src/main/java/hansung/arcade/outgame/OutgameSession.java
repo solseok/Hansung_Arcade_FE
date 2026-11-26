@@ -32,6 +32,8 @@ import java.util.Random;
 public final class OutgameSession {
     /** 이 컴퓨터에서 함께 할 수 있는 최대 인원 */
     public static final int MAX_LOCAL_PLAYERS = 2;
+    /** 게임을 시작할 수 있는 가장 적은 인원. 같은 컴퓨터의 1P·2P는 두 명으로 센다 (서버 NOT_ENOUGH_PLAYERS와 같다) */
+    public static final int MIN_PLAYERS_TO_START = 2;
     /** 2P가 고른 적이 없을 때의 캐릭터. 1P와 같은 상상부기다 */
     public static final Mascot DEFAULT_CHARACTER_2P = Mascot.DEFAULT;
     /** 2P가 고른 적이 없을 때의 팀. 1P(빨강)와 구별되게 파랑이다 */
@@ -203,6 +205,38 @@ public final class OutgameSession {
     }
 
     public Room room() { return room; }
+
+    /** slot번 자리가 닫혀 있는지 (X). 방장이 닫았거나 맵 최대 인원 밖 자리다. 방 밖이면 false */
+    public boolean isSlotClosed(int slot) {
+        if (room == null) {
+            return false;
+        }
+        if (roomState != null) {
+            return roomState.isClosed(slot);
+        }
+        return service.closedSlots(room).contains(slot);
+    }
+
+    /**
+     * 방장이 자리를 누르면 빈 자리는 닫고(X, 정원 -1) 닫힌 자리는 연다(정원 +1).
+     * 방장이 아니거나, 대기 중이 아니거나, 사람이 있는 자리면 아무것도 하지 않는다.
+     * 온라인이면 CHANGE_SLOT을 보내고, 바뀐 자리는 뒤따르는 ROOM_STATE로 그린다.
+     *
+     * @return 열거나 닫기를 했으면 true, 아무것도 하지 않았으면 false
+     * @throws IllegalStateException 맵 최대 인원 밖 자리를 열거나 정원이 2명보다 줄어 거절되면. 메시지를 그대로 보여 줄 수 있다
+     */
+    public boolean toggleSlot(int slot) {
+        if (room == null || !isHost() || room.status() != Room.Status.WAITING
+                || seats().stream().anyMatch(seat -> seat.slot() == slot)) {
+            return false;
+        }
+        Room changed = service.setSlotOpen(slot, isSlotClosed(slot));
+        if (online == null) {
+            room = changed;
+        }
+        return true;
+    }
+
     /** 1P가 고른 캐릭터. 랜덤을 골랐으면 마지막으로 고른 캐릭터이고, 실제 캐릭터는 {@link #start}에서 정한다 */
     public Mascot character() { return character(0); }
     public boolean randomCharacter() { return randomCharacter(0); }
@@ -464,12 +498,12 @@ public final class OutgameSession {
         return playerId <= localPlayers() ? ready : participantReady.getOrDefault(playerId, false);
     }
 
-    /** 방장이고, 방이 대기 중이고, 다른 참가자가 모두 준비했으면 시작할 수 있다 */
+    /** 방장이고, 방이 대기 중이고, 2명 이상이고, 다른 참가자가 모두 준비했으면 시작할 수 있다 */
     public boolean canStart() {
         if (roomState != null) {
             return isHost()
                     && room.status() == Room.Status.WAITING
-                    && roomState.seats().size() >= 2
+                    && roomState.seats().size() >= MIN_PLAYERS_TO_START
                     && roomState.seats().stream()
                     .filter(seat -> !playerIds.contains(seat.playerId()))
                     .allMatch(RoomState.Seat::ready);
@@ -477,6 +511,7 @@ public final class OutgameSession {
         return room != null
                 && service.isHost()
                 && room.status() == Room.Status.WAITING
+                && room.players() >= MIN_PLAYERS_TO_START
                 && participantReady.values().stream().allMatch(Boolean::booleanValue);
     }
 
@@ -496,7 +531,8 @@ public final class OutgameSession {
      * 게임을 시작한다. 방은 게임 중이 되고, 랜덤 맵·랜덤 캐릭터는 여기서 실제 맵·캐릭터로 정한다.
      * 온라인이면 서버에 GAME_START만 보내고 null을 돌려준다. 맵·캐릭터는 서버가 정해 GAME_STARTED로 알린다({@link #startInfo}).
      *
-     * @throws IllegalStateException 방장이 아니거나 시작할 수 없으면. 온라인이면 서버 문구(모두 준비 등)
+     * @throws IllegalStateException 방장이 아니거나 시작할 수 없으면. 혼자면 "2명 이상 모여야 시작할 수 있습니다."이고,
+     *                               온라인이면 서버 문구(인원·모두 준비·팀 등)
      */
     public GameStartInfo start() {
         if (!service.isHost()) {
@@ -505,6 +541,9 @@ public final class OutgameSession {
         if (online != null) {
             online.startGame();
             return null;
+        }
+        if (room == null || room.players() < MIN_PLAYERS_TO_START) {
+            throw new IllegalStateException("2명 이상 모여야 시작할 수 있습니다.");
         }
         if (!canStart()) {
             throw new IllegalStateException("모든 참가자가 준비해야 시작할 수 있습니다.");

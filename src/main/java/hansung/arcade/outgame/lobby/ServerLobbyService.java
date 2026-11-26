@@ -22,7 +22,7 @@ import java.util.function.Consumer;
  * 로비·대기실을 서버의 방 API로 한다 (온라인 모드). 목업({@link MockLobbyService}) 자리에 끼운다.
  *
  * <ul>
- *   <li>요청 → 응답: ROOM_LIST, ROOM_CREATE, ROOM_JOIN, ROOM_QUICK_JOIN, ROOM_LEAVE, CHANGE_MAP, GAME_START.
+ *   <li>요청 → 응답: ROOM_LIST, ROOM_CREATE, ROOM_JOIN, ROOM_QUICK_JOIN, ROOM_LEAVE, CHANGE_MAP, CHANGE_SLOT, GAME_START.
  *       응답을 기다리는 동안 부른 스레드(EDT)가 멈춘다. 서버가 거절하면 서버 문구를 담은 {@link IllegalStateException}을 던진다</li>
  *   <li>응답 없음: SELECT_CHARACTER, SELECT_TEAM, READY, CHAT, LOADED. 실패는 ERROR 푸시로 온다</li>
  *   <li>푸시: LOBBY_ROOMS(방 목록 전체), ROOM_STATE, CHAT_MESSAGE, GAME_STARTED, GAME_OVER, ERROR.
@@ -41,6 +41,7 @@ public final class ServerLobbyService implements LobbyService {
     public static final String ROOM_QUICK_JOIN = "ROOM_QUICK_JOIN";
     public static final String ROOM_LEAVE = "ROOM_LEAVE";
     public static final String CHANGE_MAP = "CHANGE_MAP";
+    public static final String CHANGE_SLOT = "CHANGE_SLOT";
     public static final String GAME_START = "GAME_START";
     public static final String SELECT_CHARACTER = "SELECT_CHARACTER";
     public static final String SELECT_TEAM = "SELECT_TEAM";
@@ -286,6 +287,31 @@ public final class ServerLobbyService implements LobbyService {
         if (!mapId.equals(state.mapId())) {
             call(CHANGE_MAP, Map.of("mapId", mapId));
         }
+        return state.room();
+    }
+
+    /** 서버가 알려 준 지금 방의 닫힌 자리. 방 밖이면 정원으로 셈한다 */
+    @Override
+    public List<Integer> closedSlots(Room room) {
+        RoomState current = state;
+        if (current == null || current.room().number() != room.number()) {
+            return LobbyService.super.closedSlots(room);
+        }
+        return current.closedSlots();
+    }
+
+    /**
+     * 방장이 빈 자리를 열거나 닫는다 (CHANGE_SLOT). 규칙 검사는 서버가 하고, 바뀐 자리·정원은 뒤따르는 ROOM_STATE로 온다.
+     *
+     * @return 지금 들고 있는 방 (ROOM_STATE가 오기 전 모습)
+     * @throws IllegalStateException 방 밖이거나 서버가 거절하면. 서버 문구를 담는다
+     */
+    @Override
+    public Room setSlotOpen(int slot, boolean open) {
+        if (state == null) {
+            throw new IllegalStateException("방에 있지 않습니다.");
+        }
+        call(CHANGE_SLOT, Map.of("slot", slot, "open", open));
         return state.room();
     }
 
