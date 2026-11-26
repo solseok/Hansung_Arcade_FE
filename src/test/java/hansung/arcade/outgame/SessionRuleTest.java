@@ -53,7 +53,8 @@ class SessionRuleTest {
     @Test
     void 랜덤_맵과_랜덤_캐릭터는_시작할_때마다_무작위로_정한다() {
         OutgameSession session = new OutgameSession(new MockLobbyService());
-        session.login("부기");
+        // 혼자서는 시작할 수 없으므로 한 컴퓨터 2인으로 연다
+        session.login("부기", "꾸꾸");
         session.create("랜덤 방", 8);
         session.selectMap(GameMaps.RANDOM_ID);
         session.selectRandomCharacter();

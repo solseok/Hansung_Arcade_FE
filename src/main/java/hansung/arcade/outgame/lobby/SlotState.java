@@ -14,9 +14,9 @@ public enum SlotState {
     READY("준   비", OutgamePalette.STATUS_READY),
     /** 아직 준비하지 않음: 불이 꺼진 흐린 남색 "준   비" */
     WAITING("준   비", OutgamePalette.STATUS_IDLE),
-    /** 정원 안 빈자리 */
+    /** 열린 빈자리. 방장이 누르면 닫힌다 */
     EMPTY("", OutgamePalette.STATUS_IDLE),
-    /** 정원 밖 닫힌 자리 (X) */
+    /** 닫힌 자리 (X). 방장이 닫았거나 맵 최대 인원 밖이다. 방장이 누르면 열린다 */
     CLOSED("", OutgamePalette.STATUS_IDLE);
 
     private final String label;

@@ -135,6 +135,11 @@ public final class WaterBalloon {
         return !serverTimed && age >= FUSE_SECONDS - TIME_SLACK;
     }
 
+    /** 언제 터질지·어디로 움직일지 서버가 정하는 물풍선인지 (온라인). 그러면 이 컴퓨터의 규칙으로는 터뜨리지 않는다 */
+    boolean isServerTimed() {
+        return serverTimed;
+    }
+
     /** 이 칸에서 몸이 완전히 빠져나간 플레이어는 다시 들어오지 못한다 */
     void forgetLeavers(List<Player> players) {
         for (Player player : players) {
@@ -176,6 +181,14 @@ public final class WaterBalloon {
     void stopSliding() {
         slideDirection = null;
         slideOffset = 0;
+    }
+
+    /** (col, row) 칸 가운데에 바로 세운다. 미끄러지거나 날던 것은 멈춘다. 서버가 알린 칸으로 맞출 때 쓴다 */
+    void settleAt(int col, int row) {
+        stopSliding();
+        flight = null;
+        this.col = col;
+        this.row = row;
     }
 
     /** 지금 땅 위 위치에서 direction 쪽 (toCol, toRow) 칸으로 seconds초 동안 날아간다 */

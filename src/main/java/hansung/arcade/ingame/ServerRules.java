@@ -26,6 +26,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * 온라인 경기의 규칙: 판정은 서버가 하고, 이 컴퓨터는 서버가 알려 준 대로 그린다. Swing과 네트워크에 의존하지 않는다.
@@ -39,6 +40,10 @@ import java.util.Objects;
  *       블럭에서 나온 아이템과 터진 사람이 흩뿌린 아이템도 서버가 알려 준 칸에 놓는다.</li>
  *   <li>비행기는 AIRPLANE_APPEARED가 오면 알려 준 줄(row)을 따라 띄우고(스스로 출현 시각을 세지 않는다),
  *       아이템은 ITEM_DROPPED로 받은 것만 떨어뜨려 닿으면 놓는다. 떨어지는 사이 그 아이템이 물줄기에 사라지거나 누가 먹으면 놓지 않는다.</li>
+ *   <li>장갑을 먹었으면 물풍선 키로 선 칸이나 앞 칸의 물풍선을 던질 수 있을 때 놓지 않고 BALLOON_THROW를 보내고, 신발·빨간 악마를
+ *       먹었으면 막힌 앞 칸의 물풍선을 찰 수 있을 때 BALLOON_KICK을 보낸다. 물풍선은 BALLOON_THROWN이 오면 날리고, BALLOON_KICKED가
+ *       오면 미끄러뜨리다 BALLOON_STOPPED가 알린 칸에 세운다. 가시·물줄기 칸에 닿아도 스스로 터지지 않고 서버의 BALLOON_EXPLODED를 따른다.
+ *       어떤 능력을 얻었는지는 ITEM_TAKEN의 item으로 안다.</li>
  *   <li>아이템 키를 누르면 손에 든 쓰는 아이템을 ITEM_USE로 보낸다. 바늘·보호막·스프링 신발의 효과와 남은 개수는
  *       ITEM_USED를 따른다.</li>
  *   <li>상자에 막힌 채 {@link BoxPusher#PUSH_SECONDS}초를 밀면 상자를 옮기지 않고 멈춘 자리(MOVE)와 BOX_PUSH를 보낸다.
@@ -48,8 +53,7 @@ import java.util.Objects;
  *       시작 연출("Ready... Start!")도 끝나도록 연출을 늦춰 시작하고, 그때부터 조작과 경기 시계가 움직인다.</li>
  * </ul>
  *
- * <p>서버가 아직 다루지 않는 것(물풍선 밀기·던지기)은 온라인에서 하지 않는다.
- * 서버 메시지는 게임 루프와 같은 스레드(EDT)에서 넣는다.</p>
+ * <p>서버 메시지는 게임 루프와 같은 스레드(EDT)에서 넣는다.</p>
  */
 public final class ServerRules {
 
@@ -59,6 +63,10 @@ public final class ServerRules {
     static final double SNAP_DISTANCE = TileMap.TILE_SIZE * 2.0;
     /** 다른 플레이어를 따라가는 빠르기. 그 플레이어가 걷는 빠르기의 이만큼 배라 늦게 받은 만큼 따라잡는다 */
     static final double CATCH_UP = 1.5;
+    /** PLAYER_POPPED의 reason: 상대가 닿아 터뜨렸다. 나머지는 TIMEOUT(갇힌 채 시간이 다 됨)이다 */
+    static final String POPPED_BY_TOUCH = "TOUCH";
+    /** 찼는데 서버가 차지 않았으면(BALLOON_KICKED가 안 옴) 계속 밀 때 이만큼 뒤 다시 보낸다 ({@link BoxPusher#PUSH_SECONDS}와 같다) */
+    static final double KICK_RETRY_SECONDS = 0.25;
     private static final double EPSILON = 1e-6;
     private static final Logger log = LoggerFactory.getLogger(ServerRules.class);
 
@@ -91,6 +99,10 @@ public final class ServerRules {
         }
     }
 
+    /** 마지막으로 차 달라고 보낸 물풍선과 방향, 보낸 때({@link GameWorld#elapsedSeconds()}) */
+    private record KickSent(WaterBalloon balloon, Direction direction, double at) {
+    }
+
     /** 마지막으로 보낸 MOVE */
     private record Sent(double x, double y, Direction facing, boolean moving) {
         boolean same(Player player) {
@@ -115,6 +127,8 @@ public final class ServerRules {
     private final Map<Integer, Integer> pickupRequests = new HashMap<>();
     /** 비행기에서 떨어지는 중인 아이템 (서버 itemId → 떨어지는 아이템). 닿으면 맵에 놓는다 */
     private final Map<Integer, FallingItem> fallingItems = new HashMap<>();
+    /** 이 컴퓨터의 플레이어 번호 → 마지막으로 보낸 BALLOON_KICK. 미는 동안 틱마다 다시 보내지 않게 한다 */
+    private final Map<Integer, KickSent> kicksSent = new HashMap<>();
     private double sinceMove;
     private boolean roundBegun;
     /** ROUND_BEGIN 뒤 경기가 시작될 때까지 남은 시간(초) */
@@ -193,10 +207,14 @@ public final class ServerRules {
     }
 
     /**
-     * player가 선 칸에 물풍선을 놓아 달라고 서버에 보낸다. 이 컴퓨터가 보기에도 놓을 수 없는 칸이면 보내지 않는다.
+     * player가 물풍선 키를 눌렀다. 장갑으로 던질 물풍선이 있으면 던져 달라고({@link #requestThrow}), 없으면 선 칸에 물풍선을 놓아 달라고
+     * 서버에 보낸다 (혼자 하는 경기의 {@code ItemActions.pressBalloonKey}와 같은 순서). 이 컴퓨터가 보기에도 놓을 수 없는 칸이면 보내지 않는다.
      * 서버는 마지막 MOVE의 칸을 보고 판정하므로 지금 자리를 먼저 보낸다.
      */
     void requestBalloon(Player player) {
+        if (requestThrow(player)) {
+            return;
+        }
         int col = player.col();
         int row = player.row();
         TileMap map = world.map();
@@ -208,6 +226,53 @@ public final class ServerRules {
         }
         sendMove(player);
         outbox.placeBalloon(player.id(), col, row);
+    }
+
+    /**
+     * 장갑을 먹은 player가 선 칸이나 앞 칸의 물풍선을 던질 수 있으면 던져 달라고 서버에 보낸다 (BALLOON_THROW).
+     * 물풍선은 서버가 BALLOON_THROWN을 알린 뒤에 날린다. 서버는 마지막 MOVE의 칸·방향으로 판정하므로 지금 자리를 먼저 보낸다.
+     *
+     * @return 보냈는지. 보내지 않았으면 물풍선을 놓는다
+     */
+    private boolean requestThrow(Player player) {
+        PlayerGear gear = world.gear(player);
+        if (!isPlaying() || !gear.canThrowBalloons() || player.state() != PlayerState.NORMAL || gear.isAirborne()) {
+            return false;
+        }
+        Direction facing = player.facing();
+        Optional<WaterBalloon> balloon = world.itemActions().balloonToThrow(player)
+                .filter(found -> world.balloonField().canThrow(found, facing));
+        if (balloon.isEmpty()) {
+            return false;
+        }
+        sendMove(player);
+        outbox.throwBalloon(player.id(), balloon.get().col(), balloon.get().row(), facing);
+        return true;
+    }
+
+    /**
+     * player가 move 쪽으로 걸으려다 막혔다. 신발·빨간 악마로 찰 수 있는 물풍선이 앞에 있으면 차 달라고 서버에 보낸다 (BALLOON_KICK).
+     * 물풍선은 서버가 BALLOON_KICKED를 알린 뒤에 미끄러뜨린다. 서버는 마지막 MOVE가 멈춘 채 미는 쪽을 볼 때만 차므로 지금 자리를 먼저 보낸다.
+     * 같은 물풍선을 같은 쪽으로 계속 밀면 {@link #KICK_RETRY_SECONDS}초마다 한 번만 보낸다.
+     */
+    void requestKick(Player player, Direction move) {
+        Optional<WaterBalloon> target = !isPlaying() ? Optional.empty()
+                : world.itemActions().balloonToKick(player, world.gear(player), move)
+                        .filter(balloon -> world.balloonField().canKick(balloon, move));
+        if (target.isEmpty()) {
+            kicksSent.remove(player.id());
+            return;
+        }
+        WaterBalloon balloon = target.get();
+        KickSent last = kicksSent.get(player.id());
+        double now = world.elapsedSeconds();
+        if (last != null && last.balloon() == balloon && last.direction() == move
+                && now - last.at() < KICK_RETRY_SECONDS - EPSILON) {
+            return;
+        }
+        sendMove(player);
+        outbox.kickBalloon(player.id(), balloon.col(), balloon.row(), move);
+        kicksSent.put(player.id(), new KickSent(balloon, move, now));
     }
 
     /**
@@ -335,6 +400,46 @@ public final class ServerRules {
     }
 
     /**
+     * BALLOON_THROWN. 물풍선이 날아올라 flightMs 뒤 (toCol, toRow)에 내려앉는다. 나는 동안은 어느 칸에도 없다.
+     * 내려앉은 뒤 더 날아갈지·터질지는 서버가 다시 알린다.
+     *
+     * @param playerId 던진 사람. 내려앉을 칸이 막혀 더 날아가는 것이면 null (그때는 소리를 내지 않는다)
+     */
+    public void balloonThrown(int balloonId, Long playerId, int col, int row, int toCol, int toRow, String direction,
+                              long flightMs) {
+        WaterBalloon balloon = balloons.get(balloonId);
+        Direction heading = direction(direction, null);
+        if (balloon == null || heading == null) {
+            log.warn("모르는 물풍선이거나 방향이라 던지지 않습니다: #{} {}", balloonId, direction);
+            return;
+        }
+        world.balloonField().throwFromServer(balloon, heading, toCol, toRow, Math.max(0, flightMs) / 1000.0);
+        if (playerId != null) {
+            world.addSound(GameSound.KICK);
+        }
+    }
+
+    /** BALLOON_KICKED. 물풍선이 (col, row)에서 direction 쪽으로 미끄러지기 시작했다. 멈추면 BALLOON_STOPPED가 온다 */
+    public void balloonKicked(int balloonId, long playerId, int col, int row, String direction) {
+        WaterBalloon balloon = balloons.get(balloonId);
+        Direction heading = direction(direction, null);
+        if (balloon == null || heading == null) {
+            log.warn("모르는 물풍선이거나 방향이라 차지 않습니다: #{} {}", balloonId, direction);
+            return;
+        }
+        world.balloonField().kickFromServer(balloon, col, row, heading, world.players());
+        world.addSound(GameSound.KICK);
+    }
+
+    /** BALLOON_STOPPED. 미끄러지던 물풍선이 (col, row) 칸 가운데에 멈췄다 */
+    public void balloonStopped(int balloonId, int col, int row) {
+        WaterBalloon balloon = balloons.get(balloonId);
+        if (balloon != null) {
+            world.balloonField().stopFromServer(balloon, col, row, world.players());
+        }
+    }
+
+    /**
      * BALLOON_EXPLODED. 물풍선들이 한꺼번에(연쇄 포함) 터졌다. 물줄기를 그리고, 블럭을 서버가 알려 준 모습으로 바꾸고,
      * 물줄기에 사라진 아이템을 없앤 뒤 부서진 블럭에서 나온 아이템을 놓는다.
      */
@@ -369,18 +474,21 @@ public final class ServerRules {
         }
     }
 
-    /** PLAYER_RESCUED. 같은 편이 닿아 구했다 */
+    /** PLAYER_RESCUED. 같은 편이 닿아 구했다. 갇혀 있던 사람이 풀리면 구출 소리를 낸다 */
     public void playerRescued(long playerId, long rescuerId) {
         Player player = world.player((int) playerId);
-        if (player != null) {
-            player.escape();
+        if (player != null && player.escape()) {
+            world.addSound(GameSound.RESCUE);
         }
         if (world.player((int) rescuerId) != null) {
             world.match().recordSave((int) rescuerId);
         }
     }
 
-    /** PLAYER_POPPED. 상대가 닿았거나(TOUCH) 시간이 다 돼(TIMEOUT) 터졌다. killerId는 TIMEOUT이면 null */
+    /**
+     * PLAYER_POPPED. 상대가 닿았거나(TOUCH) 시간이 다 돼(TIMEOUT) 터졌다. killerId는 TIMEOUT이면 null.
+     * 탈락 소리를 내고, 상대가 닿아 터뜨렸으면 터뜨리는 소리도 낸다.
+     */
     public void playerPopped(long playerId, Long killerId, String reason) {
         Player player = world.player((int) playerId);
         if (player != null && player.isAlive()) {
@@ -388,6 +496,9 @@ public final class ServerRules {
             // 서버는 터진 사람의 손을 비우고 따로 알리지 않는다
             world.gear(player).holdFromServer(null, 0);
             world.addSound(GameSound.DIE);
+            if (POPPED_BY_TOUCH.equals(reason)) {
+                world.addSound(GameSound.POP);
+            }
         }
         if (killerId != null && world.player(killerId.intValue()) != null) {
             world.match().recordKill(killerId.intValue());
@@ -408,6 +519,11 @@ public final class ServerRules {
         }
         if (stats != null) {
             player.syncStats(stats.balloons(), stats.waterRange(), stats.speedLevel());
+        }
+        ItemType taken = itemType(item);
+        if (taken != null) {
+            // 신발·빨간 악마·장갑으로 생긴 능력(차기·던지기)은 stats에 없으므로 먹은 아이템으로 얻는다
+            world.gear(player).gainFromServer(taken);
         }
         world.gear(player).holdFromServer(itemType(heldItem), heldCount);
         if (world.localPlayers().contains(player)) {

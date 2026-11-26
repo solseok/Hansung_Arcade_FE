@@ -34,6 +34,7 @@ import javax.swing.Timer;
 import java.awt.AlphaComposite;
 import java.awt.BasicStroke;
 import java.awt.Color;
+import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.Graphics;
@@ -57,6 +58,8 @@ import static hansung.arcade.outgame.ui.WaitingRoomLayout.*;
  * 대기실 (참고 화면 구조). 왼쪽 판에 방 제목줄·8자리·채팅, 오른쪽 판에 캐릭터·팀·맵·준비를 둔다.
  * 자리마다 캐릭터를 팀 색으로 다시 칠해 보여 주고, 상태 줄에 방장·준비(불 켜짐·꺼짐)를 보여 준다.
  * 방장은 맵 선택(랜덤 포함)과 게임 시작을, 손님은 준비를 한다. 맵은 최대 인원(빌리지 6명)에 맞춰 정원이 바뀐다.
+ * 방장이 빈 자리를 누르면 X로 닫혀 정원이 하나 줄고, 닫힌 자리를 누르면 다시 열려 정원이 하나 는다.
+ * 방장의 게임 시작 버튼은 대기 중이면 늘 누를 수 있고, 혼자이거나 준비하지 않은 사람이 있으면 까닭을 채팅창에 알리고 시작 불가 소리를 낸다.
  * 모든 구역의 위치·크기는 {@link WaitingRoomLayout}, 색은 {@link OutgamePalette}를 따른다.
  *
  * <p>2P(한 컴퓨터 2인)로 들어오면 캐릭터 칸과 팀 칸을 왼쪽 클릭하면 1P의 것을, 오른쪽 클릭(맥의 Ctrl+클릭 포함)하면 2P의 것을 고른다.
@@ -80,6 +83,8 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
     static final String SELECT_SOUND = "Bt_c_SelectAIBattleChar";
     /** 팀·자동 준비를 고를 때 나는 소리 */
     static final String CHECK_SOUND = "Bt_c_CheckBox";
+    /** 시작할 수 없거나 자리를 바꿀 수 없을 때 나는 소리 */
+    static final String NOT_ABLE_SOUND = "Bt_c_GameStartNotAble";
     /** 게임을 시작할 때 대기실이 검게 어두워지는 시간(ms). 크아 플레이 영상에서 잰 값 */
     static final int START_FADE_MS = 300;
     /** 1P·2P 표시 색 */
@@ -250,6 +255,17 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
         place(left, LEFT_PANEL, grid, SLOT_GRID);
         for (int i = 0; i < SLOTS; i++) {
             slots[i] = new PlayerSlot(i);
+            int slot = i;
+            PlayerSlot view = slots[i];
+            // 버튼처럼 왼쪽 버튼을 자리 안에서 뗄 때 연다·닫는다
+            view.addMouseListener(new MouseAdapter() {
+                @Override
+                public void mouseReleased(MouseEvent e) {
+                    if (SwingUtilities.isLeftMouseButton(e) && view.contains(e.getPoint())) {
+                        toggleSlot(slot);
+                    }
+                }
+            });
             place(grid, SLOT_GRID, slots[i], slot(i));
         }
 
@@ -355,7 +371,7 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
                     start = session.start();
                 } catch (IllegalStateException e) {
                     chat.systemMessage(e.getMessage());
-                    Sound.play("Bt_c_GameStartNotAble");
+                    Sound.play(NOT_ABLE_SOUND);
                     return;
                 }
                 Sound.play("Bt_c_GameStart");
@@ -403,12 +419,17 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
         place(bottom, BOTTOM_BAR, leave, LEAVE);
     }
 
-    /** 대기실을 {@link #START_FADE_MS}ms 동안 검게 어둡게 한 뒤 next를 한다. 화면에 보이지 않으면 바로 한다 */
+    /**
+     * 대기실을 {@link #START_FADE_MS}ms 동안 검게 어둡게 한 뒤 next를 한다. 화면에 보이지 않으면 바로 한다.
+     * 어두워지는 동안에는 포커스를 채팅 입력 칸에서 대기실로 옮긴다. 막은 키만 버리고 한글 조합 입력은 막지 못해서,
+     * 입력 칸에 포커스가 남으면 그 사이 친 글자가 칸에 남는다.
+     */
     private void fadeOutThen(Runnable next) {
         if (!isShowing()) {
             next.run();
             return;
         }
+        requestFocusInWindow();
         curtain.fade(next);
     }
 
@@ -441,6 +462,22 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
         chat.message(session.nickname(), message);
     }
 
+    /** 방장이 slot번 자리를 눌렀다: 빈 자리는 닫고 닫힌 자리는 연다. 방장이 아니거나 사람이 있는 자리면 아무 일도 없다 */
+    private void toggleSlot(int slot) {
+        boolean toggled;
+        try {
+            toggled = session.toggleSlot(slot);
+        } catch (IllegalStateException e) {
+            chat.systemMessage(e.getMessage());
+            Sound.play(NOT_ABLE_SOUND);
+            return;
+        }
+        if (toggled) {
+            Sound.click();
+            refresh();
+        }
+    }
+
     private void selectMap(String mapId) {
         try {
             session.selectMap(mapId);
@@ -462,6 +499,9 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
         Map<Integer, OutgameSession.SeatView> seats = new HashMap<>();
         session.seats().forEach(seat -> seats.put(seat.slot(), seat));
         boolean meHost = session.isHost();
+        // 서버에서 경기가 아직 끝나지 않았으면(게임 중) 고르기·준비·맵·자리를 막는다
+        boolean waiting = room.status() == Room.Status.WAITING;
+        int mapLimit = GameMaps.byIdOrDefault(session.mapId()).maxPlayers();
         for (int i = 0; i < SLOTS; i++) {
             OutgameSession.SeatView seat = seats.get(i);
             if (seat != null) {
@@ -470,16 +510,17 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
                         : figure(seat.character(), seat.team().characterColor());
                 slots[i].display(seat.state(), seat.nickname(), figure);
             } else {
-                slots[i].display(i < room.capacity() ? SlotState.EMPTY : SlotState.CLOSED, "", null);
+                slots[i].display(session.isSlotClosed(i) ? SlotState.CLOSED : SlotState.EMPTY, "", null);
             }
+            // 방장은 빈 자리·닫힌 자리를 눌러 닫고 열 수 있다 (맵 최대 인원 밖 자리는 열 수 없다)
+            slots[i].setCursor(Cursor.getPredefinedCursor(meHost && waiting && seat == null && i < mapLimit
+                    ? Cursor.HAND_CURSOR : Cursor.DEFAULT_CURSOR));
         }
 
-        // 서버에서 경기가 아직 끝나지 않았으면(게임 중) 고르기·준비·맵을 막는다
-        boolean waiting = room.status() == Room.Status.WAITING;
         lastStatus = room.status();
         ready.setText(meHost ? "게임 시작" : session.ready() ? "준비 취소" : "준비");
-        // 방장은 다른 참가자가 모두 준비했고 방이 대기 중일 때만 시작할 수 있다
-        ready.setEnabled(waiting && (!meHost || session.canStart()));
+        // 방장은 대기 중이면 늘 누를 수 있다. 시작할 수 없으면 눌렀을 때 까닭과 시작 불가 소리로 알린다
+        ready.setEnabled(waiting);
         mapSelect.setEnabled(meHost && waiting);
         autoReady.setEnabled(!meHost);
         characterCells.values().forEach(cell -> cell.setEnabled(waiting));
@@ -586,6 +627,8 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
         // 새 방에 들어왔든 경기를 마치고 돌아왔든, 자동 준비면 바로 준비한다
         session.setReady(autoReady.isSelected() && !session.isHost());
         refresh();
+        // 글자 커서는 채팅 입력 칸에 둔다. 들어오자마자 칠 수 있다
+        chat.focusInput();
     }
 
     /** 대기실을 떠나면 짙어지던 막을 걷는다. 그래야 막이 다 짙어졌을 때 떠난 방의 게임을 시작하지 않는다 */

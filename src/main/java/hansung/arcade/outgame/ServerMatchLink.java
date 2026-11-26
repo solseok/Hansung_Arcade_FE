@@ -25,11 +25,12 @@ import java.util.function.Consumer;
 
 /**
  * 온라인 경기와 서버를 잇는다. 인게임 푸시를 읽어 지금 띄운 경기({@link ServerRules})에 넣고,
- * 이 컴퓨터의 플레이어가 한 일(MOVE, BALLOON_PLACE, ITEM_PICKUP, ITEM_USE, BOX_PUSH, CHAT)을 서버로 보낸다.
+ * 이 컴퓨터의 플레이어가 한 일(MOVE, BALLOON_PLACE, BALLOON_THROW, BALLOON_KICK, ITEM_PICKUP, ITEM_USE, BOX_PUSH, CHAT)을 서버로 보낸다.
  * 나가기(GAME_EXIT)는 방 API({@link ServerLobbyService#exitGame})가 보낸다.
  *
  * <ul>
- *   <li>푸시: ROUND_BEGIN, PLAYER_MOVED, BALLOON_PLACED, BALLOON_EXPLODED, PLAYER_TRAPPED, PLAYER_RESCUED,
+ *   <li>푸시: ROUND_BEGIN, PLAYER_MOVED, BALLOON_PLACED, BALLOON_THROWN, BALLOON_KICKED, BALLOON_STOPPED,
+ *       BALLOON_EXPLODED, PLAYER_TRAPPED, PLAYER_RESCUED,
  *       PLAYER_POPPED, ITEM_TAKEN, ITEM_USED, ITEM_SCATTERED, AIRPLANE_APPEARED, ITEM_DROPPED, BOX_MOVED, PLAYER_LEFT,
  *       CHAT_MESSAGE, GAME_OVER. 게임 화면을 여는 GAME_STARTED는
  *       방 API({@link ServerLobbyService})가 받는다.</li>
@@ -46,11 +47,16 @@ public final class ServerMatchLink implements ServerOutbox {
     public static final String ITEM_PICKUP = "ITEM_PICKUP";
     public static final String ITEM_USE = "ITEM_USE";
     public static final String BOX_PUSH = "BOX_PUSH";
+    public static final String BALLOON_THROW = "BALLOON_THROW";
+    public static final String BALLOON_KICK = "BALLOON_KICK";
     public static final String CHAT = "CHAT";
     public static final String ROUND_BEGIN = "ROUND_BEGIN";
     public static final String PLAYER_MOVED = "PLAYER_MOVED";
     public static final String BALLOON_PLACED = "BALLOON_PLACED";
     public static final String BALLOON_EXPLODED = "BALLOON_EXPLODED";
+    public static final String BALLOON_THROWN = "BALLOON_THROWN";
+    public static final String BALLOON_KICKED = "BALLOON_KICKED";
+    public static final String BALLOON_STOPPED = "BALLOON_STOPPED";
     public static final String PLAYER_TRAPPED = "PLAYER_TRAPPED";
     public static final String PLAYER_RESCUED = "PLAYER_RESCUED";
     public static final String PLAYER_POPPED = "PLAYER_POPPED";
@@ -72,6 +78,17 @@ public final class ServerMatchLink implements ServerOutbox {
     }
 
     private record BalloonPlaced(int balloonId, long ownerId, int col, int row, int range, long fuseMs) {
+    }
+
+    /** @param playerId 던진 사람. 내려앉을 칸이 막혀 더 날아가는 것이면 null */
+    private record BalloonThrown(int balloonId, Long playerId, int col, int row, int toCol, int toRow, String direction,
+                                 long flightMs) {
+    }
+
+    private record BalloonKicked(int balloonId, long playerId, int col, int row, String direction) {
+    }
+
+    private record BalloonStopped(int balloonId, int col, int row) {
     }
 
     private record BalloonExploded(List<Blast> balloons, List<TileChange> tiles, List<Drop> items,
@@ -144,6 +161,11 @@ public final class ServerMatchLink implements ServerOutbox {
                 (r, b) -> r.playerMoved(b.playerId(), b.x(), b.y(), b.facing(), b.moving()));
         onPush(BALLOON_PLACED, BalloonPlaced.class,
                 (r, b) -> r.balloonPlaced(b.balloonId(), b.ownerId(), b.col(), b.row(), b.range(), b.fuseMs()));
+        onPush(BALLOON_THROWN, BalloonThrown.class, (r, b) -> r.balloonThrown(b.balloonId(), b.playerId(), b.col(),
+                b.row(), b.toCol(), b.toRow(), b.direction(), b.flightMs()));
+        onPush(BALLOON_KICKED, BalloonKicked.class,
+                (r, b) -> r.balloonKicked(b.balloonId(), b.playerId(), b.col(), b.row(), b.direction()));
+        onPush(BALLOON_STOPPED, BalloonStopped.class, (r, b) -> r.balloonStopped(b.balloonId(), b.col(), b.row()));
         onPush(BALLOON_EXPLODED, BalloonExploded.class, (r, b) -> r.balloonExploded(listOf(b.balloons()),
                 listOf(b.tiles()), listOf(b.items()), listOf(b.removedItems())));
         onPush(PLAYER_TRAPPED, PlayerTrapped.class, (r, b) -> r.playerTrapped(b.playerId(), b.balloonId(), b.popMs()));
@@ -295,6 +317,16 @@ public final class ServerMatchLink implements ServerOutbox {
     @Override
     public void pushBox(int playerId, int col, int row, Direction direction) {
         client.send(BOX_PUSH, Map.of("playerId", playerId, "col", col, "row", row, "direction", direction.name()));
+    }
+
+    @Override
+    public void throwBalloon(int playerId, int col, int row, Direction direction) {
+        client.send(BALLOON_THROW, Map.of("playerId", playerId, "col", col, "row", row, "direction", direction.name()));
+    }
+
+    @Override
+    public void kickBalloon(int playerId, int col, int row, Direction direction) {
+        client.send(BALLOON_KICK, Map.of("playerId", playerId, "col", col, "row", row, "direction", direction.name()));
     }
 
     @Override
