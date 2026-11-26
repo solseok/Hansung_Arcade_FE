@@ -55,7 +55,7 @@ import java.util.random.RandomGenerator;
  *   <li>물풍선 키를 막 누른 플레이어가 선 칸에 물풍선을 놓는다. 장갑이 있으면 선 칸이나 앞 칸의 물풍선을 던진다.
  *       아이템 키를 막 누른 플레이어는 아이템 칸의 액티브 아이템을 쓴다 ({@link ItemActions}).</li>
  *   <li>이번 틱에 터진 물줄기가 막혀 멈춘 블럭을 맞힌다. 한 틱에 여럿이 같은 블럭을 맞혀도 한 번만 맞는다.
- *       다 부서진 블럭 자리에는 {@link ItemDrops} 확률로 아이템이 나온다.</li>
+ *       다 부서진 블럭 자리에는 {@link ItemDrops} 확률로 아이템이 나온다. 탱크는 무작위로 나오지 않는다.</li>
  *   <li>물줄기가 덮은 칸의 아이템은 사라진다. 블럭 자리는 물줄기가 들어가지 않은 칸이라 방금 나온 아이템은 남는다.</li>
  *   <li>물줄기 싸움을 가린다 ({@link BattleRules}). 물줄기가 덮은 칸에 선 플레이어를 가두고, 갇힌 사람에게 닿은 플레이어가
  *       같은 편이면 구하고(save) 상대면 터뜨리며(kill, 탈락), 갇힌 채 5초가 지난 사람을 탈락시킨다.</li>
@@ -68,7 +68,7 @@ import java.util.random.RandomGenerator;
  * 키를 눌러도 움직이거나 물풍선을 놓지 않는다. 경기 시계는 START!! 글자가 뜬 뒤부터 흐른다 ({@link StartIntro}).
  * 채팅은 그대로 올라가고 사라진다.</p>
  *
- * <p>한 틱에 일어난 일 가운데 소리를 낼 일(물풍선 놓기·터짐, 갇힘, 탈락, 아이템 나옴·먹음 등)은 {@link GameSound}로 모아 두고,
+ * <p>한 틱에 일어난 일 가운데 소리를 낼 일(물풍선 놓기·터짐, 갇힘, 닿아서 터뜨림·구함, 탈락, 아이템 나옴·먹음 등)은 {@link GameSound}로 모아 두고,
  * 화면이 {@link #takeSounds()}로 꺼내 소리를 낸다.</p>
  *
  * <p>경기({@link Match})가 끝나면 이동 입력과 물풍선 놓기는 더 받지 않고, 물줄기도 보이기만 할 뿐 아무도 가두지 않는다.
@@ -296,7 +296,12 @@ public final class GameWorld {
         items.removeWhere(balloonField::isWet);
         boxPusher.advance(dt);
         if (playing) {
-            battleRules.settle();
+            for (BattleRules.Touch touch : battleRules.settle()) {
+                sounds.add(switch (touch) {
+                    case POP -> GameSound.POP;
+                    case RESCUE -> GameSound.RESCUE;
+                });
+            }
             pickUpItems();
         }
         collectPlayerSounds(players, before);

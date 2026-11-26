@@ -35,16 +35,17 @@ public final class ScriptedRandom implements RandomGenerator {
         return of(DROPS, pickFor(item));
     }
 
-    /** {@link ItemDrops}가 item을 고르는 "무엇인지" 난수 [0, 1): item 구간의 가운데 값 */
+    /** {@link ItemDrops}가 item을 고르는 "무엇인지" 난수 [0, 1): 비율의 합(97)으로 나눈 item 구간의 가운데 값 */
     public static double pickFor(ItemType item) {
+        int total = ItemDrops.WEIGHTS.values().stream().mapToInt(Integer::intValue).sum();
         int bound = 0;
         for (var entry : ItemDrops.WEIGHTS.entrySet()) {
             if (entry.getKey() == item) {
-                return (bound + entry.getValue() / 2.0) / 100;
+                return (bound + entry.getValue() / 2.0) / total;
             }
             bound += entry.getValue();
         }
-        throw new IllegalArgumentException("블럭에서 나오지 않는 아이템입니다: " + item);
+        throw new IllegalArgumentException("블럭에서 무작위로 나오지 않는 아이템입니다: " + item);
     }
 
     @Override

@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -355,13 +356,46 @@ class BattleRulesTest {
             ally.placeAt(trapped.x() - 5, trapped.y());
             enemy.placeAt(trapped.x() + 15, trapped.y());
 
-            rules(match).settle();
+            Set<BattleRules.Touch> touches = rules(match).settle();
 
             String when = allyFirst ? "팀원 번호가 작을 때" : "팀원 번호가 클 때";
+            assertEquals(Set.of(BattleRules.Touch.POP), touches, when);
             assertEquals(PlayerState.DYING, trapped.state(), when);
             assertEquals(1, match.kills(enemy.id()), when);
             assertEquals(0, match.saves(ally.id()), when);
         }
+    }
+
+    @Test
+    void 한_틱에_한_사람은_터뜨리고_다른_사람은_구하면_둘_다_알린다() {
+        Player popped = join(1, 0, 0);
+        Player saved = join(1, 5, 0);
+        Player enemy = join(2, 0, 3);
+        Player ally = join(1, 5, 3);
+        Match match = new Match(MatchMode.TEAM, players);
+        popped.trap(popped.id());
+        saved.trap(saved.id());
+        enemy.placeAt(popped.x() + TileMap.TILE_SIZE / 2.0 - 1, popped.y());
+        ally.placeAt(saved.x() + TileMap.TILE_SIZE / 2.0 - 1, saved.y());
+
+        Set<BattleRules.Touch> touches = rules(match).settle();
+
+        assertEquals(Set.of(BattleRules.Touch.POP, BattleRules.Touch.RESCUE), touches);
+        assertEquals(PlayerState.DYING, popped.state());
+        assertEquals(PlayerState.ESCAPING, saved.state());
+    }
+
+    @Test
+    void 닿은_사람이_없으면_시간이_다_돼_탈락해도_알릴_일이_없다() {
+        Player trapped = join(1, 0, 0);
+        join(2, 5, 5);
+        trapped.trap(trapped.id());
+        elapse(Player.TRAP_SECONDS);
+
+        Set<BattleRules.Touch> touches = rules(new Match(MatchMode.SOLO, players)).settle();
+
+        assertFalse(trapped.isAlive());
+        assertEquals(Set.of(), touches);
     }
 
     @Test
