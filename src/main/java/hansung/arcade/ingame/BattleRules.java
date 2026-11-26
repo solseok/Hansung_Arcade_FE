@@ -7,6 +7,7 @@ import hansung.arcade.ingame.match.Match;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -45,6 +46,14 @@ final class BattleRules {
     /** 픽셀을 나눠 잰 비율이라 경계에서 아주 조금 모자랄 수 있어 그만큼은 넘은 것으로 친다 */
     private static final double SHARE_SLACK = 1e-9;
 
+    /** 갇힌 사람에게 닿아 일어난 일. 게임 상태가 알맞은 소리를 고를 때 쓴다 */
+    enum Touch {
+        /** 상대가 닿아 터뜨렸다 (kill) */
+        POP,
+        /** 같은 편이 닿아 구했다 (save) */
+        RESCUE
+    }
+
     /** 칸을 덮은 물줄기의 주인들을 알려 준다 */
     @FunctionalInterface
     interface WaterOwners {
@@ -74,11 +83,16 @@ final class BattleRules {
         this.water = water;
     }
 
-    /** 한 틱의 가둠·접촉·시간 초과를 이 순서로 가린다. 경기가 진행 중일 때만 부른다 */
-    void settle() {
+    /**
+     * 한 틱의 가둠·접촉·시간 초과를 이 순서로 가린다. 경기가 진행 중일 때만 부른다.
+     *
+     * @return 이번 틱에 갇힌 사람에게 닿아 일어난 일. 시간 초과로 탈락한 것은 넣지 않는다
+     */
+    Set<Touch> settle() {
         Set<Player> justTrapped = trapSoakedPlayers();
-        settleTouches(justTrapped);
+        Set<Touch> touches = settleTouches(justTrapped);
         eliminateTimedOut();
+        return touches;
     }
 
     /**
@@ -169,8 +183,10 @@ final class BattleRules {
      * {@link #nearest 가장 가까운 사람}이 kill(save)을 얻는다.
      *
      * @param justTrapped 이번 틱에 갇힌 사람들. 갇힌 모습이 한 틱도 보이지 않은 채 풀리거나 터지지 않도록 이번 틱에는 가리지 않는다
+     * @return 터뜨렸으면 {@link Touch#POP}, 구했으면 {@link Touch#RESCUE}가 들어 있다
      */
-    private void settleTouches(Set<Player> justTrapped) {
+    private Set<Touch> settleTouches(Set<Player> justTrapped) {
+        Set<Touch> touches = EnumSet.noneOf(Touch.class);
         for (Player trapped : players) {
             if (trapped.state() != PlayerState.TRAPPED || justTrapped.contains(trapped)) {
                 continue;
@@ -183,13 +199,16 @@ final class BattleRules {
             if (killer.isPresent()) {
                 trapped.eliminate();
                 match.recordKill(killer.get().id());
+                touches.add(Touch.POP);
                 continue;
             }
             nearest(trapped, touching).ifPresent(saver -> {
                 trapped.escape();
                 match.recordSave(saver.id());
+                touches.add(Touch.RESCUE);
             });
         }
+        return touches;
     }
 
     /** candidates 가운데 중심이 trapped의 중심과 가장 가까운 사람. 거리까지 같으면 번호가 작은 사람이다 */

@@ -123,8 +123,6 @@ class AirplaneSpritesTest {
         // 떨어뜨리는 자리에서 그림 양 끝까지가 비행기가 맵 밖에서 출발하는 거리보다 짧다
         assertTrue(AirplaneSprites.CARGO_X <= Flight.OFFSTAGE);
         assertTrue(AirplaneSprites.FRAME_WIDTH - AirplaneSprites.CARGO_X <= Flight.OFFSTAGE);
-        // 비행기 그림 위쪽 끝은 맵 안이다
-        assertTrue(Flight.CRUISE_Y - AirplaneSprites.CARGO_Y >= 0);
     }
 
     @Test

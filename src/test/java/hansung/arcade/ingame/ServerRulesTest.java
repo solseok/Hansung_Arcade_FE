@@ -4,7 +4,9 @@ import hansung.arcade.ingame.ServerRules.Blast;
 import hansung.arcade.ingame.ServerRules.Drop;
 import hansung.arcade.ingame.ServerRules.Stats;
 import hansung.arcade.ingame.ServerRules.TileChange;
+import hansung.arcade.ingame.airplane.Flight;
 import hansung.arcade.ingame.balloon.Explosion;
+import hansung.arcade.ingame.balloon.WaterBalloon;
 import hansung.arcade.ingame.balloon.WaterCell;
 import hansung.arcade.ingame.balloon.WaterCell.Part;
 import hansung.arcade.ingame.block.BoxPusher;
@@ -26,6 +28,7 @@ import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -78,6 +81,16 @@ class ServerRulesTest {
         @Override
         public void useItem(int playerId, String item) {
             sent.add("ITEM_USE %d %s".formatted(playerId, item));
+        }
+
+        @Override
+        public void throwBalloon(int playerId, int col, int row, Direction direction) {
+            sent.add("BALLOON_THROW %d %d,%d %s".formatted(playerId, col, row, direction));
+        }
+
+        @Override
+        public void kickBalloon(int playerId, int col, int row, Direction direction) {
+            sent.add("BALLOON_KICK %d %d,%d %s".formatted(playerId, col, row, direction));
         }
 
         @Override
@@ -237,6 +250,24 @@ class ServerRulesTest {
     }
 
     @Test
+    void 내구도_상자가_다_부서지며_서버가_고정_드롭으로_탱크를_알리면_그_칸에_탱크를_놓는다() {
+        // 클라이언트 비율표에는 탱크가 없다. 탱크는 서버가 맵의 고정 드롭으로 알려 줄 때만 놓인다
+        play();
+        assertEquals(Tile.HARD_BLOCK_3, map.tileAt(4, 0));
+
+        server.balloonExploded(List.of(), List.of(new TileChange(4, 0, "b")), List.of(), List.of());
+        server.balloonExploded(List.of(), List.of(new TileChange(4, 0, "a")), List.of(), List.of());
+        assertTrue(world.items().at(4, 0).isEmpty(), "다 부서지기 전에는 아무것도 나오지 않는다");
+
+        world.takeSounds();
+        server.balloonExploded(List.of(), List.of(new TileChange(4, 0, ".")), List.of(new Drop(9, 4, 0, "tank")), List.of());
+
+        assertEquals(Tile.FLOOR, map.tileAt(4, 0));
+        assertEquals(ItemType.TANK, world.items().at(4, 0).orElseThrow().type());
+        assertTrue(world.takeSounds().contains(GameSound.ITEM_POP));
+    }
+
+    @Test
     void 아이템_칸에_들어서면_한_번만_줍겠다고_보내고_먹는_것은_서버를_따른다() {
         play();
         server.itemsScattered(OTHER, 1, 1, List.of(new Drop(7, me.col(), me.row(), "fluid")));
@@ -287,6 +318,40 @@ class ServerRulesTest {
     }
 
     @Test
+    void 서버가_구출을_알리면_구출_소리가_나고_닿아서_터뜨렸다고_알리면_터뜨리는_소리와_탈락_소리가_난다() {
+        play();
+        server.balloonPlaced(3, ME, 1, 2, 1, 2_000);
+        server.balloonExploded(List.of(new Blast(3, 1, 2, 1, 0, 0, 0)), List.of(), List.of(), List.of());
+        server.playerTrapped(OTHER, 3, 5_000);
+        world.takeSounds();
+
+        // 다른 컴퓨터의 플레이어 일이어도 갇힘·탈락처럼 모두 듣는다
+        server.playerRescued(OTHER, ME);
+        assertEquals(List.of(GameSound.RESCUE), world.takeSounds());
+        server.playerRescued(OTHER, ME);
+        assertEquals(List.of(), world.takeSounds(), "갇혀 있지 않으면 구출 소리를 다시 내지 않는다");
+
+        server.playerTrapped(OTHER, 3, 5_000);
+        world.takeSounds();
+        server.playerPopped(OTHER, (long) ME, "TOUCH");
+        assertEquals(Set.of(GameSound.POP, GameSound.DIE), Set.copyOf(world.takeSounds()));
+    }
+
+    @Test
+    void 서버가_시간이_다_돼_터졌다고_알리면_탈락_소리만_난다() {
+        play();
+        server.balloonPlaced(3, ME, 1, 2, 1, 2_000);
+        server.balloonExploded(List.of(new Blast(3, 1, 2, 1, 0, 0, 0)), List.of(), List.of(), List.of());
+        server.playerTrapped(OTHER, 3, 5_000);
+        world.takeSounds();
+
+        server.playerPopped(OTHER, null, "TIMEOUT");
+
+        assertFalse(other.isAlive());
+        assertEquals(List.of(GameSound.DIE), world.takeSounds());
+    }
+
+    @Test
     void 다른_플레이어는_받은_자리로_따라가고_멀리_떨어졌으면_바로_옮긴다() {
         play();
         double startX = other.x();
@@ -312,27 +377,45 @@ class ServerRulesTest {
         ticks(62 * 60);
         assertEquals(0, world.airDrop().launches(), "온라인은 1:59가 돼도 스스로 띄우지 않는다");
 
-        server.airplaneAppeared(1, "RIGHT");
+        server.airplaneAppeared(1, "RIGHT", 2);
         assertEquals(1, world.airDrop().flights().size());
-        assertEquals(Direction.RIGHT, world.airDrop().flights().getFirst().heading());
+        Flight flight = world.airDrop().flights().getFirst();
+        assertEquals(Direction.RIGHT, flight.heading());
+        assertEquals(2, flight.row(), "서버가 알린 줄을 따라 난다");
+        assertEquals(80, flight.y(), "2번 줄의 위쪽 끝");
         assertTrue(world.takeSounds().contains(GameSound.AIRPLANE));
 
-        server.itemDropped(1, 9, 2, 2, "bubble", 200);
+        server.itemDropped(1, 9, 2, 2, "bubble", 129);
         assertEquals(1, world.airDrop().fallingItems().size());
         assertTrue(world.items().at(2, 2).isEmpty(), "떨어지는 동안은 아직 칸에 없다");
         assertTrue(world.takeSounds().contains(GameSound.AIR_DROP));
 
-        ticks(60);
+        // fallMs 129ms: 7틱(0.117초)에는 아직 떨어지는 중이고 8틱(0.133초)에 닿는다
+        ticks(7);
+        assertEquals(1, world.airDrop().fallingItems().size());
+        ticks(1);
         assertTrue(world.airDrop().fallingItems().isEmpty());
         assertEquals(ItemType.BUBBLE, world.items().at(2, 2).orElseThrow().type());
         assertEquals(0, world.airDrop().launches() - 1, "떨어뜨린 아이템 때문에 비행기를 더 띄우지 않는다");
     }
 
     @Test
+    void 맵에_없는_줄이나_모르는_방향의_비행기는_띄우지_않는다() {
+        play();
+
+        server.airplaneAppeared(1, "RIGHT", 3);
+        server.airplaneAppeared(2, "LEFT", -1);
+        server.airplaneAppeared(3, "UP", 1);
+
+        assertEquals(0, world.airDrop().launches());
+        assertFalse(world.takeSounds().contains(GameSound.AIRPLANE));
+    }
+
+    @Test
     void 떨어지는_사이_물줄기에_사라지거나_누가_먹은_아이템은_놓지_않는다() {
         play();
-        server.itemDropped(1, 9, 2, 2, "bubble", 200);
-        server.itemDropped(1, 10, 0, 2, "shoe", 200);
+        server.itemDropped(1, 9, 2, 2, "bubble", 129);
+        server.itemDropped(1, 10, 0, 2, "shoe", 129);
 
         server.balloonExploded(List.of(), List.of(), List.of(), List.of(9));
         server.itemTaken(10, OTHER, "shoe", new Stats(2, 1, 4), null, 0);
@@ -345,7 +428,7 @@ class ServerRulesTest {
     @Test
     void 내_발밑에_떨어진_아이템은_닿은_뒤에_줍겠다고_보낸다() {
         play();
-        server.itemDropped(1, 11, me.col(), me.row(), "fluid", 200);
+        server.itemDropped(1, 11, me.col(), me.row(), "fluid", 129);
 
         ticks(3);
         assertEquals(0, outbox.count("ITEM_PICKUP"), "떨어지는 동안은 보내지 않는다");
@@ -481,6 +564,283 @@ class ServerRulesTest {
         assertEquals(remaining, world.match().clock().remainingSeconds(), "시계가 멈춘다");
     }
 
+    /**
+     * 장갑 던지기·신발 차기: 물풍선은 서버가 던지고 찬다. 이 컴퓨터는 던지거나 찰 수 있을 때 보내고,
+     * BALLOON_THROWN·BALLOON_KICKED·BALLOON_STOPPED가 오면 움직인다
+     */
+    @Nested
+    class 물풍선_던지기와_차기 {
+
+        /** 한 번 차 달라고 보낸 뒤 계속 밀 때 다시 보내기까지의 틱 */
+        private final int retryTicks = (int) Math.round(ServerRules.KICK_RETRY_SECONDS / TICK);
+        private final Stats stats = new Stats(1, 1, 5);
+        /** 나(12번)는 (1,1), 다른 플레이어(20번)는 (11,1)에 선다. (6,2)는 바닥 가시 */
+        private final GameWorld kickWorld = GameWorld.online(MapLoader.parse("fixture/online-kick", List.of(
+                ".............",
+                ".1.........2.",
+                "......!......")), List.of(
+                new OnlineSeat(ME, new PlayerProfile("부기", Mascot.SANGSANGBUGI, 1), 1, true),
+                new OnlineSeat(OTHER, new PlayerProfile("냥이", Mascot.HANSUNGNYANGI, 2), 2, false)), outbox);
+        private final ServerRules kickServer = kickWorld.server().orElseThrow();
+        private final Player thrower = kickWorld.localPlayers().getFirst();
+
+        private void run(int count, PlayerCommand command) {
+            for (int i = 0; i < count; i++) {
+                kickWorld.update(TICK, Map.of(ME, command));
+            }
+        }
+
+        private void start() {
+            kickServer.roundBegin(3_000, 180_000);
+            run(181, PlayerCommand.IDLE);
+            assertTrue(kickServer.isPlaying());
+            outbox.sent.clear();
+        }
+
+        private WaterBalloon balloon() {
+            return kickWorld.balloonField().balloons().getFirst();
+        }
+
+        @Test
+        void 장갑을_먹으면_물풍선_위에서_물풍선_키로_놓지_않고_지금_자리부터_보낸_뒤_던져_달라고_한다() {
+            start();
+            kickServer.itemTaken(1, ME, "glove", stats, null, 0);
+            kickServer.balloonPlaced(1, ME, 1, 1, 1, 2_000);
+            run(1, PlayerCommand.moving(Direction.RIGHT));
+            outbox.sent.clear();
+
+            run(1, BALLOON);
+
+            assertEquals(List.of("MOVE " + ME, "BALLOON_THROW " + ME + " 1,1 RIGHT"), outbox.sent);
+            assertTrue(balloon().isResting(), "서버가 알릴 때까지 던지지 않는다");
+        }
+
+        @Test
+        void 장갑이_있으면_바라보는_앞_칸의_남의_물풍선도_던져_달라고_한다() {
+            start();
+            kickServer.itemTaken(1, ME, "glove", stats, null, 0);
+            kickServer.balloonPlaced(1, OTHER, 2, 1, 1, 2_000);
+            run(1, PlayerCommand.moving(Direction.RIGHT));
+            outbox.sent.clear();
+
+            run(1, BALLOON);
+
+            assertEquals(List.of("MOVE " + ME, "BALLOON_THROW " + ME + " 2,1 RIGHT"), outbox.sent);
+        }
+
+        @Test
+        void 장갑이_없으면_물풍선_위에서_물풍선_키를_눌러도_아무것도_보내지_않는다() {
+            start();
+            kickServer.balloonPlaced(1, ME, 1, 1, 1, 2_000);
+
+            run(1, BALLOON);
+
+            assertTrue(outbox.sent.isEmpty(), outbox.sent.toString());
+        }
+
+        @Test
+        void 던질_곳이_없으면_던지지_않고_선_칸에_놓아_달라고_한다() {
+            start();
+            kickServer.itemTaken(1, ME, "glove", stats, null, 0);
+            kickServer.balloonPlaced(1, OTHER, 0, 1, 1, 2_000);
+            run(1, PlayerCommand.moving(Direction.LEFT));
+            outbox.sent.clear();
+
+            run(1, BALLOON);
+
+            assertEquals(List.of("MOVE " + ME, "BALLOON_PLACE " + ME + " 1,1"), outbox.sent, "맵 끝을 보고 있다");
+        }
+
+        @Test
+        void BALLOON_THROWN이_오면_알린_칸으로_날아_내려앉고_때가_지나도_스스로_터지지_않는다() {
+            start();
+            kickServer.balloonPlaced(1, ME, 1, 1, 1, 2_000);
+
+            kickServer.balloonThrown(1, (long) ME, 1, 1, 7, 1, "RIGHT", 360);
+            assertTrue(balloon().isFlying());
+            run(22, PlayerCommand.IDLE);
+
+            assertTrue(balloon().isResting());
+            assertEquals(List.of(7, 1), List.of(balloon().col(), balloon().row()));
+            run(180, PlayerCommand.IDLE);
+            assertEquals(1, kickWorld.balloonField().balloons().size(), "언제 터지는지는 서버가 알린다");
+        }
+
+        @Test
+        void 바닥_가시_칸에_내려앉아도_스스로_터지지_않고_서버를_기다린다() {
+            start();
+            kickServer.balloonPlaced(1, OTHER, 0, 2, 1, 2_000);
+
+            kickServer.balloonThrown(1, (long) ME, 0, 2, 6, 2, "RIGHT", 360);
+            run(30, PlayerCommand.IDLE);
+
+            assertTrue(balloon().isResting());
+            assertEquals(6, balloon().col());
+            assertTrue(kickWorld.balloonField().explosions().isEmpty());
+        }
+
+        @Test
+        void 내려앉을_칸이_막혀_더_날아가라는_알림이_오면_내려앉은_자리에서_다시_난다() {
+            start();
+            kickServer.balloonPlaced(1, ME, 1, 1, 1, 2_000);
+            kickServer.balloonThrown(1, (long) ME, 1, 1, 7, 1, "RIGHT", 360);
+            run(22, PlayerCommand.IDLE);
+
+            kickServer.balloonThrown(1, null, 7, 1, 8, 1, "RIGHT", 200);
+            assertTrue(balloon().isFlying());
+            run(13, PlayerCommand.IDLE);
+
+            assertTrue(balloon().isResting());
+            assertEquals(8, balloon().col());
+        }
+
+        @Test
+        void 신발을_먹으면_막힌_앞_칸의_물풍선을_멈춘_자리와_방향부터_보낸_뒤_차_달라고_한다() {
+            start();
+            kickServer.itemTaken(1, ME, "shoe", stats, null, 0);
+            kickServer.balloonPlaced(1, OTHER, 3, 1, 1, 2_000);
+
+            run(20, PlayerCommand.moving(Direction.RIGHT));
+
+            int kick = outbox.sent.indexOf("BALLOON_KICK " + ME + " 3,1 RIGHT");
+            assertTrue(kick > 0, outbox.sent.toString());
+            assertEquals("MOVE " + ME, outbox.sent.get(kick - 1));
+            // 차 달라고 하기 바로 전에 보낸 MOVE
+            int moveBefore = (int) outbox.sent.subList(0, kick).stream().filter(line -> line.startsWith("MOVE")).count() - 1;
+            assertEquals("RIGHT false", outbox.moveStates.get(moveBefore), "멈춘 채 미는 쪽을 본다");
+            assertEquals(2, TileMap.colAt(outbox.moves.get(moveBefore)[0]), "서버는 MOVE 칸 + 미는 쪽이 물풍선 칸일 때만 찬다");
+            assertTrue(balloon().isResting(), "서버가 알릴 때까지 차지 않는다");
+            assertEquals(1, outbox.count("BALLOON_KICK"));
+        }
+
+        @Test
+        void 차_달라고_한_뒤_계속_밀면_정해진_간격마다_한_번만_다시_보낸다() {
+            start();
+            kickServer.itemTaken(1, ME, "red_devil", stats, null, 0);
+            kickServer.balloonPlaced(1, OTHER, 3, 1, 1, 2_000);
+            run(20, PlayerCommand.moving(Direction.RIGHT));
+            assertEquals(1, outbox.count("BALLOON_KICK"));
+
+            run(retryTicks - 8, PlayerCommand.moving(Direction.RIGHT));
+            assertEquals(1, outbox.count("BALLOON_KICK"));
+            run(4, PlayerCommand.moving(Direction.RIGHT));
+            assertEquals(2, outbox.count("BALLOON_KICK"));
+        }
+
+        @Test
+        void 손을_뗐다가_다시_밀면_바로_다시_보낸다() {
+            start();
+            kickServer.itemTaken(1, ME, "shoe", stats, null, 0);
+            kickServer.balloonPlaced(1, OTHER, 3, 1, 1, 2_000);
+            run(20, PlayerCommand.moving(Direction.RIGHT));
+
+            run(1, PlayerCommand.IDLE);
+            run(1, PlayerCommand.moving(Direction.RIGHT));
+
+            assertEquals(2, outbox.count("BALLOON_KICK"));
+        }
+
+        @Test
+        void 막힌_앞_칸의_물풍선이_미끄러질_곳이_없으면_차_달라고_하지_않는다() {
+            start();
+            kickServer.itemTaken(1, ME, "shoe", stats, null, 0);
+            kickServer.balloonPlaced(1, OTHER, 0, 1, 1, 2_000);
+
+            run(30, PlayerCommand.moving(Direction.LEFT));
+
+            assertEquals(0, outbox.count("BALLOON_KICK"), "맵 끝 바로 앞의 물풍선이다");
+        }
+
+        @Test
+        void 신발도_빨간_악마도_없으면_막혀도_차_달라고_하지_않는다() {
+            start();
+            kickServer.balloonPlaced(1, OTHER, 3, 1, 1, 2_000);
+
+            run(40, PlayerCommand.moving(Direction.RIGHT));
+
+            assertEquals(0, outbox.count("BALLOON_KICK"));
+        }
+
+        @Test
+        void BALLOON_KICKED가_오면_미끄러지다_BALLOON_STOPPED가_알린_칸에_선다() {
+            start();
+            kickServer.balloonPlaced(1, OTHER, 3, 1, 1, 2_000);
+
+            kickServer.balloonKicked(1, ME, 3, 1, "RIGHT");
+            assertTrue(balloon().isSliding());
+            run(20, PlayerCommand.IDLE);
+            assertTrue(balloon().isSliding(), "아직 맵 끝까지 가지 않았다");
+
+            kickServer.balloonStopped(1, 6, 1);
+
+            assertTrue(balloon().isResting());
+            assertEquals(List.of(6, 1), List.of(balloon().col(), balloon().row()));
+        }
+
+        @Test
+        void 이_컴퓨터에서_먼저_멈춘_칸이_서버와_다르면_BALLOON_STOPPED가_알린_칸으로_옮긴다() {
+            start();
+            kickServer.balloonPlaced(1, OTHER, 3, 1, 1, 2_000);
+            kickServer.balloonKicked(1, ME, 3, 1, "RIGHT");
+            run(120, PlayerCommand.IDLE);
+            assertTrue(balloon().isResting());
+            assertEquals(12, balloon().col(), "이 컴퓨터는 맵 끝 앞에 멈춘다");
+
+            kickServer.balloonStopped(1, 10, 1);
+
+            assertEquals(10, balloon().col());
+        }
+
+        @Test
+        void BALLOON_KICKED가_다른_칸에서_왔으면_그_칸에서_미끄러지기_시작한다() {
+            start();
+            kickServer.balloonPlaced(1, OTHER, 3, 1, 1, 2_000);
+
+            kickServer.balloonKicked(1, ME, 4, 1, "UP");
+
+            assertTrue(balloon().isSliding());
+            assertEquals(List.of(4, 1), List.of(balloon().col(), balloon().row()));
+        }
+
+        @Test
+        void 서버_물풍선은_미끄러지다_바닥_가시에_들어가도_스스로_터지지_않고_그_칸에서_서버를_기다린다() {
+            start();
+            kickServer.balloonPlaced(1, OTHER, 2, 2, 1, 2_000);
+            kickServer.balloonKicked(1, OTHER, 2, 2, "RIGHT");
+
+            run(60, PlayerCommand.IDLE);
+
+            assertEquals(1, kickWorld.balloonField().balloons().size());
+            assertTrue(balloon().isResting());
+            assertEquals(6, balloon().col());
+            kickServer.balloonExploded(List.of(new Blast(1, 6, 2, 1, 0, 1, 1)), List.of(), List.of(), List.of());
+            assertTrue(kickWorld.balloonField().balloons().isEmpty());
+        }
+
+        @Test
+        void 모르는_물풍선의_알림은_버린다() {
+            start();
+
+            kickServer.balloonThrown(9, (long) ME, 1, 1, 7, 1, "RIGHT", 360);
+            kickServer.balloonKicked(9, ME, 1, 1, "RIGHT");
+            kickServer.balloonStopped(9, 1, 1);
+
+            assertTrue(kickWorld.balloonField().balloons().isEmpty());
+        }
+
+        @Test
+        void ITEM_TAKEN의_아이템으로_차기와_던지기_능력을_얻는다() {
+            start();
+
+            kickServer.itemTaken(1, OTHER, "red_devil", stats, null, 0);
+            kickServer.itemTaken(2, ME, "glove", stats, null, 0);
+
+            assertTrue(kickWorld.gear(kickWorld.players().get(1)).canPushBalloons());
+            assertFalse(kickWorld.gear(thrower).canPushBalloons());
+            assertTrue(kickWorld.gear(thrower).canThrowBalloons());
+        }
+    }
+
     /** 상자 밀기: 상자는 서버가 밀고, 이 컴퓨터는 다 밀었을 때 밀어 달라고 보낸 뒤 BOX_MOVED로 옮긴다 */
     @Nested
     class 상자_밀기 {
@@ -612,9 +972,9 @@ class ServerRulesTest {
         void 비행기_아이템이_떨어지는_중인_칸으로는_밀어_달라고_하지_않는다() {
             start();
             run(reachTicks + pushTicks - 3, Direction.RIGHT);
-            // 맨 윗줄은 0.1초 만에 닿으므로 밀 때가 되기 직전에 떨어뜨린다
-            boxServer.airplaneAppeared(1, "LEFT");
-            boxServer.itemDropped(1, 7, 2, 0, "bubble", 100);
+            // 비행기 아이템은 0.129초 만에 닿으므로 밀 때가 되기 직전에 떨어뜨린다
+            boxServer.airplaneAppeared(1, "LEFT", 0);
+            boxServer.itemDropped(1, 7, 2, 0, "bubble", 129);
 
             run(3, Direction.RIGHT);
 

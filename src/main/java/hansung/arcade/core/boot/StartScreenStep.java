@@ -23,6 +23,7 @@ import hansung.arcade.ingame.render.ItemSprites;
 import hansung.arcade.ingame.render.Tileset;
 import hansung.arcade.outgame.GamePreviewScene;
 import hansung.arcade.network.ServerClient;
+import hansung.arcade.outgame.LocalPicks;
 import hansung.arcade.outgame.LoginPanel;
 import hansung.arcade.outgame.LoginService;
 import hansung.arcade.outgame.OfflineLoginService;
@@ -30,6 +31,7 @@ import hansung.arcade.outgame.OutgameSession;
 import hansung.arcade.outgame.ServerLoginService;
 import hansung.arcade.outgame.ServerMatchLink;
 import hansung.arcade.outgame.audio.Sound;
+import hansung.arcade.outgame.audio.SoundSettings;
 import hansung.arcade.outgame.lobby.LobbyPanel;
 import hansung.arcade.outgame.lobby.LobbyService;
 import hansung.arcade.outgame.lobby.MockLobbyService;
@@ -56,7 +58,7 @@ import java.util.List;
  * 설정이 없으면 기본 캐릭터({@link Mascot#DEFAULT})를 원래 색 그대로, 1팀, 개인전으로 시작한다.</p>
  *
  * <p>인게임을 바로 띄울 때 설정값 game.local-players=2 를 주면 한 키보드 2인 모드로 시작한다.
- * 2P는 player2.nickname, player2.character, player2.team, player2.color 로 정한다 (없으면 Player2, 한성냥이, 2팀, 원래 색).</p>
+ * 2P는 player2.nickname, player2.character, player2.team, player2.color 로 정한다 (없으면 Player2, 상상부기, 2팀, 원래 색).</p>
  *
  * <p>인게임을 바로 띄울 때 설정값 game.test-items=true 를 주면 1P 스폰 둘레에 아이템 11종을 한 개씩 깔아 두고 시작한다 ({@link TestItems}).</p>
  */
@@ -77,6 +79,8 @@ public final class StartScreenStep implements BootStep {
 
     @Override
     public void run(GameContext context) {
+        // 이 컴퓨터에 저장해 둔 전체 음량을 첫 곡보다 먼저 적용한다. 로비 메뉴에서 바꾸면 여기에 다시 적는다
+        Sound.useSettings(SoundSettings.file(SoundSettings.defaultFile()));
         GameWindow window = context.get(GameWindow.class);
         TileMap map = context.get(TileMap.class);
         Tileset tileset = context.get(Tileset.class);
@@ -94,7 +98,8 @@ public final class StartScreenStep implements BootStep {
                         ? new MockLobbyService()
                         : new ServerLobbyService(server, SwingUtilities::invokeLater);
                 SceneManager scenes = new SceneManager(window::show);
-                OutgameSession session = new OutgameSession(service);
+                // 1P·2P가 고른 캐릭터·팀은 이 컴퓨터에 기억해 다음에 켜도 이어 쓴다
+                OutgameSession session = new OutgameSession(service, LocalPicks.file(LocalPicks.defaultFile()));
                 LoginService login = server == null ? new OfflineLoginService() : new ServerLoginService(server);
                 scenes.register("login", new LoginPanel(session, scenes, login));
                 if (server != null) {
@@ -176,7 +181,7 @@ public final class StartScreenStep implements BootStep {
         int count = properties.getInt(LOCAL_PLAYERS, 1);
         return switch (count) {
             case 1 -> List.of(localProfile(properties));
-            case 2 -> List.of(localProfile(properties), profile(properties, "player2", "Player2", Mascot.HANSUNGNYANGI, 2));
+            case 2 -> List.of(localProfile(properties), profile(properties, "player2", "Player2", Mascot.DEFAULT, 2));
             default -> throw new IllegalStateException("설정값 %s=%d 는 쓸 수 없습니다. 1(혼자) 또는 2(한 키보드 2인)만 됩니다."
                     .formatted(LOCAL_PLAYERS, count));
         };

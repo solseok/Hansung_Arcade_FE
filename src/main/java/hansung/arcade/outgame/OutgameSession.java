@@ -23,16 +23,20 @@ import java.util.Random;
  * 이 컴퓨터 플레이어의 캐릭터·팀·준비도 서버가 알려 준 자리 값으로 맞춘다.</p>
  *
  * <p>캐릭터와 팀(캐릭터 색)은 이 컴퓨터의 플레이어마다 따로 고른다. 번호(local)는 0이 1P, 1이 2P이고,
- * 번호를 받지 않는 메서드는 1P의 것이다. 2P는 처음에 1P와 구별되게 다른 캐릭터({@link #DEFAULT_CHARACTER_2P})·
- * 다른 팀({@link #DEFAULT_TEAM_2P})으로 시작한다. 온라인에서는 지금 서버가 고르기를 연결 단위로 받아 1P·2P에 함께 적용하므로,
- * 서버가 돌려준 대로 둘이 같은 캐릭터·팀으로 보인다 (요청에는 고른 플레이어 번호를 함께 보낸다).</p>
+ * 번호를 받지 않는 메서드는 1P의 것이다. 온라인이면 고른 플레이어 번호(playerId)를 붙여 보내고, 서버도 그 플레이어만 바꾼다.</p>
+ *
+ * <p>1P·2P가 마지막으로 고른 캐릭터·팀은 이 컴퓨터({@link LocalPicks})에 기억해 다음에 켜도 이어 쓴다. 온라인에서 방에 들어가면
+ * 서버 자리가 기억한 값과 다를 때 맞춰 달라고 보낸다. 고른 적이 없으면 캐릭터는 둘 다 상상부기({@link #DEFAULT_CHARACTER_2P})이고,
+ * 팀은 2P가 1P와 구별되게 파랑({@link #DEFAULT_TEAM_2P})이다.</p>
  */
 public final class OutgameSession {
     /** 이 컴퓨터에서 함께 할 수 있는 최대 인원 */
     public static final int MAX_LOCAL_PLAYERS = 2;
-    /** 2P가 처음 고른 캐릭터 */
-    public static final Mascot DEFAULT_CHARACTER_2P = Mascot.HANSUNGNYANGI;
-    /** 2P가 처음 고른 팀 */
+    /** 게임을 시작할 수 있는 가장 적은 인원. 같은 컴퓨터의 1P·2P는 두 명으로 센다 (서버 NOT_ENOUGH_PLAYERS와 같다) */
+    public static final int MIN_PLAYERS_TO_START = 2;
+    /** 2P가 고른 적이 없을 때의 캐릭터. 1P와 같은 상상부기다 */
+    public static final Mascot DEFAULT_CHARACTER_2P = Mascot.DEFAULT;
+    /** 2P가 고른 적이 없을 때의 팀. 1P(빨강)와 구별되게 파랑이다 */
     public static final Team DEFAULT_TEAM_2P = Team.BLUE;
 
     public final LobbyService service;
@@ -50,6 +54,13 @@ public final class OutgameSession {
     private final boolean[] randomCharacters = new boolean[MAX_LOCAL_PLAYERS];
     private final Random random = new Random();
     private final Team[] teams = {Team.RED, DEFAULT_TEAM_2P};
+    /** 1P·2P가 마지막으로 고른 캐릭터·팀 (이 컴퓨터에 기억) */
+    private final LocalPicks picks;
+    /**
+     * 기억한 값으로 맞춰 달라고 이미 보낸 방 번호 (온라인). 방 만들기와 대기실 화면이 같은 방으로 두 번 들어오므로 한 번만 보낸다.
+     * 방을 떠나면 비운다.
+     */
+    private Integer pickedRoom;
     private String mapId = GameMaps.DEFAULT_ID;
     private boolean ready;
     /** 목업 참가자(이 컴퓨터 밖의 사람)의 준비 상태. 서버가 붙으면 서버에서 받은 값으로 바꾼다 */
@@ -59,8 +70,19 @@ public final class OutgameSession {
     public record SeatView(int slot, String nickname, Mascot character, Team team, SlotState state) {
     }
 
+    /** 고른 캐릭터·팀을 이번 실행 동안만 기억한다 */
     public OutgameSession(LobbyService service) {
+        this(service, LocalPicks.inMemory());
+    }
+
+    /** picks에 기억해 둔 1P·2P의 캐릭터·팀으로 시작하고, 고를 때마다 picks에 적는다 */
+    public OutgameSession(LobbyService service, LocalPicks picks) {
         this.service = service;
+        this.picks = Objects.requireNonNull(picks);
+        for (int local = 0; local < MAX_LOCAL_PLAYERS; local++) {
+            showCharacter(local, pickedCharacter(local));
+            teams[local] = pickedTeam(local);
+        }
         this.online = service instanceof ServerLobbyService server ? server : null;
         if (online != null) {
             // 화면보다 먼저 등록해, 화면이 알림을 받을 때는 세션이 이미 새 상태다
@@ -119,6 +141,7 @@ public final class OutgameSession {
         playerIds = players.stream().map(LoginService.LoginPlayer::playerId).toList();
         room = null;
         roomState = null;
+        pickedRoom = null;
         service.signedIn(playerIds);
     }
 
@@ -162,13 +185,17 @@ public final class OutgameSession {
         return joined;
     }
 
-    /** 방에 들어온 상태로 맞춘다. 목업 참가자는 모두 준비한 채로 시작한다. 온라인이면 서버가 알려 준 방 상태를 쓴다 */
+    /**
+     * 방에 들어온 상태로 맞춘다. 목업 참가자는 모두 준비한 채로 시작한다. 온라인이면 서버가 알려 준 방 상태를 쓰고,
+     * 이 컴퓨터에 기억한 1P·2P의 캐릭터·팀과 다른 자리는 맞춰 달라고 서버에 보낸다.
+     */
     public void enter(Room room) {
         this.room = room;
         ready = false;
         participantReady.clear();
         if (online != null) {
             applyRoomState(online.state());
+            usePicks();
             return;
         }
         for (int id = localPlayers() + 1; id <= room.players(); id++) {
@@ -178,6 +205,38 @@ public final class OutgameSession {
     }
 
     public Room room() { return room; }
+
+    /** slot번 자리가 닫혀 있는지 (X). 방장이 닫았거나 맵 최대 인원 밖 자리다. 방 밖이면 false */
+    public boolean isSlotClosed(int slot) {
+        if (room == null) {
+            return false;
+        }
+        if (roomState != null) {
+            return roomState.isClosed(slot);
+        }
+        return service.closedSlots(room).contains(slot);
+    }
+
+    /**
+     * 방장이 자리를 누르면 빈 자리는 닫고(X, 정원 -1) 닫힌 자리는 연다(정원 +1).
+     * 방장이 아니거나, 대기 중이 아니거나, 사람이 있는 자리면 아무것도 하지 않는다.
+     * 온라인이면 CHANGE_SLOT을 보내고, 바뀐 자리는 뒤따르는 ROOM_STATE로 그린다.
+     *
+     * @return 열거나 닫기를 했으면 true, 아무것도 하지 않았으면 false
+     * @throws IllegalStateException 맵 최대 인원 밖 자리를 열거나 정원이 2명보다 줄어 거절되면. 메시지를 그대로 보여 줄 수 있다
+     */
+    public boolean toggleSlot(int slot) {
+        if (room == null || !isHost() || room.status() != Room.Status.WAITING
+                || seats().stream().anyMatch(seat -> seat.slot() == slot)) {
+            return false;
+        }
+        Room changed = service.setSlotOpen(slot, isSlotClosed(slot));
+        if (online == null) {
+            room = changed;
+        }
+        return true;
+    }
+
     /** 1P가 고른 캐릭터. 랜덤을 골랐으면 마지막으로 고른 캐릭터이고, 실제 캐릭터는 {@link #start}에서 정한다 */
     public Mascot character() { return character(0); }
     public boolean randomCharacter() { return randomCharacter(0); }
@@ -229,6 +288,56 @@ public final class OutgameSession {
         }
     }
 
+    /**
+     * 방에 들어왔을 때 서버 자리의 캐릭터·팀이 이 컴퓨터에 기억한 값과 다르면 기억한 값으로 보이고, 그 플레이어 번호를 붙여
+     * 서버에 보낸다 (온라인). 방을 떠나지 않고 같은 방으로 다시 들어오면 이미 보냈으므로 보이기만 한다.
+     */
+    private void usePicks() {
+        boolean send = pickedRoom == null || pickedRoom != room.number();
+        pickedRoom = room.number();
+        if (roomState == null) {
+            return;
+        }
+        for (int local = 0; local < localPlayers() && local < MAX_LOCAL_PLAYERS; local++) {
+            RoomState.Seat seat = roomState.seatOf(playerIds.get(local));
+            if (seat == null) {
+                continue;
+            }
+            String character = pickedCharacter(local);
+            if (!character.equals(seat.character())) {
+                showCharacter(local, character);
+                if (send) {
+                    online.selectCharacter(playerIds.get(local), character);
+                }
+            }
+            Team team = pickedTeam(local);
+            if (team != seat.team()) {
+                teams[local] = team;
+                if (send) {
+                    online.selectTeam(playerIds.get(local), team);
+                }
+            }
+        }
+    }
+
+    /** local번째 플레이어의 캐릭터를 id(랜덤이면 random)로 보인다. 랜덤이면 마지막으로 고른 캐릭터는 그대로 둔다 */
+    private void showCharacter(int local, String id) {
+        randomCharacters[local] = RoomState.RANDOM_CHARACTER.equals(id);
+        if (!randomCharacters[local]) {
+            characters[local] = Mascot.fromId(id);
+        }
+    }
+
+    /** local번째 플레이어가 기억한 캐릭터 id (랜덤이면 random). 고른 적이 없으면 상상부기 */
+    private String pickedCharacter(int local) {
+        return picks.character(local).orElse((local == 0 ? Mascot.DEFAULT : DEFAULT_CHARACTER_2P).id());
+    }
+
+    /** local번째 플레이어가 기억한 팀. 고른 적이 없으면 1P 빨강, 2P 파랑 */
+    private Team pickedTeam(int local) {
+        return picks.team(local).orElse(local == 0 ? Team.RED : DEFAULT_TEAM_2P);
+    }
+
     /** 1P의 캐릭터를 바꾼다. 바꾸면 준비가 풀리고 랜덤도 풀린다. */
     public void select(Mascot character) {
         select(0, character);
@@ -246,13 +355,14 @@ public final class OutgameSession {
 
     /**
      * local번째(0이 1P) 플레이어의 캐릭터를 바꾼다. 바꾸면 준비가 풀리고 그 플레이어의 랜덤도 풀린다.
-     * 온라인이면 서버에 SELECT_CHARACTER를 보낸다 (지금 서버는 이 컴퓨터의 플레이어 모두에 적용한다).
+     * 온라인이면 그 플레이어 번호를 붙여 SELECT_CHARACTER를 보낸다. 고른 것은 이 컴퓨터에 기억한다.
      *
      * @throws IllegalArgumentException 이 컴퓨터에 그 플레이어가 없으면 (1P로 로그인했는데 2P를 고르는 등)
      */
     public void select(int local, Mascot character) {
         characters[checkPlaying(local)] = Objects.requireNonNull(character);
         randomCharacters[local] = false;
+        picks.saveCharacter(local, character.id());
         if (online != null) {
             // 준비가 풀리는지는 서버가 정한다 (같은 캐릭터를 다시 고르면 서버는 준비를 그대로 둔다)
             online.selectCharacter(playerIds.get(local), character.id());
@@ -264,6 +374,7 @@ public final class OutgameSession {
     /** local번째(0이 1P) 플레이어가 ?(랜덤 캐릭터)를 고른다. 게임을 시작할 때 다섯 캐릭터 중 하나로 정한다 */
     public void selectRandomCharacter(int local) {
         randomCharacters[checkPlaying(local)] = true;
+        picks.saveCharacter(local, RoomState.RANDOM_CHARACTER);
         if (online != null) {
             online.selectCharacter(playerIds.get(local), RoomState.RANDOM_CHARACTER);
         } else {
@@ -271,9 +382,13 @@ public final class OutgameSession {
         }
     }
 
-    /** local번째(0이 1P) 플레이어의 팀(캐릭터 색)을 바꾼다. 바꾸면 준비가 풀린다. 온라인이면 SELECT_TEAM을 보낸다 */
+    /**
+     * local번째(0이 1P) 플레이어의 팀(캐릭터 색)을 바꾼다. 바꾸면 준비가 풀린다. 온라인이면 SELECT_TEAM을 보낸다.
+     * 고른 것은 이 컴퓨터에 기억한다.
+     */
     public void selectTeam(int local, Team team) {
         teams[checkPlaying(local)] = Objects.requireNonNull(team);
+        picks.saveTeam(local, team);
         if (online != null) {
             online.selectTeam(playerIds.get(local), team);
         } else {
@@ -383,12 +498,12 @@ public final class OutgameSession {
         return playerId <= localPlayers() ? ready : participantReady.getOrDefault(playerId, false);
     }
 
-    /** 방장이고, 방이 대기 중이고, 다른 참가자가 모두 준비했으면 시작할 수 있다 */
+    /** 방장이고, 방이 대기 중이고, 2명 이상이고, 다른 참가자가 모두 준비했으면 시작할 수 있다 */
     public boolean canStart() {
         if (roomState != null) {
             return isHost()
                     && room.status() == Room.Status.WAITING
-                    && roomState.seats().size() >= 2
+                    && roomState.seats().size() >= MIN_PLAYERS_TO_START
                     && roomState.seats().stream()
                     .filter(seat -> !playerIds.contains(seat.playerId()))
                     .allMatch(RoomState.Seat::ready);
@@ -396,6 +511,7 @@ public final class OutgameSession {
         return room != null
                 && service.isHost()
                 && room.status() == Room.Status.WAITING
+                && room.players() >= MIN_PLAYERS_TO_START
                 && participantReady.values().stream().allMatch(Boolean::booleanValue);
     }
 
@@ -415,7 +531,8 @@ public final class OutgameSession {
      * 게임을 시작한다. 방은 게임 중이 되고, 랜덤 맵·랜덤 캐릭터는 여기서 실제 맵·캐릭터로 정한다.
      * 온라인이면 서버에 GAME_START만 보내고 null을 돌려준다. 맵·캐릭터는 서버가 정해 GAME_STARTED로 알린다({@link #startInfo}).
      *
-     * @throws IllegalStateException 방장이 아니거나 시작할 수 없으면. 온라인이면 서버 문구(모두 준비 등)
+     * @throws IllegalStateException 방장이 아니거나 시작할 수 없으면. 혼자면 "2명 이상 모여야 시작할 수 있습니다."이고,
+     *                               온라인이면 서버 문구(인원·모두 준비·팀 등)
      */
     public GameStartInfo start() {
         if (!service.isHost()) {
@@ -424,6 +541,9 @@ public final class OutgameSession {
         if (online != null) {
             online.startGame();
             return null;
+        }
+        if (room == null || room.players() < MIN_PLAYERS_TO_START) {
+            throw new IllegalStateException("2명 이상 모여야 시작할 수 있습니다.");
         }
         if (!canStart()) {
             throw new IllegalStateException("모든 참가자가 준비해야 시작할 수 있습니다.");
@@ -483,6 +603,7 @@ public final class OutgameSession {
         }
         roomState = null;
         room = null;
+        pickedRoom = null;
         participantReady.clear();
         ready = false;
     }
@@ -492,6 +613,7 @@ public final class OutgameSession {
         online().ifPresent(ServerLobbyService::exitGame);
         roomState = null;
         room = null;
+        pickedRoom = null;
         participantReady.clear();
         ready = false;
     }
@@ -507,6 +629,7 @@ public final class OutgameSession {
         } finally {
             roomState = null;
             room = null;
+            pickedRoom = null;
             participantReady.clear();
             ready = false;
         }

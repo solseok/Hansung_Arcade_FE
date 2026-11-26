@@ -92,7 +92,7 @@ class StartCurtainTest {
     @Test
     void 화면에_보이지_않는_대기실은_기다리지_않고_바로_게임으로_넘어간다() {
         OutgameSession session = new OutgameSession(new MockLobbyService(SampleRooms.rooms()));
-        session.login("부기");
+        session.login("부기", "꾸꾸");
         List<String> shown = new ArrayList<>();
         SceneManager scenes = new SceneManager(screen -> { });
         WaitingRoomPanel waiting = new WaitingRoomPanel(session, scenes, (parent, current) -> Optional.empty());

@@ -83,6 +83,62 @@ class ServerLobbyServiceTest {
     }
 
     @Test
+    void 방_상태의_닫힌_자리를_읽고_없으면_정원_이상인_자리로_본다() throws Exception {
+        com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+
+        RoomState old = RoomState.from(mapper.readTree(STATE));
+        RoomState closed = RoomState.from(mapper.readTree(STATE.replace("\"status\":\"WAITING\"}",
+                "\"status\":\"WAITING\",\"closedSlots\":[7,1,6]}").replace("\"capacity\":6", "\"capacity\":5")));
+
+        assertEquals(List.of(6, 7), old.closedSlots(), "closedSlots가 없는 서버");
+        assertEquals(List.of(1, 6, 7), closed.closedSlots());
+        assertTrue(closed.isClosed(1));
+        assertFalse(closed.isClosed(2));
+        assertEquals(5, closed.room().capacity());
+        assertEquals(List.of(1, 6, 7), closed.withStatus(Room.Status.PLAYING).closedSlots());
+    }
+
+    @Test
+    void 방장이_자리를_누르면_CHANGE_SLOT을_보내고_닫힌_자리는_방_상태를_따른다() throws Exception {
+        server.respond(request -> FakeServer.ok(request, "CHANGE_SLOT".equals(request.path("type").asText())
+                ? "{}" : compact(STATE)));
+        Room room = lobby.create("한 판", 6, 1);
+        assertEquals(List.of(6, 7), lobby.closedSlots(room));
+
+        lobby.setSlotOpen(3, false);
+        lobby.setSlotOpen(6, true);
+
+        JsonNode close = server.next("CHANGE_SLOT").path("body");
+        assertEquals(3, close.path("slot").asInt());
+        assertFalse(close.path("open").asBoolean());
+        assertTrue(close.path("open").isBoolean());
+        JsonNode open = server.next("CHANGE_SLOT").path("body");
+        assertEquals(6, open.path("slot").asInt());
+        assertTrue(open.path("open").asBoolean());
+
+        server.push("{\"type\":\"ROOM_STATE\",\"body\":" + compact(STATE.replace("\"status\":\"WAITING\"}",
+                "\"status\":\"WAITING\",\"closedSlots\":[3,7]}")) + "}");
+        until(() -> lobby.state().isClosed(3));
+        assertEquals(List.of(3, 7), lobby.closedSlots(room));
+        assertEquals(List.of(4, 5, 6, 7), lobby.closedSlots(new Room(9, "다른 방", 1, 4, "캠프 08", Room.Status.WAITING)),
+                "들어가 있지 않은 방은 정원으로 센다");
+    }
+
+    @Test
+    void 자리_바꾸기를_서버가_거절하면_서버_문구로_실패한다() throws Exception {
+        server.respond(request -> "CHANGE_SLOT".equals(request.path("type").asText())
+                ? FakeServer.fail(request, "SLOT_OCCUPIED", "사람이 있는 자리는 닫을 수 없습니다.")
+                : FakeServer.ok(request, compact(STATE)));
+        lobby.create("한 판", 6, 1);
+
+        IllegalStateException failure = assertThrows(IllegalStateException.class, () -> lobby.setSlotOpen(2, false));
+
+        assertEquals("사람이 있는 자리는 닫을 수 없습니다.", failure.getMessage());
+        lobby.leave();
+        assertThrows(IllegalStateException.class, () -> lobby.setSlotOpen(2, false), "방 밖에서는 보내지 않는다");
+    }
+
+    @Test
     void 로비에_들어갈_때_ROOM_LIST로_목록을_받는다() throws Exception {
         server.respond(request -> FakeServer.ok(request, compact(ROOMS)));
 

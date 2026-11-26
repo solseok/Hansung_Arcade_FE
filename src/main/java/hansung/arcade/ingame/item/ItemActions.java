@@ -55,10 +55,18 @@ public final class ItemActions {
     }
 
     private boolean throwNearby(Player player) {
+        return balloonToThrow(player).map(found -> balloonField.throwBalloon(found, player.facing())).orElse(false);
+    }
+
+    /**
+     * 장갑으로 물풍선 키를 누르면 집어 들 물풍선: 선 칸(몸 가운데 칸)에 가만히 놓인 물풍선, 없으면 바라보는 앞 칸의 것.
+     * 던질 수 있는지({@link BalloonField#canThrow})는 따로 본다. 선 칸의 물풍선을 던질 수 없으면 앞 칸의 것도 던지지 않는다.
+     * 온라인에서는 이 물풍선을 던져 달라고 서버에 보낸다.
+     */
+    public Optional<WaterBalloon> balloonToThrow(Player player) {
         Direction facing = player.facing();
-        Optional<WaterBalloon> balloon = restingAt(player.col(), player.row())
+        return restingAt(player.col(), player.row())
                 .or(() -> restingAt(player.col() + facing.dx(), player.row() + facing.dy()));
-        return balloon.map(found -> balloonField.throwBalloon(found, facing)).orElse(false);
     }
 
     private Optional<WaterBalloon> restingAt(int col, int row) {
@@ -72,14 +80,21 @@ public final class ItemActions {
      * @return 물풍선을 밀었는지
      */
     public boolean kick(Player player, PlayerGear gear, Direction move) {
+        return balloonToKick(player, gear, move).map(balloon -> balloonField.push(balloon, move)).orElse(false);
+    }
+
+    /**
+     * player가 move 쪽으로 걸으려다 막혔을 때 찰 물풍선: 물풍선을 밀 수 있고(신발·빨간 악마), 땅에 선 보통 상태로 움직이지 못했고,
+     * 바로 앞(몸 가운데 칸의 다음 칸)에 가만히 놓인 물풍선이 player를 막고 있다. 미끄러질 수 있는지({@link BalloonField#canKick})는
+     * 따로 본다. 온라인에서는 이 물풍선을 차 달라고 서버에 보낸다.
+     */
+    public Optional<WaterBalloon> balloonToKick(Player player, PlayerGear gear, Direction move) {
         if (move == null || !gear.canPushBalloons() || gear.isAirborne()
                 || player.state() != PlayerState.NORMAL || player.isMoving()) {
-            return false;
+            return Optional.empty();
         }
         return restingAt(player.col() + move.dx(), player.row() + move.dy())
-                .filter(balloon -> !balloon.lets(player))
-                .map(balloon -> balloonField.push(balloon, move))
-                .orElse(false);
+                .filter(balloon -> !balloon.lets(player));
     }
 
     /**
