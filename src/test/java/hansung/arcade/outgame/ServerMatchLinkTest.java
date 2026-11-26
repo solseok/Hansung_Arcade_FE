@@ -3,6 +3,7 @@ package hansung.arcade.outgame;
 import com.fasterxml.jackson.databind.JsonNode;
 import hansung.arcade.ingame.GameWorld;
 import hansung.arcade.ingame.OnlineSeat;
+import hansung.arcade.ingame.balloon.WaterBalloon;
 import hansung.arcade.ingame.entity.Direction;
 import hansung.arcade.ingame.entity.Mascot;
 import hansung.arcade.ingame.entity.Player;
@@ -153,6 +154,31 @@ class ServerMatchLinkTest {
     }
 
     @Test
+    void 물풍선_던지기_차기_멈춤_푸시를_경기에_넣는다() throws Exception {
+        bind();
+        server.push("{\"type\":\"ROUND_BEGIN\",\"body\":{\"countdownMs\":0,\"timeLimitMs\":180000}}");
+        until(() -> world.server().orElseThrow().isPlaying());
+        server.push("{\"type\":\"BALLOON_PLACED\",\"body\":{\"balloonId\":1,\"ownerId\":12,\"col\":0,\"row\":2,\"range\":1,\"fuseMs\":2000}}");
+        until(() -> world.balloonField().balloons().size() == 1);
+        WaterBalloon balloon = world.balloonField().balloons().getFirst();
+
+        server.push("{\"type\":\"BALLOON_THROWN\",\"body\":{\"balloonId\":1,\"playerId\":null,\"col\":0,\"row\":2,"
+                + "\"toCol\":5,\"toRow\":2,\"direction\":\"RIGHT\",\"flightMs\":300}}");
+        until(balloon::isFlying);
+        assertEquals(5, balloon.col(), "나는 동안 칸은 내려앉을 칸이다");
+
+        server.push("{\"type\":\"BALLOON_PLACED\",\"body\":{\"balloonId\":2,\"ownerId\":20,\"col\":2,\"row\":0,\"range\":1,\"fuseMs\":2000}}");
+        until(() -> world.balloonField().balloons().size() == 2);
+        WaterBalloon second = world.balloonField().balloons().get(1);
+        server.push("{\"type\":\"BALLOON_KICKED\",\"body\":{\"balloonId\":2,\"playerId\":20,\"col\":2,\"row\":0,"
+                + "\"direction\":\"LEFT\"}}");
+        until(second::isSliding);
+        server.push("{\"type\":\"BALLOON_STOPPED\",\"body\":{\"balloonId\":2,\"col\":1,\"row\":0}}");
+        until(second::isResting);
+        assertEquals(List.of(1, 0), List.of(second.col(), second.row()));
+    }
+
+    @Test
     void 경기_중_채팅은_맵_위에_올리고_서버_안내는_올리지_않는다() throws Exception {
         bind();
         server.push("{\"type\":\"CHAT_MESSAGE\",\"body\":{\"senderId\":0,\"sender\":\"\",\"text\":\"냥이님이 나갔습니다.\"}}");
@@ -246,6 +272,18 @@ class ServerMatchLinkTest {
         assertEquals(List.of(12, 6, 7), List.of(push.path("playerId").asInt(), push.path("col").asInt(),
                 push.path("row").asInt()));
         assertEquals("RIGHT", push.path("direction").asText());
+
+        link.throwBalloon(12, 1, 2, Direction.DOWN);
+        JsonNode thrown = server.next(ServerMatchLink.BALLOON_THROW).path("body");
+        assertEquals(List.of(12, 1, 2), List.of(thrown.path("playerId").asInt(), thrown.path("col").asInt(),
+                thrown.path("row").asInt()));
+        assertEquals("DOWN", thrown.path("direction").asText());
+
+        link.kickBalloon(12, 3, 4, Direction.LEFT);
+        JsonNode kicked = server.next(ServerMatchLink.BALLOON_KICK).path("body");
+        assertEquals(List.of(12, 3, 4), List.of(kicked.path("playerId").asInt(), kicked.path("col").asInt(),
+                kicked.path("row").asInt()));
+        assertEquals("LEFT", kicked.path("direction").asText());
 
         link.chat(12, "안녕");
         JsonNode chat = server.next(ServerMatchLink.CHAT).path("body");

@@ -140,6 +140,18 @@ public final class PlayerGear {
         activeCount = Math.min(MAX_ACTIVE_COUNT, count);
     }
 
+    /**
+     * 서버가 알린 아이템을 먹어 생긴 능력을 얻는다 (온라인 ITEM_TAKEN). 신발·빨간 악마는 물풍선 밀기(차기), 장갑은 물풍선 던지기다.
+     * 능력치는 플레이어가, 손에 든 쓰는 아이템은 {@link #holdFromServer}가 따로 맞춘다. 탱크는 서버가 아직 다루지 않아 얻지 않는다.
+     */
+    public void gainFromServer(ItemType item) {
+        switch (item) {
+            case SHOE, RED_DEVIL -> allowPushing();
+            case GLOVE -> allowThrowing();
+            default -> { }
+        }
+    }
+
     /** 서버가 보호막을 썼다고 알렸다 (온라인). seconds초 동안 물줄기를 막는 모습을 보인다 */
     public void raiseShieldFromServer(double seconds) {
         shieldLeft = seconds;

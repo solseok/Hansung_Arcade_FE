@@ -346,6 +346,8 @@ public final class GameWorld {
             boxPusher.requestPush(player, move, dt, (col, row) -> occupancy.hasAny(col, row, BOX_BLOCKERS)
                             || isItemFallingInto(col, row))
                     .ifPresent(request -> server.requestBoxPush(player, request));
+            // 막힌 앞 칸의 물풍선도 서버가 찬다. 찰 수 있으면 차 달라고 보내고, 미끄러뜨리는 것은 BALLOON_KICKED가 온 뒤다
+            server.requestKick(player, move);
         }
         server.moveRemotePlayers(dt);
         balloonField.update(dt, allPlayers);
@@ -586,6 +588,11 @@ public final class GameWorld {
     /** 맵 위의 물풍선과 물줄기 */
     public BalloonField balloonField() {
         return balloonField;
+    }
+
+    /** 아이템으로 생긴 능력을 쓰는 일. 온라인 경기에서 던지거나 찰 물풍선을 고를 때 쓴다 */
+    ItemActions itemActions() {
+        return itemActions;
     }
 
     /** 몸으로 미는 블럭과, 밀려 미끄러지는 중인 블럭 */

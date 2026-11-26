@@ -42,6 +42,11 @@ import java.util.Set;
  *
  * <p>물줄기에 맞은 플레이어를 어떻게 할지는 게임 상태(GameWorld)가 {@link #wetOwnersAt}을 보고 정한다.
  * 블럭 파괴·아이템처럼 터질 때마다 할 일은 {@link #takeNewExplosions}로 이번에 터진 것을 받아 처리한다.</p>
+ *
+ * <p>온라인 경기에서 서버가 놓은 물풍선({@link #placeFromServer})은 서버가 알린 대로 던지고({@link #throwFromServer}) 차고
+ * ({@link #kickFromServer}) 멈춘다({@link #stopFromServer}). 미끄러지거나 내려앉는 모습은 위 규칙대로 보이지만, 가시·물줄기·겹침·
+ * 내려앉을 곳 없음으로 터지거나 더 날아가는 것은 이 컴퓨터가 정하지 않고 그 자리에 멈춰 서버의 알림(BALLOON_EXPLODED·
+ * BALLOON_THROWN)을 기다린다.</p>
  */
 public final class BalloonField {
 
@@ -129,15 +134,79 @@ public final class BalloonField {
      * @return 던졌는지. 이미 움직이는 중이거나, 내려앉을 곳이 제자리밖에 없으면 던지지 않고 false
      */
     public boolean throwBalloon(WaterBalloon balloon, Direction direction) {
+        if (!canThrow(balloon, direction)) {
+            return false;
+        }
+        fly(balloon, direction, landingCell(balloon.col(), balloon.row(), direction, THROW_DISTANCE, balloon));
+        return true;
+    }
+
+    /**
+     * balloon을 direction 쪽으로 던질 수 있는지 ({@link #throwBalloon}이 던질지). 맵 위에 가만히 놓였고, 내려앉을 곳이 제자리가 아니다.
+     * 온라인에서 던져 달라고 서버에 보내기 전에 본다.
+     */
+    public boolean canThrow(WaterBalloon balloon, Direction direction) {
         if (!balloons.contains(balloon) || !balloon.isResting()) {
             return false;
         }
         Point landing = landingCell(balloon.col(), balloon.row(), direction, THROW_DISTANCE, balloon);
-        if (landing.x == balloon.col() && landing.y == balloon.row()) {
+        return landing.x != balloon.col() || landing.y != balloon.row();
+    }
+
+    /**
+     * balloon을 direction 쪽으로 밀면 무슨 일이 생기는지 ({@link #push}가 true를 돌려줄지): 맵 위에 가만히 놓였고,
+     * 미끄러질 칸이 있거나 바로 앞이 그쪽으로 가시 난 블럭이다. 온라인에서 차 달라고 서버에 보내기 전에 본다.
+     */
+    public boolean canKick(WaterBalloon balloon, Direction direction) {
+        if (!balloons.contains(balloon) || !balloon.isResting()) {
             return false;
         }
-        fly(balloon, direction, landing);
-        return true;
+        return keepsSliding(balloon.col(), balloon.row(), direction, balloon)
+                || facesThorn(balloon.col(), balloon.row(), direction);
+    }
+
+    /**
+     * 서버가 던졌다고 알린 물풍선을 날린다 (온라인 BALLOON_THROWN). 지금 땅 위 위치에서 direction 쪽 (toCol, toRow) 칸으로
+     * seconds초 동안 난다. 미끄러지거나 날던 중이었어도 지금 자리에서 새로 날아간다.
+     */
+    public void throwFromServer(WaterBalloon balloon, Direction direction, int toCol, int toRow, double seconds) {
+        if (balloons.contains(balloon)) {
+            balloon.startFlying(direction, toCol, toRow, seconds);
+        }
+    }
+
+    /**
+     * 서버가 찼다고 알린 물풍선을 (col, row) 칸 가운데에서 direction 쪽으로 미끄러뜨리기 시작한다 (온라인 BALLOON_KICKED).
+     * 이 컴퓨터가 보던 칸이 달랐거나 아직 날고 있는 것으로 보이던 물풍선이면(서버는 내려앉은 뒤에야 찬다) 그 칸에 세운 뒤 미끄러뜨린다.
+     *
+     * @param players 맵 위의 모든 플레이어. 옮긴 칸에 몸이 걸친 사람은 그 칸을 벗어날 때까지 지나갈 수 있다
+     */
+    public void kickFromServer(WaterBalloon balloon, int col, int row, Direction direction, List<Player> players) {
+        if (!balloons.contains(balloon)) {
+            return;
+        }
+        if (balloon.isFlying() || balloon.col() != col || balloon.row() != row) {
+            balloon.settleAt(col, row);
+            admitOverlapping(balloon, players);
+        }
+        balloon.startSliding(direction);
+    }
+
+    /**
+     * 서버가 미끄러지던 물풍선이 (col, row)에 멈췄다고 알렸다 (온라인 BALLOON_STOPPED). 그 칸 가운데에 세운다.
+     * 이 컴퓨터에서 아직 미끄러지거나 날고 있거나 다른 칸에 멈췄어도 서버가 알린 칸을 따른다.
+     *
+     * @param players 맵 위의 모든 플레이어. 세운 칸에 몸이 걸친 사람은 그 칸을 벗어날 때까지 지나갈 수 있다
+     */
+    public void stopFromServer(WaterBalloon balloon, int col, int row, List<Player> players) {
+        if (!balloons.contains(balloon)) {
+            return;
+        }
+        boolean moved = balloon.isFlying() || balloon.col() != col || balloon.row() != row;
+        balloon.settleAt(col, row);
+        if (moved) {
+            admitOverlapping(balloon, players);
+        }
     }
 
     /**
@@ -204,6 +273,11 @@ public final class BalloonField {
      * 내려앉은 칸에 사람이 있으면 그 칸을 벗어날 때까지 지나가게 두고, 물줄기가 남은 칸이나 바닥 가시 칸이면 바로 터진다.
      */
     private void land(WaterBalloon balloon, Direction direction, List<Player> players, List<WaterBalloon> burst) {
+        if (balloon.isServerTimed()) {
+            // 더 날지·터질지는 서버가 알린다 (BALLOON_THROWN·BALLOON_EXPLODED). 그때까지 내려앉은 칸에 둔다
+            admitOverlapping(balloon, players);
+            return;
+        }
         if (!canLand(balloon.col(), balloon.row(), balloon)) {
             Point next = landingCell(balloon.col(), balloon.row(), direction, 1, balloon);
             if (next.x != balloon.col() || next.y != balloon.row()) {
@@ -253,8 +327,11 @@ public final class BalloonField {
                 balloon.stepCell();
                 admitOverlapping(balloon, players);
                 if (popsAt(balloon.col(), balloon.row())) {
+                    // 서버 물풍선은 이 칸에서 터진다는 서버의 알림(BALLOON_EXPLODED)을 기다린다
                     balloon.stopSliding();
-                    burst.add(balloon);
+                    if (!balloon.isServerTimed()) {
+                        burst.add(balloon);
+                    }
                     return;
                 }
             }
@@ -266,14 +343,18 @@ public final class BalloonField {
      * 다른 물풍선이 없는 가장 먼 칸이 멈출 칸이고, 그 칸이 지금 칸보다 앞이면 더 간다.
      */
     private boolean keepsSliding(WaterBalloon balloon) {
-        Direction direction = balloon.slideDirection();
+        return keepsSliding(balloon.col(), balloon.row(), balloon.slideDirection(), balloon);
+    }
+
+    /** (col, row) 칸 가운데에 있는 self가 direction 쪽으로 미끄러져 갈 칸이 있는지 ({@link #keepsSliding(WaterBalloon)}) */
+    private boolean keepsSliding(int fromCol, int fromRow, Direction direction, WaterBalloon self) {
         for (int step = 1; ; step++) {
-            int col = balloon.col() + direction.dx() * step;
-            int row = balloon.row() + direction.dy() * step;
+            int col = fromCol + direction.dx() * step;
+            int row = fromRow + direction.dy() * step;
             if (map.isSolid(col, row)) {
                 return false;
             }
-            if (canLand(col, row, balloon)) {
+            if (canLand(col, row, self)) {
                 return true;
             }
         }
@@ -281,20 +362,24 @@ public final class BalloonField {
 
     /** 미끄러지는 balloon의 바로 앞이 가시 블럭이고, 그 가시 난 면을 향해 왔는지 */
     private boolean facesThorn(WaterBalloon balloon) {
-        Direction direction = balloon.slideDirection();
-        int col = balloon.col() + direction.dx();
-        int row = balloon.row() + direction.dy();
+        return facesThorn(balloon.col(), balloon.row(), balloon.slideDirection());
+    }
+
+    /** (col, row)의 direction 쪽 바로 앞이 그쪽으로 가시 난 블럭인지 */
+    private boolean facesThorn(int fromCol, int fromRow, Direction direction) {
+        int col = fromCol + direction.dx();
+        int row = fromRow + direction.dy();
         return map.isInside(col, row) && map.tileAt(col, row).popsBalloonMoving(direction);
     }
 
     /**
      * 미끄러지던 balloon을 지금 칸 가운데에 세운다. 가시 난 면에 닿았거나, 다른 물풍선이 있는 칸이라 한 칸에 둘이 서게 되면
-     * 터뜨린다 (겹친 물풍선은 연쇄로 함께 터진다).
+     * 터뜨린다 (겹친 물풍선은 연쇄로 함께 터진다). 서버 물풍선은 세우기만 하고 서버의 알림을 기다린다.
      */
     private void stopHere(WaterBalloon balloon, List<WaterBalloon> burst) {
         boolean pop = facesThorn(balloon) || balloonsAt(balloon.col(), balloon.row()).size() > 1;
         balloon.stopSliding();
-        if (pop) {
+        if (pop && !balloon.isServerTimed()) {
             burst.add(balloon);
         }
     }
