@@ -586,6 +586,8 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
         // 새 방에 들어왔든 경기를 마치고 돌아왔든, 자동 준비면 바로 준비한다
         session.setReady(autoReady.isSelected() && !session.isHost());
         refresh();
+        // 글자 커서는 채팅 입력 칸에 둔다. 들어오자마자 칠 수 있다
+        chat.focusInput();
     }
 
     /** 대기실을 떠나면 짙어지던 막을 걷는다. 그래야 막이 다 짙어졌을 때 떠난 방의 게임을 시작하지 않는다 */
