@@ -28,7 +28,8 @@ import java.awt.event.MouseEvent;
  * 일반 메시지는 흰 글자, 시스템 안내는 노란 글자다. 사용자가 쓰는 채팅 글자는 굴림체로 매끈하게 그린다.
  *
  * <p>글자 커서와 키보드 포커스는 입력 칸만 갖는다. 로그는 포커스를 받지 않아 눌러도 캐럿·선택이 생기지 않고,
- * 로그를 누르면 입력 칸으로 포커스를 넘긴다 (JDK는 편집할 수 없는 글 칸도 포커스를 받으면 캐럿을 보인다).</p>
+ * 로그를 누르면 입력 칸으로 포커스를 넘긴다 (JDK는 편집할 수 없는 글 칸도 포커스를 받으면 캐럿을 보인다).
+ * 전송 버튼도 포커스를 받지 않아, 눌러 보낸 뒤에도 입력 칸에서 이어 칠 수 있다.</p>
  */
 public final class ChatPanel extends JPanel {
     /** 탭 높이, 입력 줄 높이 */
@@ -79,6 +80,7 @@ public final class ChatPanel extends JPanel {
         input.setToolTipText("메시지를 입력하고 Enter를 누르세요");
         input.addActionListener(event -> send());
         send.addActionListener(event -> send());
+        send.setFocusable(false);
         add(input);
         add(send);
     }

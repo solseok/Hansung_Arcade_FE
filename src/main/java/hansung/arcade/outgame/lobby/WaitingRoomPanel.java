@@ -403,12 +403,17 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
         place(bottom, BOTTOM_BAR, leave, LEAVE);
     }
 
-    /** 대기실을 {@link #START_FADE_MS}ms 동안 검게 어둡게 한 뒤 next를 한다. 화면에 보이지 않으면 바로 한다 */
+    /**
+     * 대기실을 {@link #START_FADE_MS}ms 동안 검게 어둡게 한 뒤 next를 한다. 화면에 보이지 않으면 바로 한다.
+     * 어두워지는 동안에는 포커스를 채팅 입력 칸에서 대기실로 옮긴다. 막은 키만 버리고 한글 조합 입력은 막지 못해서,
+     * 입력 칸에 포커스가 남으면 그 사이 친 글자가 칸에 남는다.
+     */
     private void fadeOutThen(Runnable next) {
         if (!isShowing()) {
             next.run();
             return;
         }
+        requestFocusInWindow();
         curtain.fade(next);
     }
 
