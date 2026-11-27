@@ -7,6 +7,7 @@ import hansung.arcade.network.NetworkSettings;
 import hansung.arcade.network.ServerClient;
 import hansung.arcade.network.ServerConnection;
 import hansung.arcade.outgame.lobby.Room;
+import hansung.arcade.outgame.lobby.RoomMode;
 import hansung.arcade.outgame.lobby.ServerLobbyService;
 import hansung.arcade.outgame.lobby.SlotState;
 import org.junit.jupiter.api.AfterEach;
@@ -20,6 +21,7 @@ import java.util.concurrent.TimeUnit;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** 온라인 대기실: 자리·방장·준비·내 선택은 서버의 방 상태를 따르고, 고르기·준비는 서버로 보낸다 */
@@ -62,6 +64,58 @@ class OnlineSessionTest {
     private void enterAsHost(boolean guestReady) {
         server.respond(request -> FakeServer.ok(request, HOST_STATE.formatted(guestReady)));
         session.enter(session.create("한 판", 8));
+    }
+
+    /** 2P(12, 13)가 방장인 캠프 08 팀전 방. 서버는 기억한 팀(MINT)을 쓸 수 없어 빨강·파랑으로 앉혔다 */
+    private static final String TEAM_STATE = """
+            {"room":{"number":4,"title":"팀 한 판","capacity":8,"mapId":"camp/camp08","status":"WAITING",
+                     "mode":"TEAM","teams":["RED","BLUE"]},"hostId":12,
+             "players":[{"playerId":12,"nickname":"상상부기","slot":0,"character":"kkukku","team":"RED","ready":false},
+                        {"playerId":13,"nickname":"꾸꾸","slot":1,"character":"kkukku","team":"BLUE","ready":false}]}"""
+            .replaceAll("\\n\\s*", "");
+
+    @Test
+    void 팀전으로_방을_만들면_mode를_보내고_고를_수_없는_기억한_팀은_보내지_않고_서버가_앉힌_팀을_따른다() throws Exception {
+        server.respond(request -> FakeServer.ok(request, TEAM_STATE));
+
+        session.create("팀 한 판", 8, RoomMode.TEAM);
+
+        var created = server.nextMessage();
+        assertEquals("ROOM_CREATE", created.path("type").asText());
+        assertEquals("TEAM", created.path("body").path("mode").asText());
+        // 1P·2P 모두 기억한 MINT를 이 방에서 고를 수 없어 SELECT_TEAM을 보내지 않는다
+        session.chat("다음");
+        assertEquals("CHAT", server.nextMessage().path("type").asText());
+        assertEquals(RoomMode.TEAM, session.mode());
+        assertEquals(List.of(Team.RED, Team.BLUE), session.allowedTeams());
+        assertEquals(Team.RED, session.team(0));
+        assertEquals(Team.BLUE, session.team(1));
+        assertEquals(Team.MINT, picks.team(0).orElseThrow(), "기억은 내가 고른 값 그대로다");
+    }
+
+    @Test
+    void 팀전에서_고를_수_없는_팀은_서버에_보내지_않고_거절한다() throws Exception {
+        server.respond(request -> FakeServer.ok(request, TEAM_STATE));
+        session.create("팀 한 판", 8, RoomMode.TEAM);
+        server.nextMessage();
+
+        IllegalStateException refused = assertThrows(IllegalStateException.class,
+                () -> session.selectTeam(0, Team.YELLOW));
+        assertEquals("캠프 08 팀전에서는 빨강·파랑만 고를 수 있습니다.", refused.getMessage());
+        session.selectTeam(0, Team.BLUE);
+
+        var team = server.nextMessage();
+        assertEquals("SELECT_TEAM", team.path("type").asText());
+        assertEquals("BLUE", team.path("body").path("team").asText());
+    }
+
+    @Test
+    void 개인전으로_방을_만들면_mode는_SOLO이고_8색을_모두_고를_수_있다() throws Exception {
+        enterAsHost(false);
+
+        assertEquals("SOLO", server.nextMessage().path("body").path("mode").asText());
+        assertEquals(RoomMode.SOLO, session.mode());
+        assertEquals(List.of(Team.values()), session.allowedTeams());
     }
 
     @Test
