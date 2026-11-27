@@ -88,7 +88,7 @@ class GameWorldItemTest {
         assertEquals(0, world.localPlayer().col());
 
         walk(world, Direction.RIGHT, 5);
-        ticks(world, 60);
+        ticks(world, 80);
 
         WaterBalloon balloon = world.balloonField().balloons().get(0);
         assertEquals(7, balloon.col());
@@ -294,7 +294,8 @@ class GameWorldItemTest {
         walk(world, Direction.LEFT, 15);
 
         walk(world, Direction.RIGHT, 3);
-        ticks(world, 40);
+        // 퓨즈(2초)보다 먼저, 가시 면 앞에 닿아 터질 만큼 넉넉히 흘린다
+        ticks(world, 70);
 
         assertTrue(world.balloonField().balloons().isEmpty());
         // 터진 물풍선은 가시 블럭 바로 앞 칸에서 터졌고, 물줄기에 맞은 가시 블럭은 부서졌다

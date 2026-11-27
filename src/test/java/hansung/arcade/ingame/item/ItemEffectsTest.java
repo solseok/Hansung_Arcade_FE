@@ -74,14 +74,17 @@ class ItemEffectsTest {
     }
 
     @Test
-    void 빨간_악마는_물줄기를_최댓값까지_올리고_물풍선을_밀_수_있게_한다() {
+    void 빨간_악마는_이동속도를_최댓값까지_올리고_물풍선을_밀_수_있게_한다() {
         Player player = new Player(1, new PlayerProfile("냥이", Mascot.HANSUNGNYANGI), 0, 0);
         PlayerGear gear = new PlayerGear();
+        int waterRange = player.waterRange();
 
         ItemEffects.apply(player, gear, ItemType.RED_DEVIL);
 
-        // 한성냥이의 물줄기 최댓값은 9
-        assertEquals(9, player.waterRange());
+        // 한성냥이의 이동속도 최댓값은 8. 물줄기는 그대로다
+        assertEquals(Mascot.HANSUNGNYANGI.speed().max(), player.speedLevel());
+        assertEquals(8, player.speedLevel());
+        assertEquals(waterRange, player.waterRange());
         assertTrue(gear.canPushBalloons());
         assertFalse(gear.canThrowBalloons());
     }

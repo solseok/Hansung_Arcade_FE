@@ -409,4 +409,55 @@ class ServerLobbyServiceTest {
         until(() -> lobby.state() == null);
         assertTrue(lobby.rooms().isEmpty());
     }
+
+    @Test
+    void 팀전으로_방을_만들면_ROOM_CREATE에_mode를_보내고_개인전은_SOLO를_보낸다() throws Exception {
+        server.respond(request -> FakeServer.ok(request, compact(STATE)));
+
+        lobby.create("팀 한 판", 8, 1, RoomMode.TEAM);
+        assertEquals("TEAM", server.next("ROOM_CREATE").path("body").path("mode").asText());
+        lobby.leave();
+        server.next("ROOM_LEAVE");
+        lobby.create("한 판", 8, 1);
+        assertEquals("SOLO", server.next("ROOM_CREATE").path("body").path("mode").asText());
+    }
+
+    @Test
+    void 방_상태의_mode와_teams를_읽고_없으면_개인전_8색이다() throws Exception {
+        var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        RoomState team = RoomState.from(mapper.readTree(STATE.replace("\"status\":\"WAITING\"}",
+                "\"status\":\"WAITING\",\"mode\":\"TEAM\",\"teams\":[\"BLUE\",\"RED\",\"YELLOW\",\"GREEN\"]}")));
+        RoomState old = RoomState.from(mapper.readTree(STATE));
+
+        assertEquals(RoomMode.TEAM, team.room().mode());
+        assertEquals(List.of(Team.RED, Team.YELLOW, Team.GREEN, Team.BLUE), team.teams(), "Team 순서로 둔다");
+        assertTrue(team.allows(Team.GREEN));
+        assertFalse(team.allows(Team.MINT));
+        assertEquals(RoomMode.TEAM, team.withStatus(Room.Status.PLAYING).room().mode(), "게임 중으로 바꿔도 팀전이다");
+        assertEquals(RoomMode.SOLO, old.room().mode());
+        assertEquals(List.of(Team.values()), old.teams());
+    }
+
+    @Test
+    void teams가_없거나_아는_색이_없으면_경기_방식과_맵으로_셈한다() throws Exception {
+        var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        String camp = STATE.replace("village/village10", "camp/camp08");
+        RoomState noTeams = RoomState.from(mapper.readTree(camp.replace("\"status\":\"WAITING\"}",
+                "\"status\":\"WAITING\",\"mode\":\"TEAM\"}")));
+        RoomState unknown = RoomState.from(mapper.readTree(STATE.replace("\"status\":\"WAITING\"}",
+                "\"status\":\"WAITING\",\"mode\":\"TEAM\",\"teams\":[\"GOLD\"]}")));
+
+        assertEquals(List.of(Team.RED, Team.BLUE), noTeams.teams());
+        assertEquals(List.of(Team.RED, Team.YELLOW, Team.GREEN, Team.BLUE), unknown.teams());
+    }
+
+    @Test
+    void 방_목록의_mode를_읽고_없으면_개인전이다() throws Exception {
+        var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        List<Room> rooms = RoomState.rooms(mapper.readTree(ROOMS.replace("\"status\":\"WAITING\"}",
+                "\"status\":\"WAITING\",\"mode\":\"TEAM\"}")));
+
+        assertEquals(RoomMode.TEAM, rooms.get(0).mode());
+        assertEquals(RoomMode.SOLO, rooms.get(1).mode());
+    }
 }
