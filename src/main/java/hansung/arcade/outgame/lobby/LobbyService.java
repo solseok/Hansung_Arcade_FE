@@ -34,18 +34,6 @@ public interface LobbyService {
 
     Room create(String title, int capacity, int seats);
 
-    /**
-     * 경기 방식을 정해 방을 만든다. 기본은 개인전만 만들 수 있는 서비스다.
-     *
-     * @throws IllegalStateException 팀전을 만들 수 없는 서비스면
-     */
-    default Room create(String title, int capacity, int seats, RoomMode mode) {
-        if (mode != RoomMode.SOLO) {
-            throw new IllegalStateException("팀전 방을 만들 수 없습니다.");
-        }
-        return create(title, capacity, seats);
-    }
-
     boolean isHost();
 
     default Room quickJoin() {

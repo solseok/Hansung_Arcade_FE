@@ -58,7 +58,7 @@ public final class RoomCard extends JButton {
         number.setEdge(OutgamePalette.ROOM_NUMBER_BOX_EDGE, 1f);
         number.setGloss(0.45f);
         place(header, number, LobbyLayout.CARD_NUMBER);
-        TextLabel title = new TextLabel(room == null ? "" : titleText(room));
+        TextLabel title = new TextLabel(room == null ? "" : room.title());
         title.setName("room-title");
         title.ellipsis();
         title.setFont(OutgameFonts.gulimCheBold(14));
@@ -119,11 +119,6 @@ public final class RoomCard extends JButton {
 
     public int radius() {
         return LobbyLayout.ROOM_RADIUS;
-    }
-
-    /** 팀전 방은 제목 앞에 [팀전]을 붙인다 */
-    static String titleText(Room room) {
-        return room.mode() == RoomMode.TEAM ? "[" + RoomMode.TEAM.label() + "] " + room.title() : room.title();
     }
 
     private static String statusText(Room room) {

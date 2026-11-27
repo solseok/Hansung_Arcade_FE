@@ -1,21 +1,6 @@
 package hansung.arcade.outgame.lobby;
 
-/**
- * 로비 목록의 방 한 곳.
- *
- * @param mode 경기 방식. 모르는 서버면 개인전
- */
-public record Room(int number, String title, int players, int capacity, String map, Status status, RoomMode mode) {
-
-    public Room {
-        mode = mode == null ? RoomMode.SOLO : mode;
-    }
-
-    /** 개인전 방 */
-    public Room(int number, String title, int players, int capacity, String map, Status status) {
-        this(number, title, players, capacity, map, status, RoomMode.SOLO);
-    }
-
+public record Room(int number, String title, int players, int capacity, String map, Status status) {
     public enum Status {
         WAITING("대기중"), PLAYING("게임중");
 
