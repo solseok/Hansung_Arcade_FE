@@ -163,7 +163,7 @@ public final class LobbyPanel extends JPanel implements Scene {
     private void createRoom() {
         creator.create(this).ifPresent(request -> {
             if (showing) {
-                enterRoom(() -> session.create(request.title(), request.capacity(), request.mode()));
+                enterRoom(() -> session.create(request.title(), request.capacity()));
             }
         });
     }
