@@ -3,6 +3,7 @@ package hansung.arcade.outgame;
 import hansung.arcade.ingame.entity.Mascot;
 import hansung.arcade.outgame.lobby.LobbyService;
 import hansung.arcade.outgame.lobby.Room;
+import hansung.arcade.outgame.lobby.RoomMode;
 import hansung.arcade.outgame.lobby.RoomState;
 import hansung.arcade.outgame.lobby.ServerLobbyService;
 import hansung.arcade.outgame.lobby.SlotState;
@@ -174,7 +175,12 @@ public final class OutgameSession {
     }
 
     public Room create(String title, int capacity) {
-        Room created = service.create(title, capacity, localPlayers());
+        return create(title, capacity, RoomMode.SOLO);
+    }
+
+    /** 경기 방식(개인전·팀전)을 정해 방을 만들고 들어간다 */
+    public Room create(String title, int capacity, RoomMode mode) {
+        Room created = service.create(title, capacity, localPlayers(), mode);
         enter(created);
         return created;
     }
@@ -202,9 +208,42 @@ public final class OutgameSession {
             participantReady.put(id, true);
         }
         mapId = GameMaps.byName(room.map()).id();
+        for (int local = 0; local < MAX_LOCAL_PLAYERS; local++) {
+            teams[local] = pickedTeam(local);
+        }
+        keepTeamsAllowed();
     }
 
     public Room room() { return room; }
+
+    /** 들어가 있는 방의 경기 방식. 방 밖이면 개인전 */
+    public RoomMode mode() {
+        return room == null ? RoomMode.SOLO : room.mode();
+    }
+
+    /**
+     * 지금 방에서 고를 수 있는 팀 (Team 순서). 온라인은 서버가 알려 준 teams, 오프라인은 경기 방식과 맵으로 셈한다.
+     * 개인전과 방 밖은 8색 모두다.
+     */
+    public List<Team> allowedTeams() {
+        if (roomState != null) {
+            return roomState.teams();
+        }
+        return mode().teamsFor(mapId);
+    }
+
+    /**
+     * 오프라인에서 1P·2P의 팀이 지금 방에서 고를 수 없는 색이면 1P는 빨강, 2P는 파랑으로 옮긴다 (두 색은 늘 고를 수 있다).
+     * 서버는 같은 일을 자리에 앉힐 때와 맵을 바꿀 때 한다.
+     */
+    private void keepTeamsAllowed() {
+        List<Team> allowed = allowedTeams();
+        for (int local = 0; local < MAX_LOCAL_PLAYERS; local++) {
+            if (!allowed.contains(teams[local])) {
+                teams[local] = local == 0 ? Team.RED : DEFAULT_TEAM_2P;
+            }
+        }
+    }
 
     /** slot번 자리가 닫혀 있는지 (X). 방장이 닫았거나 맵 최대 인원 밖 자리다. 방 밖이면 false */
     public boolean isSlotClosed(int slot) {
@@ -311,7 +350,8 @@ public final class OutgameSession {
                 }
             }
             Team team = pickedTeam(local);
-            if (team != seat.team()) {
+            // 기억한 팀을 이 방에서 고를 수 없으면 서버가 앉힌 팀을 따른다
+            if (team != seat.team() && roomState.allows(team)) {
                 teams[local] = team;
                 if (send) {
                     online.selectTeam(playerIds.get(local), team);
@@ -385,9 +425,19 @@ public final class OutgameSession {
     /**
      * local번째(0이 1P) 플레이어의 팀(캐릭터 색)을 바꾼다. 바꾸면 준비가 풀린다. 온라인이면 SELECT_TEAM을 보낸다.
      * 고른 것은 이 컴퓨터에 기억한다.
+     *
+     * @throws IllegalStateException 이 방에서 고를 수 없는 팀이면 (팀전은 {@link #allowedTeams()}만). 메시지를 그대로 보여 줄 수 있다
      */
     public void selectTeam(int local, Team team) {
-        teams[checkPlaying(local)] = Objects.requireNonNull(team);
+        checkPlaying(local);
+        Objects.requireNonNull(team);
+        List<Team> allowed = allowedTeams();
+        if (!allowed.contains(team)) {
+            // 서버 TEAM_NOT_ALLOWED와 같은 문구
+            throw new IllegalStateException(allowed.size() == 2 ? "캠프 08 팀전에서는 빨강·파랑만 고를 수 있습니다."
+                    : "팀전에서는 빨강·파랑·노랑·초록만 고를 수 있습니다.");
+        }
+        teams[local] = team;
         picks.saveTeam(local, team);
         if (online != null) {
             online.selectTeam(playerIds.get(local), team);
@@ -432,6 +482,10 @@ public final class OutgameSession {
             room = service.updateRoom(map.name(), Room.Status.WAITING);
         }
         this.mapId = mapId;
+        if (online == null) {
+            // 팀전에서 캠프 08로 바꾸면 노랑·초록은 고를 수 없다 (온라인은 서버가 옮기고 ROOM_STATE로 알린다)
+            keepTeamsAllowed();
+        }
     }
 
     /**
