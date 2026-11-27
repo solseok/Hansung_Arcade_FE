@@ -5,6 +5,7 @@ import hansung.arcade.outgame.GameMaps;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.IntStream;
 
 /**
@@ -58,6 +59,11 @@ public final class MockLobbyService implements LobbyService {
 
     @Override
     public synchronized Room create(String title, int capacity, int seats) {
+        return create(title, capacity, seats, RoomMode.SOLO);
+    }
+
+    @Override
+    public synchronized Room create(String title, int capacity, int seats, RoomMode mode) {
         if (joinedRoom != null) {
             throw new IllegalStateException("이미 방에 입장해 있습니다.");
         }
@@ -68,7 +74,8 @@ public final class MockLobbyService implements LobbyService {
             throw new IllegalArgumentException("정원은 2~8명으로 선택해 주세요.");
         }
         int number = rooms.keySet().stream().mapToInt(Integer::intValue).max().orElse(0) + 1;
-        Room room = new Room(number, title.strip(), seats, capacity, "캠프 08", Room.Status.WAITING);
+        Room room = new Room(number, title.strip(), seats, capacity, "캠프 08", Room.Status.WAITING,
+                Objects.requireNonNull(mode));
         add(room);
         joinedRoom = number;
         localSeats = seats;
@@ -124,7 +131,7 @@ public final class MockLobbyService implements LobbyService {
         for (int slot = 0; openSlots(map) < 2 && slot < limit; slot++) {
             closedByHost[slot] = false;
         }
-        Room updated = new Room(old.number(), old.title(), old.players(), openSlots(map), map, status);
+        Room updated = new Room(old.number(), old.title(), old.players(), openSlots(map), map, status, old.mode());
         add(updated);
         return updated;
     }
@@ -166,7 +173,7 @@ public final class MockLobbyService implements LobbyService {
         }
         closedByHost[slot] = !open;
         Room updated = new Room(room.number(), room.title(), room.players(), openSlots(room.map()), room.map(),
-                room.status());
+                room.status(), room.mode());
         add(updated);
         return updated;
     }
@@ -189,6 +196,6 @@ public final class MockLobbyService implements LobbyService {
 
     private Room withPlayers(Room room, int players) {
         return new Room(
-                room.number(), room.title(), players, room.capacity(), room.map(), room.status());
+                room.number(), room.title(), players, room.capacity(), room.map(), room.status(), room.mode());
     }
 }

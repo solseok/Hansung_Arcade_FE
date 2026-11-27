@@ -226,7 +226,13 @@ public final class ServerLobbyService implements LobbyService {
 
     @Override
     public Room create(String title, int capacity, int seats) {
-        return enter(ROOM_CREATE, Map.of("title", title, "capacity", capacity));
+        return create(title, capacity, seats, RoomMode.SOLO);
+    }
+
+    /** ROOM_CREATE에 경기 방식(mode)을 함께 보낸다. 팀전이면 고를 수 있는 팀이 ROOM_STATE의 teams로 온다 */
+    @Override
+    public Room create(String title, int capacity, int seats, RoomMode mode) {
+        return enter(ROOM_CREATE, Map.of("title", title, "capacity", capacity, "mode", mode.name()));
     }
 
     @Override
