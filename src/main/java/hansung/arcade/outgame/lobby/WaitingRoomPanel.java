@@ -325,12 +325,7 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
             swatch.setName("team-" + team.name());
             swatch.setToolTipText(team.label());
             onPick(swatch, local -> {
-                try {
-                    session.selectTeam(local, team);
-                } catch (IllegalStateException e) {
-                    chat.systemMessage(e.getMessage());
-                    return;
-                }
+                session.selectTeam(local, team);
                 Sound.play(CHECK_SOUND);
                 refresh();
             });
@@ -498,8 +493,7 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
             return;
         }
         roomNumber.setText("%03d".formatted(room.number()));
-        // 팀전 방은 로비 카드처럼 제목 앞에 [팀전]을 붙인다
-        roomTitle.setText(RoomCard.titleText(room));
+        roomTitle.setText(room.title());
         roomCount.setText(room.players() + "/" + room.capacity());
 
         Map<Integer, OutgameSession.SeatView> seats = new HashMap<>();
@@ -531,13 +525,7 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
         autoReady.setEnabled(!meHost);
         characterCells.values().forEach(cell -> cell.setEnabled(waiting));
         randomCell.setEnabled(waiting);
-        // 팀전은 고를 수 있는 색만 켠다 (빨강·파랑·노랑·초록, 캠프 08은 빨강·파랑)
-        List<Team> allowedTeams = session.allowedTeams();
-        teamSwatches.forEach((team, swatch) -> {
-            boolean allowed = allowedTeams.contains(team);
-            swatch.allow(allowed, session.mode());
-            swatch.setEnabled(waiting && allowed);
-        });
+        teamSwatches.values().forEach(swatch -> swatch.setEnabled(waiting));
         // 칸마다 그 칸을 고른 사람(1P·2P)을 표시한다
         int locals = session.localPlayers();
         boolean two = locals > 1;
@@ -629,7 +617,6 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
         if (data instanceof Room room) {
             session.enter(room);
             chat.clear();
-            session.takeNotice().ifPresent(chat::systemMessage);
         } else {
             // 경기를 마치고 돌아왔다: 방을 다시 대기 중으로 돌린다
             session.returnToWaiting();
@@ -954,12 +941,9 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
      * 2P로 들어왔으면 체크 대신 고른 사람의 "1P"(위)·"2P"(아래) 딱지를 붙인다.
      */
     private static final class TeamSwatch extends PickCell {
-        private static final Color DISALLOWED_SHADE = new Color(20, 20, 30, 170);
         private final Team team;
         private int pickers;
         private boolean twoPlayers;
-        /** 이 방에서 고를 수 있는 색인지. 아니면 어둡게 칠한다 */
-        private boolean allowed = true;
 
         TeamSwatch(Team team) {
             this.team = team;
@@ -969,14 +953,6 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
             setBorderPainted(false);
             setFocusPainted(false);
             setOpaque(false);
-        }
-
-        void allow(boolean allowed, RoomMode mode) {
-            if (this.allowed != allowed) {
-                this.allowed = allowed;
-                repaint();
-            }
-            setToolTipText(allowed ? team.label() : team.label() + " (" + mode.label() + "에서는 고를 수 없음)");
         }
 
         void mark(int pickers, boolean twoPlayers) {
@@ -999,10 +975,6 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
                             Shapes.gloss(d, w, h, 0.35f);
                             Shapes.edge(d, w, h, 4, on ? Color.WHITE : OutgamePalette.WAITING_FRAME, on ? 2.5f : 1f);
                         }), 0, 0, null);
-                if (!allowed) {
-                    g.setColor(DISALLOWED_SHADE);
-                    g.fill(Shapes.round(0, 0, w, h, 4));
-                }
                 if (on && twoPlayers) {
                     if ((pickers & 1) != 0) {
                         drawPlayerMark(g, 0, (w - 19) / 2, 1);

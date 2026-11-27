@@ -9,15 +9,13 @@ import hansung.arcade.outgame.Team;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
-import java.util.Objects;
 import java.util.stream.IntStream;
 
 /**
  * 서버가 알려 준 대기실 한 곳의 상태 (ROOM_STATE, 그리고 ROOM_CREATE·ROOM_JOIN·ROOM_QUICK_JOIN 성공 응답).
  *
  * <pre>
- * {"room":{"number":3,"title":"한 판","capacity":7,"mapId":"camp/camp08","status":"WAITING","closedSlots":[5],
- *          "mode":"TEAM","teams":["RED","BLUE"]},
+ * {"room":{"number":3,"title":"한 판","capacity":7,"mapId":"camp/camp08","status":"WAITING","closedSlots":[5]},
  *  "hostId":12,
  *  "players":[{"playerId":12,"nickname":"상상부기","slot":0,"character":"sangsangbugi","team":"RED","ready":false}]}
  * </pre>
@@ -27,10 +25,8 @@ import java.util.stream.IntStream;
  * @param hostId      방장 플레이어 번호
  * @param seats       자리 번호 순서
  * @param closedSlots 닫힌 자리 번호 (작은 순서). 방장이 닫은 자리와 맵 최대 인원 밖 자리를 모두 넣는다
- * @param teams       지금 고를 수 있는 팀 (Team 순서). 경기 방식은 {@code room.mode()}다
  */
-public record RoomState(Room room, String mapId, long hostId, List<Seat> seats, List<Integer> closedSlots,
-        List<Team> teams) {
+public record RoomState(Room room, String mapId, long hostId, List<Seat> seats, List<Integer> closedSlots) {
 
     /** 서버에서 "랜덤 캐릭터"를 뜻하는 값 */
     public static final String RANDOM_CHARACTER = "random";
@@ -40,12 +36,6 @@ public record RoomState(Room room, String mapId, long hostId, List<Seat> seats, 
     public RoomState {
         seats = seats.stream().sorted(Comparator.comparingInt(Seat::slot)).toList();
         closedSlots = closedSlots.stream().sorted().toList();
-        teams = teams.stream().sorted().toList();
-    }
-
-    /** team을 이 방에서 고를 수 있는지 */
-    public boolean allows(Team team) {
-        return teams.contains(team);
     }
 
     /** slot이 닫힌 자리인지 */
@@ -74,7 +64,7 @@ public record RoomState(Room room, String mapId, long hostId, List<Seat> seats, 
 
     // ── JSON 모양 (서버 RoomMessages와 같은 이름) ──
     private record RoomInfoBody(int number, String title, int capacity, String mapId, String status,
-            List<Integer> closedSlots, String mode, List<String> teams) {
+            List<Integer> closedSlots) {
     }
 
     private record SeatBody(long playerId, String nickname, int slot, String character, String team, boolean ready) {
@@ -83,8 +73,7 @@ public record RoomState(Room room, String mapId, long hostId, List<Seat> seats, 
     private record StateBody(RoomInfoBody room, long hostId, List<SeatBody> players) {
     }
 
-    private record SummaryBody(int number, String title, int players, int capacity, String mapId, String status,
-            String mode) {
+    private record SummaryBody(int number, String title, int players, int capacity, String mapId, String status) {
     }
 
     private record ListBody(List<SummaryBody> rooms) {
@@ -98,19 +87,12 @@ public record RoomState(Room room, String mapId, long hostId, List<Seat> seats, 
                         Team.valueOf(seat.team()), seat.ready()))
                 .toList();
         RoomInfoBody info = state.room();
-        RoomMode mode = RoomMode.parse(info.mode());
         Room room = new Room(info.number(), info.title(), seats.size(), info.capacity(), mapName(info.mapId()),
-                status(info.status()), mode);
+                status(info.status()));
         // closedSlots가 없는 서버는 정원 이상인 자리를 닫힌 자리로 본다
         List<Integer> closed = info.closedSlots() != null ? info.closedSlots()
                 : IntStream.range(Math.max(0, info.capacity()), SLOTS).boxed().toList();
-        // teams가 없거나 아는 색이 없으면 경기 방식과 맵으로 셈한다. 모르는 색 이름은 건너뛴다
-        List<Team> teams = info.teams() == null ? List.of()
-                : info.teams().stream().map(RoomState::team).filter(Objects::nonNull).toList();
-        if (teams.isEmpty()) {
-            teams = mode.teamsFor(info.mapId());
-        }
-        return new RoomState(room, info.mapId(), state.hostId(), seats, closed, teams);
+        return new RoomState(room, info.mapId(), state.hostId(), seats, closed);
     }
 
     /** ROOM_LIST 응답과 LOBBY_ROOMS의 body {@code {"rooms":[...]}}를 읽는다 */
@@ -121,15 +103,14 @@ public record RoomState(Room room, String mapId, long hostId, List<Seat> seats, 
         }
         return list.rooms().stream()
                 .map(room -> new Room(room.number(), room.title(), room.players(), room.capacity(),
-                        mapName(room.mapId()), status(room.status()), RoomMode.parse(room.mode())))
+                        mapName(room.mapId()), status(room.status())))
                 .toList();
     }
 
     /** 방 상태만 바꾼 사본 (서버는 게임을 시작해도 방 사람들에게 ROOM_STATE를 보내지 않아, GAME_STARTED를 받을 때 게임 중으로 둔다) */
     public RoomState withStatus(Room.Status status) {
-        Room changed = new Room(room.number(), room.title(), room.players(), room.capacity(), room.map(), status,
-                room.mode());
-        return new RoomState(changed, mapId, hostId, seats, closedSlots, teams);
+        Room changed = new Room(room.number(), room.title(), room.players(), room.capacity(), room.map(), status);
+        return new RoomState(changed, mapId, hostId, seats, closedSlots);
     }
 
     /** playerId의 자리. 없으면 null */
@@ -143,14 +124,6 @@ public record RoomState(Room room, String mapId, long hostId, List<Seat> seats, 
         } catch (IllegalArgumentException e) {
             // 클라이언트가 모르는 맵이 생겨도 목록은 보여 준다
             return mapId;
-        }
-    }
-
-    private static Team team(String name) {
-        try {
-            return Team.valueOf(name);
-        } catch (IllegalArgumentException | NullPointerException e) {
-            return null;
         }
     }
 
