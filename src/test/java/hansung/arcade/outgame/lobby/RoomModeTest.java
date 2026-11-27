@@ -7,6 +7,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+/** 경기 방식마다 고를 수 있는 팀과 서버 이름 읽기 */
 class RoomModeTest {
 
     @Test
@@ -21,6 +22,12 @@ class RoomModeTest {
         assertEquals(List.of(Team.RED, Team.YELLOW, Team.GREEN, Team.BLUE), RoomMode.TEAM.teamsFor("random"),
                 "랜덤 맵은 4색");
         assertEquals(List.of(Team.RED, Team.BLUE), RoomMode.TEAM.teamsFor("camp/camp08"));
+    }
+
+    @Test
+    void 고를_수_없는_팀_문구는_서버와_같다() {
+        assertEquals("캠프 08 팀전에서는 빨강·파랑만 고를 수 있습니다.", RoomMode.TEAM.notAllowedMessage("camp/camp08"));
+        assertEquals("팀전에서는 빨강·파랑·노랑·초록만 고를 수 있습니다.", RoomMode.TEAM.notAllowedMessage("random"));
     }
 
     @Test

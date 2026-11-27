@@ -39,6 +39,14 @@ public enum RoomMode {
         return Arrays.stream(Team.values()).filter(allowed::contains).toList();
     }
 
+    /**
+     * 이 방에서 고를 수 없는 팀을 골랐을 때 문구 (서버 TEAM_NOT_ALLOWED와 같다). 개인전은 모든 색을 고를 수 있어 쓰지 않는다
+     */
+    public String notAllowedMessage(String mapId) {
+        return TWO_SIDE_MAP.equals(mapId) ? "캠프 08 팀전에서는 빨강·파랑만 고를 수 있습니다."
+                : "팀전에서는 빨강·파랑·노랑·초록만 고를 수 있습니다.";
+    }
+
     /** 서버 이름(SOLO·TEAM)에 해당하는 방식. 없거나 모르면 개인전 */
     public static RoomMode parse(String name) {
         for (RoomMode mode : values()) {

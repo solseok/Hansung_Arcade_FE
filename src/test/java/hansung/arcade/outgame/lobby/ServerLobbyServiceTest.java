@@ -409,6 +409,7 @@ class ServerLobbyServiceTest {
         until(() -> lobby.state() == null);
         assertTrue(lobby.rooms().isEmpty());
     }
+
     @Test
     void 팀전으로_방을_만들면_ROOM_CREATE에_mode를_보내고_개인전은_SOLO를_보낸다() throws Exception {
         server.respond(request -> FakeServer.ok(request, compact(STATE)));

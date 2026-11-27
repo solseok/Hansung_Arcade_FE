@@ -61,6 +61,18 @@ class WaitingRoomTeamModeTest {
     }
 
     @Test
+    void 오프라인_팀전에서_맵을_바꾸면_팀_칸이_4색과_2색으로_바뀐다() {
+        enter(RoomMode.TEAM);
+        session.selectMap("patrit/patrit14");
+        scenes.show("waiting", null);
+
+        assertEquals(EnumSet.of(Team.RED, Team.YELLOW, Team.GREEN, Team.BLUE), enabledTeams());
+        session.selectMap("camp/camp08");
+        scenes.show("waiting", null);
+        assertEquals(EnumSet.of(Team.RED, Team.BLUE), enabledTeams());
+    }
+
+    @Test
     void 팀전_캠프08_대기실은_빨강_파랑_칸만_켜지고_나머지는_고를_수_없다고_알린다() {
         enter(RoomMode.TEAM);
 

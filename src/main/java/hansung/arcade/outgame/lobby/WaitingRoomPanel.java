@@ -629,6 +629,7 @@ public final class WaitingRoomPanel extends JPanel implements Scene {
         if (data instanceof Room room) {
             session.enter(room);
             chat.clear();
+            session.takeNotice().ifPresent(chat::systemMessage);
         } else {
             // 경기를 마치고 돌아왔다: 방을 다시 대기 중으로 돌린다
             session.returnToWaiting();

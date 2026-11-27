@@ -63,6 +63,8 @@ public final class OutgameSession {
      */
     private Integer pickedRoom;
     private String mapId = GameMaps.DEFAULT_ID;
+    /** 대기실에 한 번 띄울 안내 (팀전을 골랐는데 개인전 방이 열렸을 때). 없으면 null */
+    private String notice;
     private boolean ready;
     /** 목업 참가자(이 컴퓨터 밖의 사람)의 준비 상태. 서버가 붙으면 서버에서 받은 값으로 바꾼다 */
     private final Map<Integer, Boolean> participantReady = new HashMap<>();
@@ -180,7 +182,12 @@ public final class OutgameSession {
 
     /** 경기 방식(개인전·팀전)을 정해 방을 만들고 들어간다 */
     public Room create(String title, int capacity, RoomMode mode) {
+        notice = null;
         Room created = service.create(title, capacity, localPlayers(), mode);
+        if (created.mode() != mode) {
+            // 예전 서버는 mode를 모르고 개인전 방을 연다
+            notice = "서버가 %s을 지원하지 않아 %s으로 열었습니다.".formatted(mode.label(), created.mode().label());
+        }
         enter(created);
         return created;
     }
@@ -208,6 +215,7 @@ public final class OutgameSession {
             participantReady.put(id, true);
         }
         mapId = GameMaps.byName(room.map()).id();
+        // 오프라인은 팀을 늘 기억값(selectTeam이 저장한 값)에서 다시 맞춘다. 앞 방에서 옮겨진 색이 남지 않게 한다
         for (int local = 0; local < MAX_LOCAL_PLAYERS; local++) {
             teams[local] = pickedTeam(local);
         }
@@ -215,6 +223,13 @@ public final class OutgameSession {
     }
 
     public Room room() { return room; }
+
+    /** 대기실에 한 번 띄울 안내를 꺼낸다. 꺼내면 비운다 */
+    public Optional<String> takeNotice() {
+        Optional<String> taken = Optional.ofNullable(notice);
+        notice = null;
+        return taken;
+    }
 
     /** 들어가 있는 방의 경기 방식. 방 밖이면 개인전 */
     public RoomMode mode() {
@@ -433,9 +448,7 @@ public final class OutgameSession {
         Objects.requireNonNull(team);
         List<Team> allowed = allowedTeams();
         if (!allowed.contains(team)) {
-            // 서버 TEAM_NOT_ALLOWED와 같은 문구
-            throw new IllegalStateException(allowed.size() == 2 ? "캠프 08 팀전에서는 빨강·파랑만 고를 수 있습니다."
-                    : "팀전에서는 빨강·파랑·노랑·초록만 고를 수 있습니다.");
+            throw new IllegalStateException(mode().notAllowedMessage(mapId));
         }
         teams[local] = team;
         picks.saveTeam(local, team);

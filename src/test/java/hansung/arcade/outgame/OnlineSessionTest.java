@@ -94,6 +94,36 @@ class OnlineSessionTest {
     }
 
     @Test
+    void 팀전_방을_캠프08로_바꿔_서버가_옮긴_팀은_ROOM_STATE를_따른다() throws Exception {
+        String patrit = TEAM_STATE.replace("camp/camp08", "patrit/patrit14")
+                .replace("[\"RED\",\"BLUE\"]", "[\"RED\",\"YELLOW\",\"GREEN\",\"BLUE\"]")
+                .replace("\"team\":\"RED\"", "\"team\":\"YELLOW\"");
+        server.respond(request -> FakeServer.ok(request, patrit));
+        session.create("팀 한 판", 8, RoomMode.TEAM);
+        server.nextMessage();
+        assertEquals(Team.YELLOW, session.team(0));
+
+        server.push("{\"type\":\"ROOM_STATE\",\"body\":" + TEAM_STATE + "}");
+
+        for (int i = 0; i < 60 && session.team(0) != Team.RED; i++) {
+            Thread.sleep(50);
+        }
+        assertEquals(Team.RED, session.team(0), "서버가 옮긴 팀을 따른다");
+        assertEquals(List.of(Team.RED, Team.BLUE), session.allowedTeams());
+    }
+
+    @Test
+    void 팀전을_골랐는데_예전_서버가_개인전_방을_열면_대기실에_한_번_알린다() throws Exception {
+        server.respond(request -> FakeServer.ok(request, HOST_STATE.formatted(false)));
+
+        session.create("한 판", 8, RoomMode.TEAM);
+
+        assertEquals(RoomMode.SOLO, session.mode());
+        assertEquals("서버가 팀전을 지원하지 않아 개인전으로 열었습니다.", session.takeNotice().orElseThrow());
+        assertTrue(session.takeNotice().isEmpty(), "한 번만 알린다");
+    }
+
+    @Test
     void 팀전에서_고를_수_없는_팀은_서버에_보내지_않고_거절한다() throws Exception {
         server.respond(request -> FakeServer.ok(request, TEAM_STATE));
         session.create("팀 한 판", 8, RoomMode.TEAM);
